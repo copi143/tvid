@@ -1,0 +1,379 @@
+use std::{
+    fmt::Debug,
+    ops::Mul,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+use tokio::task::JoinHandle;
+
+pub struct XY {
+    x: AtomicUsize,
+    y: AtomicUsize,
+}
+
+impl XY {
+    pub const fn new() -> Self {
+        XY {
+            x: AtomicUsize::new(0),
+            y: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn set(&self, x: usize, y: usize) {
+        self.x.store(x, Ordering::SeqCst);
+        self.y.store(y, Ordering::SeqCst);
+    }
+
+    pub fn get(&self) -> (usize, usize) {
+        (self.x.load(Ordering::SeqCst), self.y.load(Ordering::SeqCst))
+    }
+
+    pub fn x(&self) -> usize {
+        self.x.load(Ordering::SeqCst)
+    }
+
+    pub fn y(&self) -> usize {
+        self.y.load(Ordering::SeqCst)
+    }
+}
+
+pub struct TBLR {
+    top: AtomicUsize,
+    bottom: AtomicUsize,
+    left: AtomicUsize,
+    right: AtomicUsize,
+}
+
+impl TBLR {
+    pub const fn new() -> Self {
+        TBLR {
+            top: AtomicUsize::new(0),
+            bottom: AtomicUsize::new(0),
+            left: AtomicUsize::new(0),
+            right: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn set(&self, top: usize, bottom: usize, left: usize, right: usize) {
+        self.top.store(top, Ordering::SeqCst);
+        self.bottom.store(bottom, Ordering::SeqCst);
+        self.left.store(left, Ordering::SeqCst);
+        self.right.store(right, Ordering::SeqCst);
+    }
+
+    pub fn get(&self) -> (usize, usize, usize, usize) {
+        (
+            self.top.load(Ordering::SeqCst),
+            self.bottom.load(Ordering::SeqCst),
+            self.left.load(Ordering::SeqCst),
+            self.right.load(Ordering::SeqCst),
+        )
+    }
+
+    pub fn top(&self) -> usize {
+        self.top.load(Ordering::SeqCst)
+    }
+
+    pub fn bottom(&self) -> usize {
+        self.bottom.load(Ordering::SeqCst)
+    }
+
+    pub fn left(&self) -> usize {
+        self.left.load(Ordering::SeqCst)
+    }
+
+    pub fn right(&self) -> usize {
+        self.right.load(Ordering::SeqCst)
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+/// 标准 srgb 2.2
+pub fn gamma_correct(value: f32) -> f32 {
+    if value <= 0.0 {
+        0.0
+    } else if value <= 0.0031308 {
+        value * 12.92
+    } else if value <= 1.0 {
+        1.055 * value.powf(1.0 / 2.4) - 0.055
+    } else {
+        1.0
+    }
+}
+
+pub fn gamma_reverse(value: f32) -> f32 {
+    if value <= 0.0 {
+        0.0
+    } else if value <= 0.04045 {
+        value / 12.92
+    } else if value <= 1.0 {
+        ((value + 0.055) / 1.055).powf(2.4)
+    } else {
+        1.0
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+pub struct ColorF32 {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+impl From<Color> for ColorF32 {
+    fn from(c: Color) -> Self {
+        ColorF32 {
+            r: gamma_reverse(c.r as f32 / 255.0),
+            g: gamma_reverse(c.g as f32 / 255.0),
+            b: gamma_reverse(c.b as f32 / 255.0),
+            a: c.a as f32 / 255.0,
+        }
+    }
+}
+
+impl From<ColorF32> for Color {
+    fn from(c: ColorF32) -> Self {
+        Color {
+            r: (gamma_correct(c.r) * 255.0) as u8,
+            g: (gamma_correct(c.g) * 255.0) as u8,
+            b: (gamma_correct(c.b) * 255.0) as u8,
+            a: (c.a * 255.0) as u8,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        }
+    }
+}
+
+impl Debug for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{};{};{}", self.r, self.g, self.b)
+    }
+}
+
+impl Mul<f32> for Color {
+    type Output = Color;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Color {
+            r: (self.r as f32 * rhs).min(255.0).max(0.0) as u8,
+            g: (self.g as f32 * rhs).min(255.0).max(0.0) as u8,
+            b: (self.b as f32 * rhs).min(255.0).max(0.0) as u8,
+            a: self.a,
+        }
+    }
+}
+
+impl Color {
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
+        Color { r, g, b, a: 255 }
+    }
+
+    pub const fn transparent() -> Self {
+        Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        }
+    }
+
+    pub const fn halfhalf(a: Color, b: Color) -> Self {
+        Color {
+            r: ((a.r as u16 + b.r as u16) / 2) as u8,
+            g: ((a.g as u16 + b.g as u16) / 2) as u8,
+            b: ((a.b as u16 + b.b as u16) / 2) as u8,
+            a: ((a.a as u16 + b.a as u16) / 2) as u8,
+        }
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Cell {
+    pub c: Option<char>,
+    pub fg: Color,
+    pub bg: Color,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Cell {
+            c: None,
+            fg: Color::default(),
+            bg: Color::default(),
+        }
+    }
+}
+
+impl Cell {
+    pub fn transparent() -> Self {
+        Cell {
+            c: None,
+            fg: Color::transparent(),
+            bg: Color::transparent(),
+        }
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+const ANSI_COLORS: [Color; 16] = [
+    Color::new(0, 0, 0),
+    Color::new(205, 0, 0),
+    Color::new(0, 205, 0),
+    Color::new(205, 205, 0),
+    Color::new(0, 0, 238),
+    Color::new(205, 0, 205),
+    Color::new(0, 205, 205),
+    Color::new(229, 229, 229),
+    Color::new(127, 127, 127),
+    Color::new(255, 0, 0),
+    Color::new(0, 255, 0),
+    Color::new(255, 255, 0),
+    Color::new(92, 92, 255),
+    Color::new(255, 0, 255),
+    Color::new(0, 255, 255),
+    Color::new(255, 255, 255),
+];
+
+const fn palette256_scale(c: u8) -> u8 {
+    if c == 0 { 0 } else { (c * 40 + 55) as u8 }
+}
+
+const fn palette256_reverse(c: u8) -> u8 {
+    if c < 35 { 0 } else { (c - 35) / 40 }
+}
+
+const fn palette256_try_reverse(c: u8) -> Option<u8> {
+    match c {
+        0 => Some(0),
+        95 => Some(1),
+        135 => Some(2),
+        175 => Some(3),
+        215 => Some(4),
+        255 => Some(5),
+        _ => None,
+    }
+}
+
+const fn palette256_gray(c: u8) -> u8 {
+    c * 10 + 8
+}
+
+const fn palette256_gray_try_reverse(c: u8) -> Option<u8> {
+    if c >= 8 && c <= 238 && (c - 8) % 10 == 0 {
+        Some((c - 8) / 10)
+    } else {
+        None
+    }
+}
+
+pub fn palette256_to_color(index: u8) -> Color {
+    if index < 16 {
+        return ANSI_COLORS[index as usize];
+    } else if index < 232 {
+        let r = palette256_scale(index / 36);
+        let g = palette256_scale(index % 36 / 6);
+        let b = palette256_scale(index % 6);
+        return Color::new(r, g, b);
+    } else {
+        let c = palette256_gray(index - 232);
+        return Color::new(c, c, c);
+    }
+}
+
+pub fn palette256_from_color(c: Color) -> u8 {
+    let r = palette256_reverse(c.r);
+    let g = palette256_reverse(c.g);
+    let b = palette256_reverse(c.b);
+    r * 36 + g * 6 + b + 16
+}
+
+pub fn try_palette256(c: Color) -> Option<u8> {
+    if let Some(ri) = palette256_try_reverse(c.r) {
+        if let Some(gi) = palette256_try_reverse(c.g) {
+            if let Some(bi) = palette256_try_reverse(c.b) {
+                return Some(ri * 36 + gi * 6 + bi + 16);
+            }
+        }
+    }
+
+    if let Some(i) = palette256_gray_try_reverse(c.g) {
+        if c.r == c.g && c.g == c.b {
+            return Some(i + 232);
+        }
+    }
+
+    None
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub fn some_if_eq<T: PartialEq>(a: T, b: T) -> Option<T> {
+    if a == b { Some(a) } else { None }
+}
+
+pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
+    if a == b { None } else { Some(a) }
+}
+
+pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>) -> String {
+    match (fg, bg) {
+        (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
+            (Some(fgi), Some(bgi)) => format!("\x1b[38;5;{};48;5;{}m", fgi, bgi),
+            (Some(fgi), None) => format!("\x1b[38;5;{};48;2;{:?}m", fgi, bg),
+            (None, Some(bgi)) => format!("\x1b[38;2;{:?};48;5;{}m", fg, bgi),
+            (None, None) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+        },
+        (Some(fg), None) => match try_palette256(fg) {
+            Some(fgi) => format!("\x1b[38;5;{}m", fgi),
+            None => format!("\x1b[38;2;{:?}m", fg),
+        },
+        (None, Some(bg)) => match try_palette256(bg) {
+            Some(bgi) => format!("\x1b[48;5;{}m", bgi),
+            None => format!("\x1b[48;2;{:?}m", bg),
+        },
+        (None, None) => String::new(),
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+#[allow(async_fn_in_trait)]
+pub trait JoinAll {
+    type Output;
+    async fn join_all(self) -> Vec<Self::Output>;
+}
+
+impl<T: Send + 'static> JoinAll for Vec<JoinHandle<T>> {
+    type Output = T;
+    async fn join_all(self) -> Vec<T> {
+        let mut results = Vec::with_capacity(self.len());
+        for handle in self {
+            results.push(handle.await.unwrap());
+        }
+        results
+    }
+}

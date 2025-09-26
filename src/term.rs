@@ -1,0 +1,305 @@
+use libc::{LC_CTYPE, SIGINT, STDIN_FILENO, STDOUT_FILENO, setlocale, signal, tcgetattr};
+use std::{
+    mem::MaybeUninit,
+    process::exit,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
+use unicode_width::UnicodeWidthChar;
+
+use crate::{
+    CURRENT_PLAYING, TOKIO_RUNTIME,
+    audio::AUDIO_VSTARTTIME,
+    error::print_errors,
+    ffmpeg, stdin,
+    stdout::{self, pend_print, pending_frames, remove_pending_frames},
+    util::*,
+};
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub struct RenderWrapper<'frame, 'cells> {
+    pub frame: &'frame [Color],
+    pub frame_width: usize,
+    pub frame_height: usize,
+    pub frame_pitch: usize,
+
+    pub cells: &'cells mut [Cell],
+    pub cells_width: usize,
+    pub cells_height: usize,
+    pub cells_pitch: usize,
+
+    pub padding_left: usize,
+    pub padding_right: usize,
+    pub padding_top: usize,
+    pub padding_bottom: usize,
+
+    pub pixels_width: usize,
+    pub pixels_height: usize,
+
+    pub playing: String,
+    pub played_time: Option<Duration>,
+}
+
+impl RenderWrapper<'_, '_> {
+    pub fn pixel_at(&self, x: usize, y: usize) -> Color {
+        self.frame[y * self.frame_pitch + x]
+    }
+
+    pub fn cell_at(&self, x: usize, y: usize) -> &Cell {
+        &self.cells[y * self.cells_pitch + x]
+    }
+
+    pub fn cell_mut_at(&mut self, x: usize, y: usize) -> &mut Cell {
+        &mut self.cells[y * self.cells_pitch + x]
+    }
+}
+
+static mut THIS_FRAME: Vec<Cell> = Vec::new();
+static mut LAST_FRAME: Vec<Cell> = Vec::new();
+static mut RENDER_CALLBACKS: Vec<fn(&mut RenderWrapper)> = Vec::new();
+
+#[allow(static_mut_refs)]
+pub fn add_render_callback(callback: fn(&mut RenderWrapper)) {
+    unsafe { RENDER_CALLBACKS.push(callback) };
+}
+
+#[allow(static_mut_refs)]
+pub fn render(frame: &[Color], pitch: usize) {
+    let wrap = &mut RenderWrapper {
+        frame,
+        frame_width: VIDEO_PIXELS.x(),
+        frame_height: VIDEO_PIXELS.y(),
+        frame_pitch: pitch,
+        cells: unsafe { THIS_FRAME.as_mut_slice() },
+        cells_width: TERM_SIZE.x(),
+        cells_height: TERM_SIZE.y(),
+        cells_pitch: TERM_SIZE.x(),
+        padding_left: VIDEO_PADDING.left(),
+        padding_right: VIDEO_PADDING.right(),
+        padding_top: VIDEO_PADDING.top(),
+        padding_bottom: VIDEO_PADDING.bottom(),
+        pixels_width: VIDEO_PIXELS.x(),
+        pixels_height: VIDEO_PIXELS.y(),
+        playing: CURRENT_PLAYING.lock().unwrap().clone(),
+        played_time: unsafe {
+            AUDIO_VSTARTTIME
+                .lock()
+                .unwrap()
+                .map_or(None, |start| Some(start.elapsed()))
+        },
+    };
+
+    for callback in unsafe { &RENDER_CALLBACKS } {
+        callback(wrap);
+    }
+
+    TOKIO_RUNTIME.block_on(print_diff(TERM_RESIZED.swap(false, Ordering::SeqCst)));
+
+    if pending_frames() > 3 {
+        TOKIO_RUNTIME.block_on(print_diff(true));
+    }
+
+    unsafe { std::mem::swap(&mut THIS_FRAME, &mut LAST_FRAME) };
+}
+
+async fn print_diff_line(cells: &mut [Cell], lasts: &[Cell], force_flush: bool) -> Vec<u8> {
+    let mut last_bg = Color::transparent();
+    let mut last_fg = Color::transparent();
+    let mut buf = Vec::with_capacity(1024);
+    for (cell, last) in cells.iter().zip(lasts.iter()) {
+        if cell.c == Some('\0') {
+            continue;
+        }
+
+        let cw = cell.c.map_or(1, |c| c.width().unwrap_or(1).max(1));
+        if !force_flush && cell == last && cw == 1 {
+            buf.extend_from_slice("\x1b[C".as_bytes());
+            continue;
+        }
+
+        let (fg, bg) = (some_if_ne(cell.fg, last_fg), some_if_ne(cell.bg, last_bg));
+
+        buf.extend_from_slice(escape_set_color(fg, bg).as_bytes());
+        buf.extend_from_slice(
+            if let Some(c) = cell.c { c } else { '▄' }
+                .to_string()
+                .as_bytes(),
+        );
+
+        if let Some(fg) = fg {
+            last_fg = fg;
+        }
+        if let Some(bg) = bg {
+            last_bg = bg;
+        }
+    }
+    buf
+}
+
+#[allow(static_mut_refs)]
+async fn print_diff(force_flush: bool) {
+    let (term_width, term_height) = TERM_SIZE.get();
+
+    let cells = unsafe {
+        THIS_FRAME
+            .as_mut_slice()
+            .chunks_mut(term_width)
+            .map(|chunk| std::mem::transmute(chunk))
+            .collect::<Vec<_>>()
+    };
+    let lasts = unsafe {
+        LAST_FRAME
+            .as_slice()
+            .chunks(term_width)
+            .map(|chunk| std::mem::transmute(chunk))
+            .collect::<Vec<_>>()
+    };
+
+    assert!(cells.len() == term_height, "cells length mismatch");
+    assert!(lasts.len() == term_height, "lasts length mismatch");
+
+    let result = (cells.into_iter().zip(lasts.into_iter()))
+        .map(|(cell, last)| tokio::spawn(print_diff_line(cell, last, force_flush)))
+        .collect::<Vec<_>>()
+        .join_all()
+        .await;
+
+    let mut buf = Vec::with_capacity(65536);
+    buf.extend_from_slice(b"\x1b[H");
+    for (i, line) in result.into_iter().enumerate() {
+        if i != 0 {
+            buf.extend_from_slice(b"\x1b[E");
+        }
+        buf.extend_from_slice(&line);
+    }
+
+    if force_flush {
+        remove_pending_frames();
+        assert!(buf.len() > 0, "force flush but buffer is empty");
+        pend_print(buf);
+        return;
+    } else if buf.len() > 0 {
+        pend_print(buf);
+    }
+}
+
+pub static VIDEO_ORIGIN_PIXELS_NOW: XY = XY::new();
+pub static VIDEO_ORIGIN_PIXELS: XY = XY::new();
+
+pub static TERM_SIZE: XY = XY::new();
+pub static TERM_PIXELS: XY = XY::new();
+pub static VIDEO_PIXELS: XY = XY::new();
+pub static VIDEO_PADDING: TBLR = TBLR::new();
+
+static TERM_RESIZED: AtomicBool = AtomicBool::new(false);
+
+#[allow(static_mut_refs)]
+pub fn updatesize() -> bool {
+    let mut winsize = MaybeUninit::uninit();
+    if unsafe { libc::ioctl(STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) } < 0 {
+        return false;
+    }
+    let winsize: libc::winsize = unsafe { winsize.assume_init() };
+
+    let (xchars, ychars) = (winsize.ws_col as usize, winsize.ws_row as usize);
+    let (xpixels, ypixels) = (winsize.ws_xpixel as usize, winsize.ws_ypixel as usize);
+    let (xvideo, yvideo) = VIDEO_ORIGIN_PIXELS_NOW.get();
+
+    if TERM_SIZE.x() == xchars && TERM_SIZE.y() == ychars {
+        if TERM_PIXELS.x() == xpixels && TERM_PIXELS.y() == ypixels {
+            if VIDEO_ORIGIN_PIXELS.x() == xvideo && VIDEO_ORIGIN_PIXELS.y() == yvideo {
+                return false;
+            }
+        }
+    }
+
+    TERM_SIZE.set(xchars, ychars);
+    TERM_PIXELS.set(xpixels, ypixels);
+    VIDEO_ORIGIN_PIXELS.set(xvideo, yvideo);
+
+    match xvideo as i64 * ypixels as i64 - yvideo as i64 * xpixels as i64 {
+        0 => {
+            VIDEO_PADDING.set(0, 0, 0, 0);
+            VIDEO_PIXELS.set(xchars, ychars * 2);
+        }
+        1..=i64::MAX => {
+            let y = (ychars * xpixels * yvideo) / (xvideo * ypixels);
+            let p = (ychars - y) / 2;
+            VIDEO_PADDING.set(p, p, 0, 0);
+            VIDEO_PIXELS.set(xchars, (ychars - p * 2) * 2);
+        }
+        i64::MIN..=-1 => {
+            let x = (xchars * ypixels * xvideo) / (yvideo * xpixels);
+            let p = (xchars - x) / 2;
+            VIDEO_PADDING.set(0, 0, p, p);
+            VIDEO_PIXELS.set(xchars - p * 2, ychars * 2);
+        }
+    }
+
+    unsafe {
+        THIS_FRAME.clear();
+        THIS_FRAME.resize(xchars * ychars, Cell::default())
+    };
+    unsafe {
+        LAST_FRAME.clear();
+        LAST_FRAME.resize(xchars * ychars, Cell::default())
+    };
+
+    remove_pending_frames();
+
+    TERM_RESIZED.store(true, Ordering::SeqCst);
+    return true;
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub const TERM_DEFAULT_FG: Color = Color::new(171, 178, 191);
+pub const TERM_DEFAULT_BG: Color = Color::new(35, 39, 46);
+
+pub static TERM_QUIT: AtomicBool = AtomicBool::new(false);
+
+const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
+const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
+
+#[allow(static_mut_refs)]
+pub extern "C" fn request_quit() {
+    TERM_QUIT.store(true, Ordering::SeqCst);
+    ffmpeg::notify_quit();
+    stdin::notify_quit();
+    stdout::notify_quit();
+}
+
+static mut ORIG_TERMIOS: Option<libc::termios> = None;
+
+/// 在初始化终端之前不能启动 stdin 和 stdout 线程
+pub fn init() {
+    unsafe { signal(SIGINT, request_quit as usize) };
+
+    stdout::print(TERM_INIT_SEQ);
+
+    unsafe { setlocale(LC_CTYPE, "en_US.UTF-8".as_ptr() as *const i8) };
+
+    let mut termios = std::mem::MaybeUninit::uninit();
+    if unsafe { tcgetattr(STDIN_FILENO, termios.as_mut_ptr()) } == 0 {
+        let mut termios = unsafe { termios.assume_init() };
+        unsafe { ORIG_TERMIOS = Some(termios) };
+        termios.c_lflag &= !(libc::ECHO | libc::ICANON);
+        termios.c_cc[libc::VMIN] = 0;
+        termios.c_cc[libc::VTIME] = 1;
+        unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
+    }
+}
+
+/// 在退出前必须终止 stdin 和 stdout 线程
+pub fn quit() -> ! {
+    if let Some(termios) = unsafe { ORIG_TERMIOS } {
+        unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
+    }
+    stdout::print(TERM_EXIT_SEQ);
+    print_errors();
+    unsafe { libc::tcflush(STDIN_FILENO, libc::TCIFLUSH) };
+    exit(0);
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
