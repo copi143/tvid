@@ -222,7 +222,7 @@ pub fn audio_main() {
         let data = converted.data(0);
         let nb_samples = converted.samples();
         let sample_count = nb_samples * target_channels as usize;
-        let slice: &[f32] =
+        let slice =
             unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, sample_count) };
         buf.extend(slice);
 

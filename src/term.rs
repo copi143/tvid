@@ -42,6 +42,9 @@ pub struct RenderWrapper<'frame, 'cells> {
     pub playing: String,
     pub played_time: Option<Duration>,
     pub delta_time: Duration,
+
+    pub term_font_width: f32,
+    pub term_font_height: f32,
 }
 
 impl RenderWrapper<'_, '_> {
@@ -107,6 +110,8 @@ pub fn render(frame: &[Color], pitch: usize) {
         playing: { PLAYLIST.lock().unwrap().current().cloned() }.unwrap_or_default(),
         played_time,
         delta_time,
+        term_font_width: TERM_PIXELS.x() as f32 / TERM_SIZE.x() as f32,
+        term_font_height: TERM_PIXELS.y() as f32 / TERM_SIZE.y() as f32,
     };
 
     for callback in unsafe { &RENDER_CALLBACKS } {
@@ -228,6 +233,17 @@ pub fn updatesize() -> bool {
     let (xchars, ychars) = (winsize.ws_col as usize, winsize.ws_row as usize);
     let (xpixels, ypixels) = (winsize.ws_xpixel as usize, winsize.ws_ypixel as usize);
     let (xvideo, yvideo) = VIDEO_ORIGIN_PIXELS_NOW.get();
+    assert!(xvideo > 0 && yvideo > 0, "video size is zero");
+    let (xchars, ychars) = if xchars == 0 || ychars == 0 {
+        (80, 24)
+    } else {
+        (xchars, ychars)
+    };
+    let (xpixels, ypixels) = if xpixels == 0 || ypixels == 0 {
+        (xchars * 8, ychars * 16)
+    } else {
+        (xpixels, ypixels)
+    };
 
     if TERM_SIZE.x() == xchars && TERM_SIZE.y() == ychars {
         if TERM_PIXELS.x() == xpixels && TERM_PIXELS.y() == ypixels {

@@ -6,10 +6,23 @@ use std::sync::{
 use unicode_width::UnicodeWidthChar;
 
 use crate::{
+    error::get_errors,
     playlist::PLAYLIST,
     term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG},
     util::{Cell, Color, TextBoxInfo},
 };
+
+const UNIFONT: *const [u8; 32] =
+    include_bytes!("../unifont-17.0.01.bin").as_ptr() as *const [u8; 32];
+
+pub fn unifont_get(ch: char) -> &'static [u8; 32] {
+    let ch = ch as u32;
+    if ch < 65536 {
+        unsafe { &*UNIFONT.add(ch as usize) }
+    } else {
+        unsafe { &*UNIFONT.add(' ' as usize) }
+    }
+}
 
 pub fn mask(
     wrap: &mut RenderWrapper,
@@ -190,6 +203,12 @@ pub fn put(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<C
     TEXTBOX.set(x, y, w, h, cx, cy);
 }
 
+macro_rules! put {
+    ($wrap:expr, $($arg:tt)*) => {
+        crate::ui::put($wrap, &format!($($arg)*), None, None)
+    };
+}
+
 pub fn putln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     let (def_fg, def_bg) = TEXTBOX_DEFAULT_COLOR.lock().unwrap().clone();
     let (fg, bg) = (fg.or(def_fg), bg.or(def_bg));
@@ -198,26 +217,51 @@ pub fn putln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option
     TEXTBOX.set(x, y, w, h, x, cy + 1);
 }
 
-macro_rules! put {
-    ($wrap:expr, $($arg:tt)*) => {
-        crate::ui::put($wrap, &format!($($arg)*), None, None)
-    };
-}
-
-pub fn render_ui(wrap: &mut RenderWrapper) {
-    render_overlay_text(wrap);
-    render_playlist(wrap);
-}
-
 macro_rules! putln {
     ($wrap:expr, $($arg:tt)*) => {
         crate::ui::putln($wrap, &format!($($arg)*), None, None)
     };
 }
 
+pub fn render_ui(wrap: &mut RenderWrapper) {
+    render_overlay_text(wrap);
+    render_playlist(wrap);
+    render_errors(wrap);
+}
+
 pub static SHOW_PLAYLIST: AtomicBool = AtomicBool::new(false);
 
-#[rustfmt::skip]
+pub fn putunifont(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+    let mut data = [const { String::new() }; 4];
+    for ch in text.chars() {
+        let font = unifont_get(ch);
+        let cw = ch.width().unwrap_or(0);
+        if cw == 1 {
+            for y in 0..4 {
+                for x in 0..4 {
+                    data[y].push(char::from_u32(0x2800 + font[y * 8 + x] as u32).unwrap());
+                }
+            }
+        }
+        if cw == 2 {
+            for y in 0..4 {
+                for x in 0..8 {
+                    data[y].push(char::from_u32(0x2800 + font[y * 8 + x] as u32).unwrap());
+                }
+            }
+        }
+    }
+    for y in 0..4 {
+        putln(wrap, &data[y], fg, bg);
+    }
+}
+
+macro_rules! putunifont {
+    ($wrap:expr, $($arg:tt)*) => {
+        crate::ui::putunifont($wrap, &format!($($arg)*), None, None)
+    };
+}
+
 fn render_overlay_text(wrap: &mut RenderWrapper) {
     if wrap.cells_width < 8 && wrap.cells_height < 8 {
         return; // 防炸
@@ -237,10 +281,28 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
 
     textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, true);
 
-    putln!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
-    putln!(wrap, "Press 'q' to quit, 'n' to skip to next, 'l' for playlist");
-    putln!(wrap, "Playing: {}", wrap.playing);
-    putln!(wrap, "Time: {}", time_str);
+    TEXTBOX_DEFAULT_COLOR
+        .lock()
+        .unwrap()
+        .clone_from(&(Some(TERM_DEFAULT_FG), None));
+
+    if wrap.term_font_height > 12.0 {
+        putln!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
+        putln!(
+            wrap,
+            "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
+        );
+        putln!(wrap, "Playing: {}", wrap.playing);
+        putln!(wrap, "Time: {}", time_str);
+    } else {
+        putunifont!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
+        putunifont!(
+            wrap,
+            "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
+        );
+        putunifont!(wrap, "Playing: {}", wrap.playing);
+        putunifont!(wrap, "Time: {}", time_str);
+    }
 }
 
 fn render_playlist(wrap: &mut RenderWrapper) {
@@ -294,6 +356,42 @@ fn render_playlist(wrap: &mut RenderWrapper) {
     let playing_index = PLAYLIST.lock().unwrap().get_pos().clone();
     for (i, item) in PLAYLIST.lock().unwrap().get_items().iter().enumerate() {
         let icon = if i == playing_index { "▶" } else { " " };
-        putln!(wrap, "{} {}", icon, item);
+        putln!(wrap, "{} {}", icon, item); // 这边的 U+2000 是故意占位的，因为 ▶ 符号在终端上渲染宽度是 2
+    }
+}
+
+fn render_errors(wrap: &mut RenderWrapper) {
+    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+        return; // 防炸
+    }
+
+    let errors = get_errors();
+
+    mask(
+        wrap,
+        0,
+        wrap.cells_height as isize - errors.len() as isize,
+        50,
+        errors.len(),
+        None,
+        Color::new(237, 21, 21),
+        0.5,
+    );
+
+    textbox(
+        0,
+        wrap.cells_height as isize - errors.len() as isize,
+        50,
+        errors.len(),
+        false,
+    );
+
+    TEXTBOX_DEFAULT_COLOR
+        .lock()
+        .unwrap()
+        .clone_from(&(Some(TERM_DEFAULT_BG), None));
+
+    for error in errors.iter() {
+        putln(wrap, &error.msg, error.fg, error.bg);
     }
 }
