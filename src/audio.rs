@@ -16,24 +16,47 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::ffmpeg::FFMPEG_END;
-use crate::term::TERM_QUIT;
+use crate::{PAUSE, ffmpeg::FFMPEG_END};
+use crate::{ffmpeg::DECODER_WAKEUP, term::TERM_QUIT};
 
-pub static mut AUDIO_VSTARTTIME: Mutex<Option<Instant>> = Mutex::new(None);
+static AUDIO_VSTARTTIME: Mutex<Option<Instant>> = Mutex::new(None);
+static AUDIO_PLAYEDTIME: Mutex<Option<Duration>> = Mutex::new(None);
 
-#[allow(static_mut_refs)]
 pub fn played_time() -> Duration {
-    if let Some(time) = *unsafe { AUDIO_VSTARTTIME.lock().unwrap() } {
-        time.elapsed()
+    if PAUSE.load(Ordering::SeqCst) {
+        if let Some(time) = *AUDIO_PLAYEDTIME.lock().unwrap() {
+            time
+        } else {
+            Duration::from_millis(0)
+        }
     } else {
-        Duration::from_millis(0)
+        if let Some(time) = *AUDIO_VSTARTTIME.lock().unwrap() {
+            time.elapsed()
+        } else {
+            Duration::from_millis(0)
+        }
+    }
+}
+
+pub fn played_time_or_none() -> Option<Duration> {
+    if PAUSE.load(Ordering::SeqCst) {
+        if let Some(time) = *AUDIO_PLAYEDTIME.lock().unwrap() {
+            Some(time)
+        } else {
+            None
+        }
+    } else {
+        if let Some(time) = *AUDIO_VSTARTTIME.lock().unwrap() {
+            Some(time.elapsed())
+        } else {
+            None
+        }
     }
 }
 
 static PLAYED_SAMPLES: AtomicU64 = AtomicU64::new(0);
 static AUDIO_SAMPLERATE: AtomicU64 = AtomicU64::new(0);
 
-#[allow(static_mut_refs)]
 fn update_vtime(add_samples: u64) {
     let samples = PLAYED_SAMPLES.fetch_add(add_samples, Ordering::SeqCst);
     let samplerate = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
@@ -41,7 +64,8 @@ fn update_vtime(add_samples: u64) {
         let secs = samples / samplerate;
         let nanos = samples % samplerate * 1_000_000_000 / samplerate;
         let vtime = Duration::new(secs, nanos as u32);
-        *unsafe { AUDIO_VSTARTTIME.lock().unwrap() } = Some(Instant::now() - vtime);
+        *AUDIO_PLAYEDTIME.lock().unwrap() = Some(vtime);
+        *AUDIO_VSTARTTIME.lock().unwrap() = Some(Instant::now() - vtime);
     };
 }
 
@@ -61,6 +85,10 @@ fn build_cpal_stream(
         SampleFormat::F32 => device.build_output_stream(
             config,
             move |data: &mut [f32], _| {
+                if PAUSE.load(Ordering::SeqCst) {
+                    data.fill(0.0);
+                    return;
+                }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
                 let mut buf = audio_buffer.lock().unwrap();
@@ -79,6 +107,10 @@ fn build_cpal_stream(
         SampleFormat::F64 => device.build_output_stream(
             config,
             move |data: &mut [f64], _| {
+                if PAUSE.load(Ordering::SeqCst) {
+                    data.fill(0.0);
+                    return;
+                }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
                 let mut buf = audio_buffer.lock().unwrap();
@@ -97,6 +129,10 @@ fn build_cpal_stream(
         SampleFormat::I16 => device.build_output_stream(
             config,
             move |data: &mut [i16], _| {
+                if PAUSE.load(Ordering::SeqCst) {
+                    data.fill(0);
+                    return;
+                }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
                 let mut buf = audio_buffer.lock().unwrap();
@@ -116,6 +152,10 @@ fn build_cpal_stream(
         SampleFormat::U16 => device.build_output_stream(
             config,
             move |data: &mut [u16], _| {
+                if PAUSE.load(Ordering::SeqCst) {
+                    data.fill(128);
+                    return;
+                }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
                 let mut buf = audio_buffer.lock().unwrap();
@@ -137,10 +177,9 @@ fn build_cpal_stream(
     .map_err(|e| e.into())
 }
 
-pub static mut AUDIO_FRAME: Mutex<Option<AudioFrame>> = Mutex::new(None);
-pub static mut AUDIO_FRAME_SIG: Condvar = Condvar::new();
+pub static AUDIO_FRAME: Mutex<Option<AudioFrame>> = Mutex::new(None);
+pub static AUDIO_FRAME_SIG: Condvar = Condvar::new();
 
-#[allow(static_mut_refs)]
 pub fn audio_main() {
     let host = cpal::default_host();
     let device = host
@@ -164,19 +203,20 @@ pub fn audio_main() {
 
     while TERM_QUIT.load(Ordering::SeqCst) == false {
         let frame = {
-            let mut lock = unsafe { AUDIO_FRAME.lock().unwrap() };
+            let mut lock = AUDIO_FRAME.lock().unwrap();
             while lock.is_none() && TERM_QUIT.load(Ordering::SeqCst) == false {
                 if FFMPEG_END.load(Ordering::SeqCst) {
                     break;
                 }
-                lock = unsafe { AUDIO_FRAME_SIG.wait(lock).unwrap() };
+                lock = AUDIO_FRAME_SIG.wait(lock).unwrap();
             }
             if lock.is_none() {
                 break;
             }
             lock.take().unwrap()
         };
-        unsafe { AUDIO_FRAME_SIG.notify_all() };
+        AUDIO_FRAME_SIG.notify_all();
+        DECODER_WAKEUP.notify_all();
 
         if Some(frame.format()) != resampler_format
             || Some(frame.channel_layout()) != resampler_layout

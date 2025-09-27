@@ -4,7 +4,10 @@ use anyhow::{Context, Result};
 use ffmpeg_next as av;
 use std::{
     panic,
-    sync::{LazyLock, atomic::Ordering},
+    sync::{
+        LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 use tokio::runtime::Runtime;
 
@@ -32,6 +35,8 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .build()
         .expect("Failed to create Tokio runtime")
 });
+
+pub static PAUSE: AtomicBool = AtomicBool::new(false);
 
 fn main() -> Result<()> {
     panic::set_hook(Box::new(|info| {
@@ -67,6 +72,9 @@ fn main() -> Result<()> {
 
     term::init();
 
+    stdin::register_keypress_callback(b' ', |_| {
+        PAUSE.fetch_xor(true, Ordering::SeqCst);
+    });
     stdin::register_keypress_callback(b'q', |_| term::request_quit());
     stdin::register_keypress_callback(b'n', |_| ffmpeg::notify_quit());
     stdin::register_keypress_callback(b'l', |_| {

@@ -2,14 +2,16 @@ use libc::{LC_CTYPE, SIGINT, STDIN_FILENO, STDOUT_FILENO, setlocale, signal, tcg
 use std::{
     mem::MaybeUninit,
     process::exit,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 use unicode_width::UnicodeWidthChar;
 
 use crate::{
-    TOKIO_RUNTIME,
-    audio::AUDIO_VSTARTTIME,
+    TOKIO_RUNTIME, audio,
     error::print_errors,
     ffmpeg,
     playlist::PLAYLIST,
@@ -72,24 +74,19 @@ pub fn add_render_callback(callback: fn(&mut RenderWrapper<'_, '_>)) {
 
 #[allow(static_mut_refs)]
 pub fn render(frame: &[Color], pitch: usize) {
-    static mut LAST_TIME: Option<Duration> = None;
+    static LAST_TIME: Mutex<Option<Duration>> = Mutex::new(None);
 
-    let played_time = unsafe {
-        AUDIO_VSTARTTIME
-            .lock()
-            .unwrap()
-            .map_or(None, |start| Some(start.elapsed()))
-    };
+    let played_time = audio::played_time_or_none();
 
-    let delta_time = unsafe {
-        LAST_TIME
-            .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))
-            .unwrap_or(None)
-            .unwrap_or(Duration::from_millis(0))
-    };
+    let delta_time = LAST_TIME
+        .lock()
+        .unwrap()
+        .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))
+        .unwrap_or(None)
+        .unwrap_or(Duration::from_millis(0));
 
     if let Some(played_time) = played_time {
-        unsafe { LAST_TIME = Some(played_time) };
+        LAST_TIME.lock().unwrap().replace(played_time);
     }
 
     let wrap = &mut RenderWrapper {
@@ -303,7 +300,6 @@ pub static TERM_QUIT: AtomicBool = AtomicBool::new(false);
 const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
 const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
 
-#[allow(static_mut_refs)]
 pub extern "C" fn request_quit() {
     TERM_QUIT.store(true, Ordering::SeqCst);
     ffmpeg::notify_quit();

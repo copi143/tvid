@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use crate::{
     audio,
-    ffmpeg::{FFMPEG_END, VIDEO_TIME_BASE},
+    ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE},
     term::{
         self, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_QUIT, VIDEO_ORIGIN_PIXELS_NOW,
         VIDEO_PIXELS,
@@ -19,10 +19,9 @@ use crate::{
     util::{Cell, Color},
 };
 
-pub static mut VIDEO_FRAME: Mutex<Option<VideoFrame>> = Mutex::new(None);
-pub static mut VIDEO_FRAME_SIG: Condvar = Condvar::new();
+pub static VIDEO_FRAME: Mutex<Option<VideoFrame>> = Mutex::new(None);
+pub static VIDEO_FRAME_SIG: Condvar = Condvar::new();
 
-#[allow(static_mut_refs)]
 pub fn video_main() {
     let mut scaler = MaybeUninit::uninit();
 
@@ -32,19 +31,20 @@ pub fn video_main() {
 
     while TERM_QUIT.load(Ordering::SeqCst) == false {
         let frame = {
-            let mut lock = unsafe { VIDEO_FRAME.lock().unwrap() };
+            let mut lock = VIDEO_FRAME.lock().unwrap();
             while lock.is_none() && TERM_QUIT.load(Ordering::SeqCst) == false {
                 if FFMPEG_END.load(Ordering::SeqCst) {
                     break;
                 }
-                lock = unsafe { VIDEO_FRAME_SIG.wait(lock).unwrap() };
+                lock = VIDEO_FRAME_SIG.wait(lock).unwrap();
             }
             if lock.is_none() {
                 break;
             }
             lock.take().unwrap()
         };
-        unsafe { VIDEO_FRAME_SIG.notify_all() };
+        VIDEO_FRAME_SIG.notify_all();
+        DECODER_WAKEUP.notify_all();
 
         VIDEO_ORIGIN_PIXELS_NOW.set(frame.width() as usize, frame.height() as usize);
         let term_size_changed = term::updatesize();
@@ -93,9 +93,8 @@ pub fn video_main() {
             pts as u64 * base.0 as u64 / base.1 as u64,
             (pts as u64 * base.0 as u64 % base.1 as u64 * 1_000_000_000 / base.1 as u64) as u32,
         );
-        let audio_played_time = audio::played_time();
-        if frametime > audio_played_time {
-            std::thread::sleep(frametime - audio_played_time);
+        while frametime > audio::played_time() + Duration::from_millis(5) {
+            std::thread::sleep(frametime - audio::played_time());
         }
     }
 }

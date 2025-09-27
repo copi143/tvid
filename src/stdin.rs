@@ -86,7 +86,6 @@ pub fn input_main() {
     }
 }
 
-#[allow(static_mut_refs)]
 pub fn notify_quit() {
     STDIN_QUIT.store(true, Ordering::SeqCst);
 }
