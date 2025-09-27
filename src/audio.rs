@@ -30,18 +30,19 @@ pub fn played_time() -> Duration {
     }
 }
 
-static PLAYED_SAMPLES: Mutex<u64> = Mutex::new(0);
+static PLAYED_SAMPLES: AtomicU64 = AtomicU64::new(0);
 static AUDIO_SAMPLERATE: AtomicU64 = AtomicU64::new(0);
 
 #[allow(static_mut_refs)]
 fn update_vtime(add_samples: u64) {
-    let samples = *PLAYED_SAMPLES.lock().unwrap();
+    let samples = PLAYED_SAMPLES.fetch_add(add_samples, Ordering::SeqCst);
     let samplerate = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
-    let secs = samples / samplerate;
-    let nanos = samples % samplerate * 1_000_000_000 / samplerate;
-    let vtime = Duration::new(secs, nanos as u32);
-    *unsafe { AUDIO_VSTARTTIME.lock().unwrap() } = Some(Instant::now() - vtime);
-    *PLAYED_SAMPLES.lock().unwrap() += add_samples;
+    if samplerate > 0 {
+        let secs = samples / samplerate;
+        let nanos = samples % samplerate * 1_000_000_000 / samplerate;
+        let vtime = Duration::new(secs, nanos as u32);
+        *unsafe { AUDIO_VSTARTTIME.lock().unwrap() } = Some(Instant::now() - vtime);
+    };
 }
 
 static AUDIO_BUFFER_LENGTH: AtomicUsize = AtomicUsize::new(0);
@@ -54,6 +55,7 @@ fn build_cpal_stream(
 ) -> Result<cpal::Stream> {
     let err_fn = |_| { /* ignore */ };
     let sample_format = config.sample_format();
+    let channels = config.channels();
     let config = &config.config();
     match sample_format {
         SampleFormat::F32 => device.build_output_stream(
@@ -68,7 +70,7 @@ fn build_cpal_stream(
                         0.0
                     });
                 }
-                update_vtime(samples_to_add);
+                update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
             },
             err_fn,
@@ -86,7 +88,7 @@ fn build_cpal_stream(
                         0.0
                     }) as f64;
                 }
-                update_vtime(samples_to_add);
+                update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
             },
             err_fn,
@@ -105,7 +107,7 @@ fn build_cpal_stream(
                     });
                     *sample = (v * std::i16::MAX as f32) as i16;
                 }
-                update_vtime(samples_to_add);
+                update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
             },
             err_fn,
@@ -124,7 +126,7 @@ fn build_cpal_stream(
                     });
                     *sample = ((v * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
                 }
-                update_vtime(samples_to_add);
+                update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
             },
             err_fn,
@@ -150,7 +152,7 @@ pub fn audio_main() {
     let target_sample_fmt = Sample::F32(SampleType::Packed);
     let audio_buffer: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::<f32>::new()));
     let cpal_stream = build_cpal_stream(&device, &config, audio_buffer.clone()).unwrap();
-    PLAYED_SAMPLES.lock().unwrap().clone_from(&0);
+    PLAYED_SAMPLES.store(0, Ordering::SeqCst);
     AUDIO_SAMPLERATE.store(config.sample_rate().0 as u64, Ordering::SeqCst);
     cpal_stream.play().unwrap();
 

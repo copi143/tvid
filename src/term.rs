@@ -8,10 +8,12 @@ use std::{
 use unicode_width::UnicodeWidthChar;
 
 use crate::{
-    CURRENT_PLAYING, TOKIO_RUNTIME,
+    TOKIO_RUNTIME,
     audio::AUDIO_VSTARTTIME,
     error::print_errors,
-    ffmpeg, stdin,
+    ffmpeg,
+    playlist::PLAYLIST,
+    stdin,
     stdout::{self, pend_print, pending_frames, remove_pending_frames},
     util::*,
 };
@@ -39,6 +41,7 @@ pub struct RenderWrapper<'frame, 'cells> {
 
     pub playing: String,
     pub played_time: Option<Duration>,
+    pub delta_time: Duration,
 }
 
 impl RenderWrapper<'_, '_> {
@@ -60,12 +63,32 @@ static mut LAST_FRAME: Vec<Cell> = Vec::new();
 static mut RENDER_CALLBACKS: Vec<fn(&mut RenderWrapper)> = Vec::new();
 
 #[allow(static_mut_refs)]
-pub fn add_render_callback(callback: fn(&mut RenderWrapper)) {
+pub fn add_render_callback(callback: fn(&mut RenderWrapper<'_, '_>)) {
     unsafe { RENDER_CALLBACKS.push(callback) };
 }
 
 #[allow(static_mut_refs)]
 pub fn render(frame: &[Color], pitch: usize) {
+    static mut LAST_TIME: Option<Duration> = None;
+
+    let played_time = unsafe {
+        AUDIO_VSTARTTIME
+            .lock()
+            .unwrap()
+            .map_or(None, |start| Some(start.elapsed()))
+    };
+
+    let delta_time = unsafe {
+        LAST_TIME
+            .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))
+            .unwrap_or(None)
+            .unwrap_or(Duration::from_millis(0))
+    };
+
+    if let Some(played_time) = played_time {
+        unsafe { LAST_TIME = Some(played_time) };
+    }
+
     let wrap = &mut RenderWrapper {
         frame,
         frame_width: VIDEO_PIXELS.x(),
@@ -81,13 +104,9 @@ pub fn render(frame: &[Color], pitch: usize) {
         padding_bottom: VIDEO_PADDING.bottom(),
         pixels_width: VIDEO_PIXELS.x(),
         pixels_height: VIDEO_PIXELS.y(),
-        playing: CURRENT_PLAYING.lock().unwrap().clone(),
-        played_time: unsafe {
-            AUDIO_VSTARTTIME
-                .lock()
-                .unwrap()
-                .map_or(None, |start| Some(start.elapsed()))
-        },
+        playing: { PLAYLIST.lock().unwrap().current().cloned() }.unwrap_or_default(),
+        played_time,
+        delta_time,
     };
 
     for callback in unsafe { &RENDER_CALLBACKS } {
@@ -144,6 +163,8 @@ async fn print_diff(force_flush: bool) {
     let cells = unsafe {
         THIS_FRAME
             .as_mut_slice()
+            .split_at_mut(THIS_FRAME.len() - 1)
+            .0
             .chunks_mut(term_width)
             .map(|chunk| std::mem::transmute(chunk))
             .collect::<Vec<_>>()
@@ -151,6 +172,8 @@ async fn print_diff(force_flush: bool) {
     let lasts = unsafe {
         LAST_FRAME
             .as_slice()
+            .split_at(LAST_FRAME.len() - 1)
+            .0
             .chunks(term_width)
             .map(|chunk| std::mem::transmute(chunk))
             .collect::<Vec<_>>()
@@ -238,12 +261,14 @@ pub fn updatesize() -> bool {
     }
 
     unsafe {
+        // 将大小加一作为哨兵
         THIS_FRAME.clear();
-        THIS_FRAME.resize(xchars * ychars, Cell::default())
+        THIS_FRAME.resize(xchars * ychars + 1, Cell::default())
     };
     unsafe {
+        // 将大小加一作为哨兵
         LAST_FRAME.clear();
-        LAST_FRAME.resize(xchars * ychars, Cell::default())
+        LAST_FRAME.resize(xchars * ychars + 1, Cell::default())
     };
 
     remove_pending_frames();

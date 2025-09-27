@@ -1,7 +1,7 @@
 use std::{
     fmt::Debug,
     ops::Mul,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
 };
 
 use tokio::task::JoinHandle;
@@ -87,6 +87,82 @@ impl TBLR {
     }
 }
 
+pub struct TextBoxInfo {
+    pub x: AtomicIsize,
+    pub y: AtomicIsize,
+    pub w: AtomicUsize,
+    pub h: AtomicUsize,
+    pub i: AtomicIsize,
+    pub j: AtomicIsize,
+    pub autowrap: AtomicBool,
+}
+
+impl TextBoxInfo {
+    pub const fn new() -> Self {
+        TextBoxInfo {
+            x: AtomicIsize::new(0),
+            y: AtomicIsize::new(0),
+            w: AtomicUsize::new(0),
+            h: AtomicUsize::new(0),
+            i: AtomicIsize::new(0),
+            j: AtomicIsize::new(0),
+            autowrap: AtomicBool::new(false),
+        }
+    }
+
+    pub fn set(&self, x: isize, y: isize, w: usize, h: usize, i: isize, j: isize) {
+        self.x.store(x, Ordering::SeqCst);
+        self.y.store(y, Ordering::SeqCst);
+        self.w.store(w, Ordering::SeqCst);
+        self.h.store(h, Ordering::SeqCst);
+        self.i.store(i, Ordering::SeqCst);
+        self.j.store(j, Ordering::SeqCst);
+    }
+
+    pub fn get(&self) -> (isize, isize, usize, usize, isize, isize) {
+        (
+            self.x.load(Ordering::SeqCst),
+            self.y.load(Ordering::SeqCst),
+            self.w.load(Ordering::SeqCst),
+            self.h.load(Ordering::SeqCst),
+            self.i.load(Ordering::SeqCst),
+            self.j.load(Ordering::SeqCst),
+        )
+    }
+
+    pub fn x(&self) -> isize {
+        self.x.load(Ordering::SeqCst)
+    }
+
+    pub fn y(&self) -> isize {
+        self.y.load(Ordering::SeqCst)
+    }
+
+    pub fn w(&self) -> usize {
+        self.w.load(Ordering::SeqCst)
+    }
+
+    pub fn h(&self) -> usize {
+        self.h.load(Ordering::SeqCst)
+    }
+
+    pub fn i(&self) -> isize {
+        self.i.load(Ordering::SeqCst)
+    }
+
+    pub fn j(&self) -> isize {
+        self.j.load(Ordering::SeqCst)
+    }
+
+    pub fn setwrap(&self, autowrap: bool) {
+        self.autowrap.store(autowrap, Ordering::SeqCst);
+    }
+
+    pub fn getwrap(&self) -> bool {
+        self.autowrap.load(Ordering::SeqCst)
+    }
+}
+
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 /// 标准 srgb 2.2
@@ -121,6 +197,30 @@ pub struct ColorF32 {
     pub g: f32,
     pub b: f32,
     pub a: f32,
+}
+
+impl Mul<f32> for ColorF32 {
+    type Output = ColorF32;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        ColorF32 {
+            r: self.r * rhs,
+            g: self.g * rhs,
+            b: self.b * rhs,
+            a: self.a,
+        }
+    }
+}
+
+impl ColorF32 {
+    pub fn mix(a: ColorF32, b: ColorF32, t: f32) -> Self {
+        ColorF32 {
+            r: a.r * (1.0 - t) + b.r * t,
+            g: a.g * (1.0 - t) + b.g * t,
+            b: a.b * (1.0 - t) + b.b * t,
+            a: a.a * (1.0 - t) + b.a * t,
+        }
+    }
 }
 
 impl From<Color> for ColorF32 {
@@ -198,13 +298,18 @@ impl Color {
         }
     }
 
-    pub const fn halfhalf(a: Color, b: Color) -> Self {
-        Color {
-            r: ((a.r as u16 + b.r as u16) / 2) as u8,
-            g: ((a.g as u16 + b.g as u16) / 2) as u8,
-            b: ((a.b as u16 + b.b as u16) / 2) as u8,
-            a: ((a.a as u16 + b.a as u16) / 2) as u8,
-        }
+    pub fn halfhalf(a: Color, b: Color) -> Self {
+        Color::mix(a, b, 0.5)
+    }
+
+    pub fn as_f32(&self) -> ColorF32 {
+        ColorF32::from(*self)
+    }
+
+    pub fn mix(a: Color, b: Color, t: f32) -> Self {
+        let a = ColorF32::from(a);
+        let b = ColorF32::from(b);
+        Color::from(ColorF32::mix(a, b, t))
     }
 }
 

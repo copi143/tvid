@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use ffmpeg_next as av;
 use std::{
     panic,
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, atomic::Ordering},
 };
 use tokio::runtime::Runtime;
 
@@ -32,8 +32,6 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .build()
         .expect("Failed to create Tokio runtime")
 });
-
-pub static CURRENT_PLAYING: Mutex<String> = Mutex::new(String::new());
 
 fn main() -> Result<()> {
     panic::set_hook(Box::new(|info| {
@@ -71,6 +69,9 @@ fn main() -> Result<()> {
 
     stdin::register_keypress_callback(b'q', |_| term::request_quit());
     stdin::register_keypress_callback(b'n', |_| ffmpeg::notify_quit());
+    stdin::register_keypress_callback(b'l', |_| {
+        ui::SHOW_PLAYLIST.fetch_xor(true, Ordering::SeqCst);
+    });
 
     term::add_render_callback(video::render_frame);
     term::add_render_callback(subtitle::render_subtitle);
@@ -79,8 +80,7 @@ fn main() -> Result<()> {
     let input_main = std::thread::spawn(stdin::input_main);
     let output_main = std::thread::spawn(stdout::output_main);
 
-    while let Some(path) = PLAYLIST.lock().unwrap().next() {
-        CURRENT_PLAYING.lock().unwrap().clone_from(&path);
+    while let Some(path) = { PLAYLIST.lock().unwrap().next().cloned() } {
         ffmpeg::decode_main(&path).unwrap_or_else(|err| {
             send_error!("ffmpeg decode error: {}", err);
         });

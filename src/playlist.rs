@@ -41,6 +41,10 @@ impl Playlist {
         self.pos
     }
 
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
     pub fn get_looping(&self) -> bool {
         self.looping
     }
@@ -50,20 +54,20 @@ impl Playlist {
         self
     }
 
-    pub fn current(&self) -> Option<String> {
+    pub fn current(&self) -> Option<&String> {
         if self.items.len() == 0 || self.pos >= self.items.len() {
             return None;
         }
-        Some(self.items[self.pos].clone())
+        Some(&self.items[self.pos])
     }
 
-    pub fn next(&mut self) -> Option<String> {
+    pub fn next(&mut self) -> Option<&String> {
         if self.items.len() == 0 {
             return None;
         }
         if self.first_run {
             self.first_run = false;
-            return Some(self.items[self.pos].clone());
+            return Some(&self.items[self.pos]);
         }
         self.pos += 1;
         if self.pos >= self.items.len() {
@@ -74,16 +78,16 @@ impl Playlist {
                 return None;
             }
         }
-        Some(self.items[self.pos].clone())
+        Some(&self.items[self.pos])
     }
 
-    pub fn prev(&mut self) -> Option<String> {
+    pub fn prev(&mut self) -> Option<&String> {
         if self.items.len() == 0 {
             return None;
         }
         if self.first_run {
             self.first_run = false;
-            return Some(self.items[self.pos].clone());
+            return Some(&self.items[self.pos]);
         }
         if self.pos == 0 {
             if self.looping {
@@ -92,7 +96,7 @@ impl Playlist {
         } else {
             self.pos -= 1;
         }
-        Some(self.items[self.pos].clone())
+        Some(&self.items[self.pos])
     }
 }
 
