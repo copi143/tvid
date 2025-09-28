@@ -54,7 +54,7 @@ tvid <video-file> [video-file] ...
 
 ### Keyboard Shortcuts (TODO)
 
-- [ ] `Space`: Play/Pause
+- [x] `Space`: Play/Pause
 - [x] `q`: Quit
 - [ ] `←/→`: Seek backward/forward
 - [ ] `↑/↓`: Volume up/down

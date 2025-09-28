@@ -1,5 +1,4 @@
 use anyhow::Result;
-use libc::{STDIN_FILENO, read};
 use std::{
     collections::BTreeMap,
     ffi::c_void,
@@ -9,8 +8,30 @@ use std::{
 
 use crate::term::TERM_QUIT;
 
+#[cfg(unix)]
 pub fn scan(bytes: &mut [u8]) -> isize {
-    unsafe { read(STDIN_FILENO, bytes.as_mut_ptr() as *mut c_void, bytes.len()) }
+    use libc::STDIN_FILENO;
+    unsafe { libc::read(STDIN_FILENO, bytes.as_mut_ptr() as *mut c_void, bytes.len()) }
+}
+
+#[cfg(windows)]
+pub fn scan(bytes: &mut [u8]) -> isize {
+    use winapi::shared::minwindef::DWORD;
+    use winapi::um::consoleapi::ReadConsoleA;
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::STD_INPUT_HANDLE;
+    unsafe {
+        let handle = GetStdHandle(STD_INPUT_HANDLE);
+        let mut read = 0u32;
+        let res = ReadConsoleA(
+            handle,
+            bytes.as_mut_ptr() as *mut c_void,
+            bytes.len() as DWORD,
+            &mut read,
+            std::ptr::null_mut(),
+        );
+        if res == 0 { -1 } else { read as isize }
+    }
 }
 
 static STDIN_QUIT: AtomicBool = AtomicBool::new(false);

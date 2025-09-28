@@ -1,6 +1,4 @@
-use libc::{LC_CTYPE, SIGINT, STDIN_FILENO, STDOUT_FILENO, setlocale, signal, tcgetattr};
 use std::{
-    mem::MaybeUninit,
     process::exit,
     sync::{
         Mutex,
@@ -209,6 +207,8 @@ async fn print_diff(force_flush: bool) {
     }
 }
 
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
 pub static VIDEO_ORIGIN_PIXELS_NOW: XY = XY::new();
 pub static VIDEO_ORIGIN_PIXELS: XY = XY::new();
 
@@ -221,14 +221,11 @@ static TERM_RESIZED: AtomicBool = AtomicBool::new(false);
 
 #[allow(static_mut_refs)]
 pub fn updatesize() -> bool {
-    let mut winsize = MaybeUninit::uninit();
-    if unsafe { libc::ioctl(STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) } < 0 {
+    let Some(winsize) = get_winsize() else {
         return false;
-    }
-    let winsize: libc::winsize = unsafe { winsize.assume_init() };
-
-    let (xchars, ychars) = (winsize.ws_col as usize, winsize.ws_row as usize);
-    let (xpixels, ypixels) = (winsize.ws_xpixel as usize, winsize.ws_ypixel as usize);
+    };
+    let (xchars, ychars) = (winsize.col as usize, winsize.row as usize);
+    let (xpixels, ypixels) = (winsize.xpixel as usize, winsize.ypixel as usize);
     let (xvideo, yvideo) = VIDEO_ORIGIN_PIXELS_NOW.get();
     assert!(xvideo > 0 && yvideo > 0, "video size is zero");
     let (xchars, ychars) = if xchars == 0 || ychars == 0 {
@@ -292,6 +289,60 @@ pub fn updatesize() -> bool {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+struct Winsize {
+    pub row: u16,
+    pub col: u16,
+    pub xpixel: u16,
+    pub ypixel: u16,
+}
+
+#[cfg(unix)]
+fn get_winsize() -> Option<Winsize> {
+    let mut winsize = std::mem::MaybeUninit::uninit();
+    if unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) } < 0 {
+        return None;
+    }
+    let winsize: libc::winsize = unsafe { winsize.assume_init() };
+    Some(Winsize {
+        row: winsize.ws_row,
+        col: winsize.ws_col,
+        xpixel: winsize.ws_xpixel,
+        ypixel: winsize.ws_ypixel,
+    })
+}
+
+#[cfg(windows)]
+fn get_winsize() -> Option<Winsize> {
+    use winapi::shared::minwindef::BOOL;
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::STD_OUTPUT_HANDLE;
+    use winapi::um::wincon::CONSOLE_SCREEN_BUFFER_INFO;
+    use winapi::um::winnt::HANDLE;
+    unsafe extern "system" {
+        pub fn GetConsoleScreenBufferInfo(
+            hConsoleOutput: HANDLE,
+            lpConsoleScreenBufferInfo: *mut CONSOLE_SCREEN_BUFFER_INFO,
+        ) -> BOOL;
+    }
+    unsafe {
+        let handle: HANDLE = GetStdHandle(STD_OUTPUT_HANDLE);
+        let mut csbi: CONSOLE_SCREEN_BUFFER_INFO = std::mem::zeroed();
+        if GetConsoleScreenBufferInfo(handle, &mut csbi) == 0 {
+            return None;
+        }
+        let col = (csbi.srWindow.Right - csbi.srWindow.Left + 1) as u16;
+        let row = (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as u16;
+        Some(Winsize {
+            row,
+            col,
+            xpixel: col * 8,
+            ypixel: row * 16,
+        })
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
 pub const TERM_DEFAULT_FG: Color = Color::new(171, 178, 191);
 pub const TERM_DEFAULT_BG: Color = Color::new(35, 39, 46);
 
@@ -307,18 +358,22 @@ pub extern "C" fn request_quit() {
     stdout::notify_quit();
 }
 
+#[cfg(unix)]
 static mut ORIG_TERMIOS: Option<libc::termios> = None;
 
 /// 在初始化终端之前不能启动 stdin 和 stdout 线程
+#[cfg(unix)]
 pub fn init() {
-    unsafe { signal(SIGINT, request_quit as usize) };
+    use libc::STDIN_FILENO;
+
+    unsafe { libc::signal(libc::SIGINT, request_quit as usize) };
 
     stdout::print(TERM_INIT_SEQ);
 
-    unsafe { setlocale(LC_CTYPE, "en_US.UTF-8".as_ptr() as *const i8) };
+    unsafe { libc::setlocale(libc::LC_CTYPE, "en_US.UTF-8".as_ptr() as *const i8) };
 
     let mut termios = std::mem::MaybeUninit::uninit();
-    if unsafe { tcgetattr(STDIN_FILENO, termios.as_mut_ptr()) } == 0 {
+    if unsafe { libc::tcgetattr(STDIN_FILENO, termios.as_mut_ptr()) } == 0 {
         let mut termios = unsafe { termios.assume_init() };
         unsafe { ORIG_TERMIOS = Some(termios) };
         termios.c_lflag &= !(libc::ECHO | libc::ICANON);
@@ -328,14 +383,53 @@ pub fn init() {
     }
 }
 
+#[cfg(windows)]
+pub fn init() {
+    use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+    use winapi::um::wincon::{ENABLE_PROCESSED_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING};
+    use winapi::um::winnt::HANDLE;
+    unsafe extern "system" {
+        fn SetConsoleCP(wCodePageID: u32) -> i32;
+        fn SetConsoleOutputCP(wCodePageID: u32) -> i32;
+    }
+    unsafe {
+        // 设置控制台输入输出为 UTF-8
+        SetConsoleCP(65001);
+        SetConsoleOutputCP(65001);
+
+        let h_in: HANDLE = GetStdHandle(STD_INPUT_HANDLE);
+        let mut mode: u32 = 0;
+        if GetConsoleMode(h_in, &mut mode) != 0 {
+            SetConsoleMode(h_in, ENABLE_PROCESSED_INPUT);
+        }
+        let h_out: HANDLE = GetStdHandle(STD_OUTPUT_HANDLE);
+        let mut out_mode: u32 = 0;
+        if GetConsoleMode(h_out, &mut out_mode) != 0 {
+            SetConsoleMode(h_out, out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+}
+
 /// 在退出前必须终止 stdin 和 stdout 线程
+#[cfg(unix)]
 pub fn quit() -> ! {
+    use libc::STDIN_FILENO;
+
     if let Some(termios) = unsafe { ORIG_TERMIOS } {
         unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
     }
     stdout::print(TERM_EXIT_SEQ);
     print_errors();
     unsafe { libc::tcflush(STDIN_FILENO, libc::TCIFLUSH) };
+    exit(0);
+}
+
+#[cfg(windows)]
+pub fn quit() -> ! {
+    stdout::print(TERM_EXIT_SEQ);
+    print_errors();
     exit(0);
 }
 

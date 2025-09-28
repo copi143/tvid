@@ -1,4 +1,3 @@
-use libc::{STDOUT_FILENO, write};
 use std::{
     collections::VecDeque,
     ffi::c_void,
@@ -7,8 +6,30 @@ use std::{
 
 use crate::term::TERM_QUIT;
 
+#[cfg(unix)]
 pub fn print(bytes: &[u8]) -> isize {
-    unsafe { write(STDOUT_FILENO, bytes.as_ptr() as *const c_void, bytes.len()) }
+    use libc::STDOUT_FILENO;
+    unsafe { libc::write(STDOUT_FILENO, bytes.as_ptr() as *const c_void, bytes.len()) }
+}
+
+#[cfg(windows)]
+pub fn print(bytes: &[u8]) -> isize {
+    use winapi::shared::minwindef::DWORD;
+    use winapi::um::consoleapi::WriteConsoleA;
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::STD_OUTPUT_HANDLE;
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        let mut written = 0u32;
+        let res = WriteConsoleA(
+            handle,
+            bytes.as_ptr() as *const c_void,
+            bytes.len() as DWORD,
+            &mut written,
+            std::ptr::null_mut(),
+        );
+        if res == 0 { -1 } else { written as isize }
+    }
 }
 
 static STDOUT_BUF: Mutex<VecDeque<Vec<u8>>> = Mutex::new(VecDeque::new());
