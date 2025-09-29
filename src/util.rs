@@ -1,9 +1,11 @@
+use parking_lot::Mutex;
 use std::{
+    collections::VecDeque,
     fmt::Debug,
     ops::Mul,
     sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
+    time::Duration,
 };
-
 use tokio::task::JoinHandle;
 
 pub struct XY {
@@ -213,12 +215,12 @@ impl Mul<f32> for ColorF32 {
 }
 
 impl ColorF32 {
-    pub fn mix(a: ColorF32, b: ColorF32, t: f32) -> Self {
+    pub fn mix(fg: ColorF32, bg: ColorF32, t: f32) -> Self {
         ColorF32 {
-            r: a.r * (1.0 - t) + b.r * t,
-            g: a.g * (1.0 - t) + b.g * t,
-            b: a.b * (1.0 - t) + b.b * t,
-            a: a.a * (1.0 - t) + b.a * t,
+            r: fg.r * t + bg.r * (1.0 - t),
+            g: fg.g * t + bg.g * (1.0 - t),
+            b: fg.b * t + bg.b * (1.0 - t),
+            a: fg.a * t + bg.a * (1.0 - t),
         }
     }
 }
@@ -306,11 +308,18 @@ impl Color {
         ColorF32::from(*self)
     }
 
-    pub fn mix(a: Color, b: Color, t: f32) -> Self {
-        let a = ColorF32::from(a);
-        let b = ColorF32::from(b);
-        Color::from(ColorF32::mix(a, b, t))
+    pub fn mix(fg: Color, bg: Color, t: f32) -> Self {
+        let fg = ColorF32::from(fg);
+        let bg = ColorF32::from(bg);
+        Color::from(ColorF32::mix(fg, bg, t))
     }
+}
+
+pub fn best_contrast_color(bg: Color) -> Color {
+    let r = if bg.r < 128 { 255 } else { 0 };
+    let g = if bg.g < 128 { 255 } else { 0 };
+    let b = if bg.b < 128 { 255 } else { 0 };
+    Color::new(r, g, b)
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -333,7 +342,11 @@ impl Default for Cell {
 }
 
 impl Cell {
-    pub fn transparent() -> Self {
+    pub const fn new(c: char, fg: Color, bg: Color) -> Self {
+        Cell { c: Some(c), fg, bg }
+    }
+
+    pub const fn transparent() -> Self {
         Cell {
             c: None,
             fg: Color::transparent(),
@@ -445,23 +458,30 @@ pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
 }
 
 pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>) -> String {
-    match (fg, bg) {
-        (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
-            (Some(fgi), Some(bgi)) => format!("\x1b[38;5;{};48;5;{}m", fgi, bgi),
-            (Some(fgi), None) => format!("\x1b[38;5;{};48;2;{:?}m", fgi, bg),
-            (None, Some(bgi)) => format!("\x1b[38;2;{:?};48;5;{}m", fg, bgi),
-            (None, None) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
-        },
-        (Some(fg), None) => match try_palette256(fg) {
-            Some(fgi) => format!("\x1b[38;5;{}m", fgi),
-            None => format!("\x1b[38;2;{:?}m", fg),
-        },
-        (None, Some(bg)) => match try_palette256(bg) {
-            Some(bgi) => format!("\x1b[48;5;{}m", bgi),
-            None => format!("\x1b[48;2;{:?}m", bg),
-        },
+    return match (fg, bg) {
+        (Some(fg), Some(bg)) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+        (Some(fg), None) => format!("\x1b[38;2;{:?}m", fg),
+        (None, Some(bg)) => format!("\x1b[48;2;{:?}m", bg),
         (None, None) => String::new(),
-    }
+    };
+    // 看起来直接全用真彩色快不少
+    // match (fg, bg) {
+    //     (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
+    //         (Some(fgi), Some(bgi)) => format!("\x1b[38;5;{};48;5;{}m", fgi, bgi),
+    //         (Some(fgi), None) => format!("\x1b[38;5;{};48;2;{:?}m", fgi, bg),
+    //         (None, Some(bgi)) => format!("\x1b[38;2;{:?};48;5;{}m", fg, bgi),
+    //         (None, None) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+    //     },
+    //     (Some(fg), None) => match try_palette256(fg) {
+    //         Some(fgi) => format!("\x1b[38;5;{}m", fgi),
+    //         None => format!("\x1b[38;2;{:?}m", fg),
+    //     },
+    //     (None, Some(bg)) => match try_palette256(bg) {
+    //         Some(bgi) => format!("\x1b[48;5;{}m", bgi),
+    //         None => format!("\x1b[48;2;{:?}m", bg),
+    //     },
+    //     (None, None) => String::new(),
+    // }
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -480,5 +500,16 @@ impl<T: Send + 'static> JoinAll for Vec<JoinHandle<T>> {
             results.push(handle.await.unwrap());
         }
         results
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub fn avg_duration(durations: &Mutex<VecDeque<Duration>>) -> Duration {
+    let lock = durations.lock();
+    if lock.len() == 0 {
+        Duration::ZERO
+    } else {
+        lock.iter().sum::<Duration>() / lock.len() as u32
     }
 }

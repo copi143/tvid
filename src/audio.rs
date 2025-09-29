@@ -10,10 +10,11 @@ use av::{
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ffmpeg_next as av;
+use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
 use std::mem::MaybeUninit;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::{PAUSE, ffmpeg::FFMPEG_END};
@@ -24,13 +25,13 @@ static AUDIO_PLAYEDTIME: Mutex<Option<Duration>> = Mutex::new(None);
 
 pub fn played_time() -> Duration {
     if PAUSE.load(Ordering::SeqCst) {
-        if let Some(time) = *AUDIO_PLAYEDTIME.lock().unwrap() {
+        if let Some(time) = *AUDIO_PLAYEDTIME.lock() {
             time
         } else {
             Duration::from_millis(0)
         }
     } else {
-        if let Some(time) = *AUDIO_VSTARTTIME.lock().unwrap() {
+        if let Some(time) = *AUDIO_VSTARTTIME.lock() {
             time.elapsed()
         } else {
             Duration::from_millis(0)
@@ -40,13 +41,13 @@ pub fn played_time() -> Duration {
 
 pub fn played_time_or_none() -> Option<Duration> {
     if PAUSE.load(Ordering::SeqCst) {
-        if let Some(time) = *AUDIO_PLAYEDTIME.lock().unwrap() {
+        if let Some(time) = *AUDIO_PLAYEDTIME.lock() {
             Some(time)
         } else {
             None
         }
     } else {
-        if let Some(time) = *AUDIO_VSTARTTIME.lock().unwrap() {
+        if let Some(time) = *AUDIO_VSTARTTIME.lock() {
             Some(time.elapsed())
         } else {
             None
@@ -64,13 +65,15 @@ fn update_vtime(add_samples: u64) {
         let secs = samples / samplerate;
         let nanos = samples % samplerate * 1_000_000_000 / samplerate;
         let vtime = Duration::new(secs, nanos as u32);
-        *AUDIO_PLAYEDTIME.lock().unwrap() = Some(vtime);
-        *AUDIO_VSTARTTIME.lock().unwrap() = Some(Instant::now() - vtime);
+        *AUDIO_PLAYEDTIME.lock() = Some(vtime);
+        *AUDIO_VSTARTTIME.lock() = Some(Instant::now() - vtime);
     };
 }
 
 static AUDIO_BUFFER_LENGTH: AtomicUsize = AtomicUsize::new(0);
 static AUDIO_CONSUMED: Condvar = Condvar::new();
+
+static mut VOLUME_K: f32 = 0.25;
 
 fn build_cpal_stream(
     device: &cpal::Device,
@@ -91,12 +94,12 @@ fn build_cpal_stream(
                 }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock().unwrap();
+                let mut buf = audio_buffer.lock();
                 for sample in data {
                     *sample = buf.remove(0).unwrap_or_else(|| {
                         samples_to_add -= 1;
                         0.0
-                    });
+                    }) * unsafe { VOLUME_K };
                 }
                 update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
@@ -113,12 +116,12 @@ fn build_cpal_stream(
                 }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock().unwrap();
+                let mut buf = audio_buffer.lock();
                 for sample in data {
-                    *sample = buf.remove(0).unwrap_or_else(|| {
+                    *sample = (buf.remove(0).unwrap_or_else(|| {
                         samples_to_add -= 1;
                         0.0
-                    }) as f64;
+                    }) * unsafe { VOLUME_K }) as f64;
                 }
                 update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
@@ -135,13 +138,13 @@ fn build_cpal_stream(
                 }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock().unwrap();
+                let mut buf = audio_buffer.lock();
                 for sample in data {
                     let v = buf.remove(0).unwrap_or_else(|| {
                         samples_to_add -= 1;
                         0.0
-                    });
-                    *sample = (v * std::i16::MAX as f32) as i16;
+                    }) * unsafe { VOLUME_K };
+                    *sample = (v.clamp(-1.0, 1.0) * std::i16::MAX as f32) as i16;
                 }
                 update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
@@ -158,13 +161,13 @@ fn build_cpal_stream(
                 }
                 AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
                 let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock().unwrap();
+                let mut buf = audio_buffer.lock();
                 for sample in data {
                     let v = buf.remove(0).unwrap_or_else(|| {
                         samples_to_add -= 1;
                         0.0
-                    });
-                    *sample = ((v * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
+                    }) * unsafe { VOLUME_K };
+                    *sample = ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
                 }
                 update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
@@ -203,12 +206,12 @@ pub fn audio_main() {
 
     while TERM_QUIT.load(Ordering::SeqCst) == false {
         let frame = {
-            let mut lock = AUDIO_FRAME.lock().unwrap();
+            let mut lock = AUDIO_FRAME.lock();
             while lock.is_none() && TERM_QUIT.load(Ordering::SeqCst) == false {
                 if FFMPEG_END.load(Ordering::SeqCst) {
                     break;
                 }
-                lock = AUDIO_FRAME_SIG.wait(lock).unwrap();
+                AUDIO_FRAME_SIG.wait(&mut lock);
             }
             if lock.is_none() {
                 break;
@@ -258,7 +261,7 @@ pub fn audio_main() {
             .context("resampler run failed")
             .unwrap();
 
-        let mut buf = audio_buffer.lock().unwrap();
+        let mut buf = audio_buffer.lock();
         let data = converted.data(0);
         let nb_samples = converted.samples();
         let sample_count = nb_samples * target_channels as usize;
@@ -269,11 +272,11 @@ pub fn audio_main() {
         while buf.len() > AUDIO_BUFFER_LENGTH.load(Ordering::SeqCst) * 2
             && TERM_QUIT.load(Ordering::SeqCst) == false
         {
-            buf = AUDIO_CONSUMED.wait(buf).unwrap();
+            AUDIO_CONSUMED.wait(&mut buf);
         }
     }
 
-    while audio_buffer.lock().unwrap().len() > 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
+    while audio_buffer.lock().len() > 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }

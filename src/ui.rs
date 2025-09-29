@@ -1,16 +1,25 @@
-use std::sync::{
-    Mutex,
-    atomic::{AtomicBool, Ordering},
+use parking_lot::Mutex;
+use std::{
+    cmp::min,
+    fs::FileType,
+    path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
 };
-
 use unicode_width::UnicodeWidthChar;
 
 use crate::{
     error::get_errors,
-    playlist::PLAYLIST,
-    term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG},
-    util::{Cell, Color, TextBoxInfo},
+    ffmpeg,
+    playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST},
+    stdin::{self, Key},
+    stdout::OUTPUT_TIME,
+    term::{
+        ESCAPE_STRING_ENCODE_TIME, RENDER_TIME, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG,
+    },
+    util::{Cell, Color, TextBoxInfo, avg_duration, best_contrast_color},
 };
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 const UNIFONT: *const [u8; 32] =
     include_bytes!("../unifont-17.0.01.bin").as_ptr() as *const [u8; 32];
@@ -23,6 +32,8 @@ pub fn unifont_get(ch: char) -> &'static [u8; 32] {
         unsafe { &*UNIFONT.add(' ' as usize) }
     }
 }
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 pub fn mask(
     wrap: &mut RenderWrapper,
@@ -42,8 +53,8 @@ pub fn mask(
             }
             let (x, y) = (x as usize, y as usize);
             let p = y * wrap.cells_pitch + x;
-            wrap.cells[p].fg = Color::mix(wrap.cells[p].fg, color, opacity);
-            wrap.cells[p].bg = Color::mix(wrap.cells[p].bg, color, opacity);
+            wrap.cells[p].fg = Color::mix(color, wrap.cells[p].fg, opacity);
+            wrap.cells[p].bg = Color::mix(color, wrap.cells[p].bg, opacity);
             if let Some(border) = border
                 && (i == 0 || i == w - 1 || j == 0 || j == h - 1)
             {
@@ -150,26 +161,24 @@ pub fn putat(
                 i += 1;
             }
         }
-        if ch == ' ' {
+        if ch == ' ' && bg == None {
             if wrap.cells[p].c.is_some() {
                 wrap.cells[p].c = Some(' ');
             }
             cx += 1;
             continue;
         }
-        wrap.cells[p] = Cell {
-            c: Some(ch),
-            fg: fg.unwrap_or(if wrap.cells[p].c == None {
-                TERM_DEFAULT_FG
-            } else {
-                wrap.cells[p].fg
-            }),
-            bg: bg.unwrap_or(if wrap.cells[p].c == None {
-                Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg)
-            } else {
-                wrap.cells[p].bg
-            }),
-        };
+        let bg = bg.unwrap_or(if wrap.cells[p].c == None {
+            Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg)
+        } else {
+            wrap.cells[p].bg
+        });
+        let fg = fg.unwrap_or(if wrap.cells[p].c == None {
+            best_contrast_color(bg)
+        } else {
+            wrap.cells[p].fg
+        });
+        wrap.cells[p] = Cell::new(ch, fg, bg);
         for i in 1..cw as usize {
             wrap.cells[p + i] = Cell {
                 c: Some('\0'),
@@ -196,7 +205,7 @@ pub fn textbox(x: isize, y: isize, w: usize, h: usize, autowrap: bool) {
 }
 
 pub fn put(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
-    let (def_fg, def_bg) = TEXTBOX_DEFAULT_COLOR.lock().unwrap().clone();
+    let (def_fg, def_bg) = TEXTBOX_DEFAULT_COLOR.lock().clone();
     let (fg, bg) = (fg.or(def_fg), bg.or(def_bg));
     let (x, y, w, h, i, j) = TEXTBOX.get();
     let (_, cx, cy) = putat(wrap, text, i, j, w, h, x, y, fg, bg, TEXTBOX.getwrap());
@@ -204,13 +213,16 @@ pub fn put(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<C
 }
 
 macro_rules! put {
+    ($wrap:expr, $text:expr) => {
+        crate::ui::put($wrap, &$text, None, None)
+    };
     ($wrap:expr, $($arg:tt)*) => {
         crate::ui::put($wrap, &format!($($arg)*), None, None)
     };
 }
 
 pub fn putln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
-    let (def_fg, def_bg) = TEXTBOX_DEFAULT_COLOR.lock().unwrap().clone();
+    let (def_fg, def_bg) = TEXTBOX_DEFAULT_COLOR.lock().clone();
     let (fg, bg) = (fg.or(def_fg), bg.or(def_bg));
     let (x, y, w, h, i, j) = TEXTBOX.get();
     let (_, _, cy) = putat(wrap, text, i, j, w, h, x, y, fg, bg, TEXTBOX.getwrap());
@@ -218,18 +230,15 @@ pub fn putln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option
 }
 
 macro_rules! putln {
+    ($wrap:expr, $text:expr) => {
+        crate::ui::putln($wrap, &$text, None, None)
+    };
     ($wrap:expr, $($arg:tt)*) => {
         crate::ui::putln($wrap, &format!($($arg)*), None, None)
     };
 }
 
-pub fn render_ui(wrap: &mut RenderWrapper) {
-    render_overlay_text(wrap);
-    render_playlist(wrap);
-    render_errors(wrap);
-}
-
-pub static SHOW_PLAYLIST: AtomicBool = AtomicBool::new(false);
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 pub fn putunifont(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     let mut data = [const { String::new() }; 4];
@@ -257,9 +266,24 @@ pub fn putunifont(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: O
 }
 
 macro_rules! putunifont {
+    ($wrap:expr, $text:expr) => {
+        crate::ui::putunifont($wrap, &$text, None, None)
+    };
     ($wrap:expr, $($arg:tt)*) => {
         crate::ui::putunifont($wrap, &format!($($arg)*), None, None)
     };
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub fn render_ui(wrap: &mut RenderWrapper) {
+    if wrap.cells_width < 4 && wrap.cells_height < 4 {
+        return; // 防炸
+    }
+    render_overlay_text(wrap);
+    render_playlist(wrap);
+    render_file_select(wrap);
+    render_errors(wrap);
 }
 
 fn render_overlay_text(wrap: &mut RenderWrapper) {
@@ -281,10 +305,7 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
 
     textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, true);
 
-    TEXTBOX_DEFAULT_COLOR
-        .lock()
-        .unwrap()
-        .clone_from(&(Some(TERM_DEFAULT_FG), None));
+    TEXTBOX_DEFAULT_COLOR.lock().clone_from(&(None, None));
 
     if wrap.term_font_height > 12.0 {
         putln!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
@@ -294,6 +315,21 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         );
         putln!(wrap, "Playing: {}", wrap.playing);
         putln!(wrap, "Time: {}", time_str);
+        putln!(
+            wrap,
+            "Escape String Encode Time: {:.2?} (avg over last 60)",
+            avg_duration(&ESCAPE_STRING_ENCODE_TIME)
+        );
+        putln!(
+            wrap,
+            "Render Time: {:.2?} (avg over last 60)",
+            avg_duration(&RENDER_TIME)
+        );
+        putln!(
+            wrap,
+            "Output Time: {:.2?} (avg over last 60)",
+            avg_duration(&OUTPUT_TIME)
+        );
     } else {
         putunifont!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
         putunifont!(
@@ -302,6 +338,21 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         );
         putunifont!(wrap, "Playing: {}", wrap.playing);
         putunifont!(wrap, "Time: {}", time_str);
+        putunifont!(
+            wrap,
+            "Escape String Encode Time: {:.2?} (avg over last 60)",
+            avg_duration(&ESCAPE_STRING_ENCODE_TIME)
+        );
+        putunifont!(
+            wrap,
+            "Render Time: {:.2?} (avg over last 60)",
+            avg_duration(&RENDER_TIME)
+        );
+        putunifont!(
+            wrap,
+            "Output Time: {:.2?} (avg over last 60)",
+            avg_duration(&OUTPUT_TIME)
+        );
     }
 }
 
@@ -348,15 +399,25 @@ fn render_playlist(wrap: &mut RenderWrapper) {
 
     TEXTBOX_DEFAULT_COLOR
         .lock()
-        .unwrap()
         .clone_from(&(Some(TERM_DEFAULT_BG), None));
 
-    putln!(wrap, "Playlist ({} items):", PLAYLIST.lock().unwrap().len());
+    putln!(wrap, "Playlist ({} items):", PLAYLIST.lock().len());
 
-    let playing_index = PLAYLIST.lock().unwrap().get_pos().clone();
-    for (i, item) in PLAYLIST.lock().unwrap().get_items().iter().enumerate() {
-        let icon = if i == playing_index { "▶" } else { " " };
-        putln!(wrap, "{} {}", icon, item); // 这边的 U+2000 是故意占位的，因为 ▶ 符号在终端上渲染宽度是 2
+    let selected_index = *PLAYLIST_SELECTED_INDEX.lock();
+    let playing_index = PLAYLIST.lock().get_pos().clone();
+    for (i, item) in PLAYLIST.lock().get_items().iter().enumerate() {
+        // 这边的 U+2000 是故意占位的，因为 ▶ 符号在终端上渲染宽度是 2
+        let icon = if i == playing_index { "▶ " } else { "  " };
+        if i as isize == selected_index {
+            putln(
+                wrap,
+                &format!("{}{}", icon, item),
+                Some(TERM_DEFAULT_FG),
+                Some(TERM_DEFAULT_BG),
+            );
+        } else {
+            putln!(wrap, "{}{}", icon, item);
+        }
     }
 }
 
@@ -388,10 +449,259 @@ fn render_errors(wrap: &mut RenderWrapper) {
 
     TEXTBOX_DEFAULT_COLOR
         .lock()
-        .unwrap()
         .clone_from(&(Some(TERM_DEFAULT_BG), None));
 
     for error in errors.iter() {
         putln(wrap, &error.msg, error.fg, error.bg);
     }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub static FILE_SELECT: AtomicBool = AtomicBool::new(false);
+pub static FILE_SELECT_PATH: Mutex<String> = Mutex::new(String::new());
+pub static FILE_SELECT_LIST: Mutex<Vec<(FileType, String)>> = Mutex::new(Vec::new());
+pub static FILE_SELECT_INDEX: Mutex<usize> = Mutex::new(0);
+
+fn render_file_select(wrap: &mut RenderWrapper) {
+    static mut FILE_SELECT_SHOWN: f32 = 0.0;
+    static mut FILE_SELECT_ALPHA: f32 = 0.0;
+
+    let mut file_select_alpha = unsafe { FILE_SELECT_ALPHA };
+    if FILE_SELECT.load(Ordering::SeqCst) {
+        file_select_alpha += wrap.delta_time.as_secs_f32() * 2.0;
+    } else {
+        file_select_alpha -= wrap.delta_time.as_secs_f32() * 2.0;
+    }
+    let file_select_alpha = file_select_alpha.clamp(0.0, 1.0);
+    unsafe { FILE_SELECT_ALPHA = file_select_alpha };
+
+    if file_select_alpha == 0.0 {
+        return;
+    }
+
+    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+        return; // 防炸
+    }
+
+    let (w, h) = (
+        wrap.cells_width as usize / 2,
+        wrap.cells_height as usize / 2,
+    );
+    let (x, y) = (
+        (wrap.cells_width as isize - w as isize) / 2,
+        (wrap.cells_height as isize - h as isize) / 2,
+    );
+
+    mask(
+        wrap,
+        x,
+        y,
+        w,
+        h,
+        Some(TERM_DEFAULT_BG),
+        TERM_DEFAULT_FG,
+        file_select_alpha * 0.5,
+    );
+
+    textbox(x + 1, y + 1, w - 2, h - 2, false);
+
+    TEXTBOX_DEFAULT_COLOR
+        .lock()
+        .clone_from(&(Some(TERM_DEFAULT_BG), None));
+
+    let mut path = FILE_SELECT_PATH.lock();
+    let mut list = FILE_SELECT_LIST.lock();
+    let index = FILE_SELECT_INDEX.lock();
+
+    let mut file_select_shown = unsafe { FILE_SELECT_SHOWN };
+    if FILE_SELECT.load(Ordering::SeqCst) {
+        file_select_shown += wrap.delta_time.as_secs_f32() * 60.0;
+    } else {
+        file_select_shown -= wrap.delta_time.as_secs_f32() * 60.0;
+    }
+    let file_select_shown = file_select_shown.clamp(0.0, min(h - 5, list.len()) as f32);
+    unsafe { FILE_SELECT_SHOWN = file_select_shown };
+
+    putln!(wrap, "File Select: {}", path);
+    putln!(
+        wrap,
+        "    Use arrow keys to navigate, Space to select, Q to cancel."
+    );
+    for _ in 0..w - 2 {
+        put!(wrap, "-");
+    }
+    putln!(wrap, "");
+
+    if path.is_empty() {
+        *path = "/".to_string();
+        list.clear();
+        if let Ok(entries) = std::fs::read_dir(&*path) {
+            for entry in entries.flatten() {
+                if let Ok(file_type) = entry.file_type() {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    list.push((file_type, file_name));
+                }
+            }
+        }
+    }
+
+    let max_show = h - 5;
+    let mut show_cnt = 0;
+    for (i, (file_type, file_name)) in list.iter().enumerate() {
+        if i + max_show / 2 < *index && i + max_show < list.len() {
+            continue;
+        }
+        show_cnt += 1;
+        if show_cnt as f32 > file_select_shown {
+            break;
+        }
+        let text = format!(
+            " {} {} ",
+            if file_type.is_dir() {
+                "📁"
+            } else if file_type.is_file() {
+                "📄"
+            } else if file_type.is_symlink() {
+                "🔗"
+            } else {
+                "❓"
+            },
+            file_name
+        );
+        if i == *index {
+            putln(wrap, &text, Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG));
+        } else {
+            putln!(wrap, text);
+        }
+    }
+}
+
+pub fn register_keypress_callbacks() {
+    stdin::register_keypress_callback(Key::Normal('q'), |_| {
+        if !FILE_SELECT.load(Ordering::SeqCst) {
+            return false;
+        }
+        FILE_SELECT.store(false, Ordering::SeqCst);
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal(' '), |_| {
+        if !FILE_SELECT.load(Ordering::SeqCst) {
+            return false;
+        }
+        let dir = FILE_SELECT_PATH.lock();
+        let list = FILE_SELECT_LIST.lock();
+        if list.is_empty() {
+            return true;
+        }
+        let index = *FILE_SELECT_INDEX.lock();
+        let (file_type, file_name) = &list[index];
+        let path = format!("{}/{}", dir, file_name);
+        let mut is_file = file_type.is_file();
+        if file_type.is_symlink() {
+            if let Ok(target_type) = std::fs::metadata(&path).map(|m| m.file_type()) {
+                is_file = target_type.is_file();
+            }
+        }
+        if is_file {
+            FILE_SELECT.store(false, Ordering::SeqCst);
+            PLAYLIST.lock().push_and_setnext(&path);
+            ffmpeg::notify_quit();
+        } else {
+            send_error!("Cannot open non-file: {}", path);
+        }
+        true
+    });
+
+    let cb = |_| {
+        if !FILE_SELECT.load(Ordering::SeqCst) {
+            return false;
+        }
+        let len = FILE_SELECT_LIST.lock().len();
+        let mut lock = FILE_SELECT_INDEX.lock();
+        *lock = lock.clamp(1, len) - 1;
+        true
+    };
+    stdin::register_keypress_callback(Key::Normal('w'), cb);
+    stdin::register_keypress_callback(Key::Up, cb);
+
+    let cb = |_| {
+        if !FILE_SELECT.load(Ordering::SeqCst) {
+            return false;
+        }
+        let len = FILE_SELECT_LIST.lock().len();
+        let mut lock = FILE_SELECT_INDEX.lock();
+        *lock = (*lock + 1).clamp(0, len - 1);
+        true
+    };
+    stdin::register_keypress_callback(Key::Normal('s'), cb);
+    stdin::register_keypress_callback(Key::Down, cb);
+
+    let cb = |_| {
+        if !FILE_SELECT.load(Ordering::SeqCst) {
+            return false;
+        }
+        let mut path = FILE_SELECT_PATH.lock();
+        let mut list = FILE_SELECT_LIST.lock();
+        let mut index = FILE_SELECT_INDEX.lock();
+        let filename = path.rsplit('/').next().unwrap_or("").to_string();
+        *path = std::fs::canonicalize(&*path)
+            .unwrap_or_else(|_| PathBuf::from("/"))
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/".to_string());
+        list.clear();
+        if let Ok(entries) = std::fs::read_dir(&*path) {
+            for entry in entries.flatten() {
+                if let Ok(file_type) = entry.file_type() {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    list.push((file_type, file_name));
+                }
+            }
+        }
+        *index = list
+            .iter()
+            .enumerate()
+            .find(|(_, (_, name))| *name == filename)
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        true
+    };
+    stdin::register_keypress_callback(Key::Normal('a'), cb);
+    stdin::register_keypress_callback(Key::Left, cb);
+
+    let cb = |_| {
+        if !FILE_SELECT.load(Ordering::SeqCst) {
+            return false;
+        }
+        let mut path = FILE_SELECT_PATH.lock();
+        let mut list = FILE_SELECT_LIST.lock();
+        let mut index = FILE_SELECT_INDEX.lock();
+        if list.is_empty() {
+            return true;
+        }
+        let (file_type, file_name) = &list[*index];
+        if file_type.is_dir() {
+            if path.ends_with('/') {
+                path.push_str(file_name);
+            } else {
+                path.push('/');
+                path.push_str(file_name);
+            }
+            list.clear();
+            *index = 0;
+            if let Ok(entries) = std::fs::read_dir(&*path) {
+                for entry in entries.flatten() {
+                    if let Ok(file_type) = entry.file_type() {
+                        let file_name = entry.file_name().to_string_lossy().to_string();
+                        list.push((file_type, file_name));
+                    }
+                }
+            }
+        }
+        true
+    };
+    stdin::register_keypress_callback(Key::Normal('d'), cb);
+    stdin::register_keypress_callback(Key::Right, cb);
 }

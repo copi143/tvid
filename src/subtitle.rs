@@ -1,11 +1,11 @@
-use std::{collections::VecDeque, sync::Mutex, time::Duration};
-
+use parking_lot::Mutex;
+use std::{collections::VecDeque, time::Duration};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::{
     audio,
     term::RenderWrapper,
-    util::{Cell, Color},
+    util::{Cell, Color, best_contrast_color},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -95,12 +95,12 @@ static SUBTITLES: Mutex<VecDeque<Option<AssDialogue>>> = Mutex::new(VecDeque::ne
 const SUBTITLE_EXTRA_DISPLAY_TIME: Duration = Duration::from_millis(500);
 
 pub fn clear() {
-    let mut subtitles = SUBTITLES.lock().unwrap();
+    let mut subtitles = SUBTITLES.lock();
     subtitles.clear();
 }
 
 pub fn push_ass(start: Duration, end: Duration, ass: &str) {
-    let mut subtitles = SUBTITLES.lock().unwrap();
+    let mut subtitles = SUBTITLES.lock();
     subtitles.iter_mut().for_each(|dialogue| {
         if let Some(dia) = dialogue {
             if dia.end == Duration::from_millis(0) {
@@ -118,7 +118,7 @@ pub fn push_ass(start: Duration, end: Duration, ass: &str) {
 }
 
 pub fn push_text(start: Duration, end: Duration, text: &str) {
-    let mut subtitles = SUBTITLES.lock().unwrap();
+    let mut subtitles = SUBTITLES.lock();
     subtitles.iter_mut().for_each(|dialogue| {
         if let Some(dia) = dialogue {
             if dia.end == Duration::from_millis(0) {
@@ -134,7 +134,7 @@ pub fn push_text(start: Duration, end: Duration, text: &str) {
 }
 
 pub fn push_nothing() {
-    let mut subtitles = SUBTITLES.lock().unwrap();
+    let mut subtitles = SUBTITLES.lock();
     subtitles.iter_mut().for_each(|dialogue| {
         if let Some(dia) = dialogue {
             if dia.end == Duration::from_millis(0) {
@@ -149,7 +149,7 @@ pub fn push_nothing() {
 }
 
 pub fn get_subtitles(time: Duration) -> Vec<AssDialogue> {
-    let mut subtitles = SUBTITLES.lock().unwrap();
+    let mut subtitles = SUBTITLES.lock();
     while let Some(dialogue) = subtitles.front() {
         if dialogue.is_none() {
             subtitles.pop_front();
@@ -209,6 +209,7 @@ pub fn render_subtitle(wrap: &mut RenderWrapper) {
                     played_time.as_millis() as f32 - sub.end.as_millis() as f32
                 };
                 let k_out = (k_out / 500.0).min(1.0).max(0.0);
+                let k = k_in * (1.0 - k_out);
                 let cw = ch.width().unwrap_or(1).max(1);
                 if x < wrap.padding_left || x + cw > wrap.cells_width - wrap.padding_right {
                     break;
@@ -217,11 +218,9 @@ pub fn render_subtitle(wrap: &mut RenderWrapper) {
                     break;
                 }
                 let p = (y - (k_out * 5.0) as usize) * wrap.cells_pitch + x;
-                wrap.cells[p] = Cell {
-                    c: Some(ch),
-                    fg: Color::new(255, 255, 255) * (k_in * (1.0 - k_out)),
-                    bg: Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg),
-                };
+                let bg = Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg);
+                let fg = Color::mix(best_contrast_color(bg), bg, k);
+                wrap.cells[p] = Cell::new(ch, fg, bg);
                 for i in 1..cw {
                     wrap.cells[p + i] = Cell {
                         c: Some('\0'),

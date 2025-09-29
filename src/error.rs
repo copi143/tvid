@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
+use parking_lot::{Mutex, MutexGuard};
 use std::{
     collections::VecDeque,
-    sync::{Mutex, MutexGuard},
     time::{Duration, Instant, SystemTime},
 };
 
@@ -18,7 +18,7 @@ static ERRORS: Mutex<VecDeque<Error>> = Mutex::new(VecDeque::new());
 static mut ERRMSG_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub fn remove_expired_errors() {
-    let mut lock = ERRORS.lock().unwrap();
+    let mut lock = ERRORS.lock();
     let now = Instant::now();
     while let Some(err) = lock.front() {
         if now.duration_since(err.ts) >= unsafe { ERRMSG_TIMEOUT } {
@@ -36,17 +36,17 @@ pub fn send_error(msg: &str, fg: Option<Color>, bg: Option<Color>) {
         bg,
         ts: Instant::now(),
     };
-    let mut lock = ERRORS.lock().unwrap();
+    let mut lock = ERRORS.lock();
     lock.push_back(err);
 }
 
 pub fn get_errors<'mutex>() -> MutexGuard<'mutex, VecDeque<Error>> {
     remove_expired_errors();
-    ERRORS.lock().unwrap()
+    ERRORS.lock()
 }
 
 pub fn print_errors() {
-    let lock = ERRORS.lock().unwrap();
+    let lock = ERRORS.lock();
     for err in lock.iter() {
         let mut text = String::new();
         let system_time = SystemTime::now().checked_sub(err.ts.elapsed()).unwrap();

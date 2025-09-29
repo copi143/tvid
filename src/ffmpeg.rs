@@ -4,12 +4,10 @@ use av::{
     util::frame::{Audio as AudioFrame, video::Video as VideoFrame},
 };
 use ffmpeg_next as av;
-use std::sync::{
-    Condvar,
-    atomic::{AtomicBool, Ordering},
-};
+use parking_lot::{Condvar, Mutex};
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use std::{collections::VecDeque, sync::Mutex};
 
 use crate::audio::{AUDIO_FRAME, AUDIO_FRAME_SIG, audio_main};
 use crate::subtitle;
@@ -97,7 +95,7 @@ pub fn decode_main(path: &str) -> Result<()> {
             break;
         }
 
-        if video_queue.len() > 0 && VIDEO_FRAME.lock().unwrap().is_none() {
+        if video_queue.len() > 0 && VIDEO_FRAME.lock().is_none() {
             let video_decoder = video_decoder.as_mut().unwrap();
             if let Err(e) = video_decoder.send_packet(&video_queue.pop_front().unwrap()) {
                 eprintln!("video send_packet err: {:?}", e);
@@ -106,12 +104,12 @@ pub fn decode_main(path: &str) -> Result<()> {
             let mut frame = VideoFrame::empty();
             while video_decoder.receive_frame(&mut frame).is_ok() {
                 {
-                    let mut lock = VIDEO_FRAME.lock().unwrap();
+                    let mut lock = VIDEO_FRAME.lock();
                     while lock.is_some()
                         && TERM_QUIT.load(Ordering::SeqCst) == false
                         && FFMPEG_END.load(Ordering::SeqCst) == false
                     {
-                        lock = VIDEO_FRAME_SIG.wait(lock).unwrap();
+                        VIDEO_FRAME_SIG.wait(&mut lock);
                     }
                     if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
                         break;
@@ -125,7 +123,7 @@ pub fn decode_main(path: &str) -> Result<()> {
             }
         }
 
-        if audio_queue.len() > 0 && AUDIO_FRAME.lock().unwrap().is_none() {
+        if audio_queue.len() > 0 && AUDIO_FRAME.lock().is_none() {
             let audio_decoder = audio_decoder.as_mut().unwrap();
             if let Err(e) = audio_decoder.send_packet(&audio_queue.pop_front().unwrap()) {
                 eprintln!("audio send_packet err: {:?}", e);
@@ -134,12 +132,12 @@ pub fn decode_main(path: &str) -> Result<()> {
             let mut frame = AudioFrame::empty();
             while audio_decoder.receive_frame(&mut frame).is_ok() {
                 {
-                    let mut lock = AUDIO_FRAME.lock().unwrap();
+                    let mut lock = AUDIO_FRAME.lock();
                     while lock.is_some()
                         && TERM_QUIT.load(Ordering::SeqCst) == false
                         && FFMPEG_END.load(Ordering::SeqCst) == false
                     {
-                        lock = AUDIO_FRAME_SIG.wait(lock).unwrap();
+                        AUDIO_FRAME_SIG.wait(&mut lock);
                     }
                     if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
                         break;
@@ -156,17 +154,17 @@ pub fn decode_main(path: &str) -> Result<()> {
         if audio_queue.len() > 0 && video_queue.len() > 0 {
             static DECODER_WAKEUP_MUTEX: Mutex<()> = Mutex::new(());
             let timeout = Duration::from_millis(50);
-            let guard = DECODER_WAKEUP_MUTEX.lock().unwrap();
-            let _ = DECODER_WAKEUP.wait_timeout(guard, timeout).unwrap();
+            let mut guard = DECODER_WAKEUP_MUTEX.lock();
+            DECODER_WAKEUP.wait_for(&mut guard, timeout);
             continue;
         }
 
         let (stream, packet) = decoder.next().unwrap();
         if stream.index() as isize == video_stream_index {
-            VIDEO_TIME_BASE.lock().unwrap().replace(stream.time_base());
+            VIDEO_TIME_BASE.lock().replace(stream.time_base());
             video_queue.push_back(packet);
         } else if stream.index() as isize == audio_stream_index {
-            AUDIO_TIME_BASE.lock().unwrap().replace(stream.time_base());
+            AUDIO_TIME_BASE.lock().replace(stream.time_base());
             audio_queue.push_back(packet);
         } else if stream.index() as isize == subtitle_stream_index {
             let subtitle_decoder = subtitle_decoder.as_mut().unwrap();
@@ -210,8 +208,8 @@ pub fn decode_main(path: &str) -> Result<()> {
     notify_quit();
 
     // 清除还没处理的音频和视频帧
-    let _ = VIDEO_FRAME.lock().unwrap().take();
-    let _ = AUDIO_FRAME.lock().unwrap().take();
+    let _ = VIDEO_FRAME.lock().take();
+    let _ = AUDIO_FRAME.lock().take();
 
     // 等待所有线程结束
     video_main.join().unwrap_or_else(|err| {

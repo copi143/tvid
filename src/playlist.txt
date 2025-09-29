@@ -1,0 +1,2 @@
+# Playlist file for tvid
+# Add one file path per line

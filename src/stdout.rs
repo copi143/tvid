@@ -1,7 +1,9 @@
+use parking_lot::{Condvar, Mutex};
 use std::{
     collections::VecDeque,
     ffi::c_void,
-    sync::{Condvar, Mutex, atomic::Ordering},
+    sync::atomic::Ordering,
+    time::{Duration, Instant},
 };
 
 use crate::term::TERM_QUIT;
@@ -32,32 +34,43 @@ pub fn print(bytes: &[u8]) -> isize {
     }
 }
 
+pub static OUTPUT_TIME: Mutex<VecDeque<Duration>> = Mutex::new(VecDeque::new());
+
+fn set_output_time(duration: Duration) {
+    let mut lock = OUTPUT_TIME.lock();
+    lock.push_back(duration);
+    while lock.len() > 60 {
+        lock.pop_front();
+    }
+}
+
 static STDOUT_BUF: Mutex<VecDeque<Vec<u8>>> = Mutex::new(VecDeque::new());
 static STDOUT_SIG: Condvar = Condvar::new();
 
 pub fn output_main() {
-    let mut buf: Option<Vec<u8>> = None;
-    let mut pos = 0;
     while TERM_QUIT.load(Ordering::SeqCst) == false {
-        if buf.is_none() || pos >= buf.as_ref().unwrap().len() {
-            let _ = buf.take();
-            let mut lock = STDOUT_BUF.lock().unwrap();
+        let buf = {
+            let mut lock = STDOUT_BUF.lock();
             while lock.len() == 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
-                lock = STDOUT_SIG.wait(lock).unwrap();
+                STDOUT_SIG.wait(&mut lock);
             }
-            if TERM_QUIT.load(Ordering::SeqCst) != false {
+            if TERM_QUIT.load(Ordering::SeqCst) {
                 break;
             }
-            buf = lock.pop_front();
-            pos = 0;
-            continue;
+            lock.pop_front().unwrap()
+        };
+
+        let instant = Instant::now();
+        let mut pos = 0;
+        while pos < buf.len() {
+            let n = print(&buf[pos..]);
+            if n <= 0 {
+                std::thread::sleep(Duration::from_millis(50));
+                break;
+            }
+            pos += n as usize;
         }
-        let n = print(&buf.as_ref().unwrap()[pos..]);
-        if n <= 0 {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            break;
-        }
-        pos += n as usize;
+        set_output_time(instant.elapsed());
     }
 }
 
@@ -66,17 +79,17 @@ pub fn notify_quit() {
 }
 
 pub fn pend_print(data: Vec<u8>) {
-    let mut lock = STDOUT_BUF.lock().unwrap();
+    let mut lock = STDOUT_BUF.lock();
     lock.push_back(data);
     STDOUT_SIG.notify_all();
 }
 
 pub fn pending_frames() -> usize {
-    let lock = STDOUT_BUF.lock().unwrap();
+    let lock = STDOUT_BUF.lock();
     lock.len()
 }
 
 pub fn remove_pending_frames() {
-    let mut lock = STDOUT_BUF.lock().unwrap();
+    let mut lock = STDOUT_BUF.lock();
     lock.clear();
 }

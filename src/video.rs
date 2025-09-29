@@ -4,17 +4,17 @@ use av::{
     util::frame::video::Video as VideoFrame,
 };
 use ffmpeg_next as av;
+use parking_lot::{Condvar, Mutex};
 use std::mem::MaybeUninit;
 use std::sync::atomic::Ordering;
-use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
 use crate::{
-    audio,
+    PAUSE, audio,
     ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE},
     term::{
-        self, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_QUIT, VIDEO_ORIGIN_PIXELS_NOW,
-        VIDEO_PIXELS,
+        self, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_QUIT, TERM_SIZE,
+        VIDEO_ORIGIN_PIXELS_NOW, VIDEO_PIXELS,
     },
     util::{Cell, Color},
 };
@@ -31,12 +31,12 @@ pub fn video_main() {
 
     while TERM_QUIT.load(Ordering::SeqCst) == false {
         let frame = {
-            let mut lock = VIDEO_FRAME.lock().unwrap();
+            let mut lock = VIDEO_FRAME.lock();
             while lock.is_none() && TERM_QUIT.load(Ordering::SeqCst) == false {
                 if FFMPEG_END.load(Ordering::SeqCst) {
                     break;
                 }
-                lock = VIDEO_FRAME_SIG.wait(lock).unwrap();
+                VIDEO_FRAME_SIG.wait(&mut lock);
             }
             if lock.is_none() {
                 break;
@@ -88,13 +88,20 @@ pub fn video_main() {
         term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
 
         let pts = frame.pts().unwrap();
-        let base = VIDEO_TIME_BASE.lock().unwrap().unwrap();
+        let base = VIDEO_TIME_BASE.lock().unwrap();
         let frametime = Duration::new(
             pts as u64 * base.0 as u64 / base.1 as u64,
             (pts as u64 * base.0 as u64 % base.1 as u64 * 1_000_000_000 / base.1 as u64) as u32,
         );
         while frametime > audio::played_time() + Duration::from_millis(5) {
-            std::thread::sleep(frametime - audio::played_time());
+            if PAUSE.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(20));
+            } else {
+                std::thread::sleep(frametime - audio::played_time());
+            }
+            if TERM_QUIT.load(Ordering::SeqCst) {
+                break;
+            }
         }
     }
 }

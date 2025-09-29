@@ -1,10 +1,17 @@
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use parking_lot::Mutex;
+
+use crate::{
+    ffmpeg,
+    stdin::{self, Key},
+};
 
 pub struct Playlist {
     items: Vec<String>,
     pos: usize,
     looping: bool,
-    first_run: bool,
+    setnext: Option<usize>,
 }
 
 impl Playlist {
@@ -13,7 +20,7 @@ impl Playlist {
             items: Vec::new(),
             pos: 0,
             looping: false,
-            first_run: true,
+            setnext: Some(0),
         }
     }
 
@@ -30,6 +37,12 @@ impl Playlist {
 
     pub fn extend(&mut self, paths: Vec<String>) -> &mut Self {
         self.items.extend(paths);
+        self
+    }
+
+    pub fn push_and_setnext(&mut self, path: &str) -> &mut Self {
+        self.items.push(path.to_string());
+        self.setnext(self.items.len() - 1);
         self
     }
 
@@ -54,6 +67,13 @@ impl Playlist {
         self
     }
 
+    pub fn setnext(&mut self, index: usize) -> &mut Self {
+        if index < self.items.len() {
+            self.setnext = Some(index);
+        }
+        self
+    }
+
     pub fn current(&self) -> Option<&String> {
         if self.items.len() == 0 || self.pos >= self.items.len() {
             return None;
@@ -65,8 +85,9 @@ impl Playlist {
         if self.items.len() == 0 {
             return None;
         }
-        if self.first_run {
-            self.first_run = false;
+        if let Some(next) = self.setnext {
+            self.setnext = None;
+            self.pos = next;
             return Some(&self.items[self.pos]);
         }
         self.pos += 1;
@@ -85,8 +106,9 @@ impl Playlist {
         if self.items.len() == 0 {
             return None;
         }
-        if self.first_run {
-            self.first_run = false;
+        if let Some(next) = self.setnext {
+            self.setnext = None;
+            self.pos = next;
             return Some(&self.items[self.pos]);
         }
         if self.pos == 0 {
@@ -101,3 +123,70 @@ impl Playlist {
 }
 
 pub static PLAYLIST: Mutex<Playlist> = Mutex::new(Playlist::new());
+pub static SHOW_PLAYLIST: AtomicBool = AtomicBool::new(false);
+pub static PLAYLIST_SELECTED_INDEX: Mutex<isize> = Mutex::new(-1);
+
+pub fn toggle_show_playlist() {
+    SHOW_PLAYLIST.fetch_xor(true, Ordering::SeqCst);
+    *PLAYLIST_SELECTED_INDEX.lock() = -1;
+}
+
+pub fn register_keypress_callbacks() {
+    stdin::register_keypress_callback(Key::Normal('q'), |_| {
+        if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
+            return false;
+        }
+        SHOW_PLAYLIST.store(false, Ordering::SeqCst);
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal(' '), |_| {
+        if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
+            return false;
+        }
+        let index = *PLAYLIST_SELECTED_INDEX.lock();
+        if index >= 0 {
+            PLAYLIST.lock().setnext(index as usize);
+            SHOW_PLAYLIST.store(false, Ordering::SeqCst);
+            ffmpeg::notify_quit();
+        }
+        true
+    });
+
+    let cb = |_| {
+        if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
+            return false;
+        }
+        let len = PLAYLIST.lock().len() as isize;
+        let mut lock = PLAYLIST_SELECTED_INDEX.lock();
+        if *lock >= 0 {
+            *lock = (*lock - 1).clamp(0, len - 1);
+        } else {
+            *lock = (PLAYLIST.lock().get_pos() as isize - 1).clamp(0, len - 1);
+        }
+        true
+    };
+    stdin::register_keypress_callback(Key::Normal('w'), cb);
+    stdin::register_keypress_callback(Key::Up, cb);
+
+    let cb = |_| {
+        if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
+            return false;
+        }
+        let len = PLAYLIST.lock().len() as isize;
+        let mut lock = PLAYLIST_SELECTED_INDEX.lock();
+        if *lock >= 0 {
+            *lock = (*lock + 1).clamp(0, len - 1);
+        } else {
+            *lock = (PLAYLIST.lock().get_pos() as isize + 1).clamp(0, len - 1);
+        }
+        true
+    };
+    stdin::register_keypress_callback(Key::Normal('s'), cb);
+    stdin::register_keypress_callback(Key::Down, cb);
+
+    stdin::register_keypress_callback(Key::Normal('a'), |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
+    stdin::register_keypress_callback(Key::Left, |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
+    stdin::register_keypress_callback(Key::Normal('d'), |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
+    stdin::register_keypress_callback(Key::Right, |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
+}

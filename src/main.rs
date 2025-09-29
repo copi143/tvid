@@ -1,5 +1,3 @@
-#![feature(sync_unsafe_cell)]
-
 use anyhow::{Context, Result};
 use ffmpeg_next as av;
 use std::{
@@ -11,14 +9,21 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
-use crate::{playlist::PLAYLIST, term::TERM_QUIT};
+use crate::{
+    playlist::{PLAYLIST, SHOW_PLAYLIST},
+    stdin::Key,
+    term::TERM_QUIT,
+};
 
 #[macro_use]
 pub mod error;
 
 pub mod audio;
+pub mod config;
 pub mod ffmpeg;
+pub mod osc;
 pub mod playlist;
+pub mod sixel;
 pub mod stdin;
 pub mod stdout;
 pub mod subtitle;
@@ -38,6 +43,33 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
 
 pub static PAUSE: AtomicBool = AtomicBool::new(false);
 
+fn register_keypress_callbacks() {
+    stdin::register_keypress_callback(Key::Normal(' '), |_| {
+        PAUSE.fetch_xor(true, Ordering::SeqCst);
+        true
+    });
+    stdin::register_keypress_callback(Key::Normal('q'), |_| {
+        term::request_quit();
+        true
+    });
+    stdin::register_keypress_callback(Key::Normal('n'), |_| {
+        ffmpeg::notify_quit();
+        true
+    });
+    stdin::register_keypress_callback(Key::Normal('l'), |_| {
+        playlist::toggle_show_playlist();
+        true
+    });
+    stdin::register_keypress_callback(Key::Normal('m'), |_| true);
+    stdin::register_keypress_callback(Key::Normal('f'), |_| {
+        ui::FILE_SELECT.fetch_xor(true, Ordering::SeqCst);
+        true
+    });
+
+    playlist::register_keypress_callbacks();
+    ui::register_keypress_callbacks();
+}
+
 fn main() -> Result<()> {
     panic::set_hook(Box::new(|info| {
         let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
@@ -55,7 +87,10 @@ fn main() -> Result<()> {
         term::quit();
     }));
 
-    if std::env::args().len() < 2 {
+    config::create_if_not_exists(None)?;
+    config::load(None)?;
+
+    if std::env::args().len() < 2 && PLAYLIST.lock().len() == 0 {
         eprintln!(
             "Usage: {} <input> [input] ...",
             std::env::args().nth(0).unwrap()
@@ -63,23 +98,31 @@ fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    PLAYLIST
-        .lock()
-        .unwrap()
-        .extend(std::env::args().skip(1).collect::<Vec<_>>());
+    if std::env::args().len() > 1 {
+        PLAYLIST
+            .lock()
+            .clear()
+            .extend(std::env::args().skip(1).collect::<Vec<_>>());
+    }
+
+    // stdout::print(b"\x1bPq");
+    // stdout::print(b"#0;2;0;0;0#1;2;100;100;0#2;2;0;100;0");
+    // stdout::print(b"#1~~@@vv@@~~@@~~$");
+    // stdout::print(b"#2??}}GG}}??}}??-");
+    // stdout::print(b"#1!14@-");
+    // stdout::print(b"#0;2;0;0;0#1;2;100;100;100#2;2;0;0;100");
+    // stdout::print(b"#1~~@@vv@@~~@@~~$");
+    // stdout::print(b"#2??}}GG}}??}}??-");
+    // stdout::print(b"#1!14@-");
+    // stdout::print(b"\x1b\\");
+
+    // stdout::print(b"\x1bPq#0;2;100;100;100#1;2;0;100;0#1~\x1b\\");
 
     av::init().context("av init failed")?;
 
     term::init();
 
-    stdin::register_keypress_callback(b' ', |_| {
-        PAUSE.fetch_xor(true, Ordering::SeqCst);
-    });
-    stdin::register_keypress_callback(b'q', |_| term::request_quit());
-    stdin::register_keypress_callback(b'n', |_| ffmpeg::notify_quit());
-    stdin::register_keypress_callback(b'l', |_| {
-        ui::SHOW_PLAYLIST.fetch_xor(true, Ordering::SeqCst);
-    });
+    register_keypress_callbacks();
 
     term::add_render_callback(video::render_frame);
     term::add_render_callback(subtitle::render_subtitle);
@@ -88,7 +131,7 @@ fn main() -> Result<()> {
     let input_main = std::thread::spawn(stdin::input_main);
     let output_main = std::thread::spawn(stdout::output_main);
 
-    while let Some(path) = { PLAYLIST.lock().unwrap().next().cloned() } {
+    while let Some(path) = { PLAYLIST.lock().next().cloned() } {
         ffmpeg::decode_main(&path).unwrap_or_else(|err| {
             send_error!("ffmpeg decode error: {}", err);
         });
@@ -104,6 +147,10 @@ fn main() -> Result<()> {
     });
     input_main.join().unwrap_or_else(|err| {
         send_error!("input thread join error: {:?}", err);
+    });
+
+    config::save(None).unwrap_or_else(|err| {
+        send_error!("config save error: {}", err);
     });
 
     term::quit();

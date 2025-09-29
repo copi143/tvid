@@ -1,10 +1,9 @@
+use parking_lot::Mutex;
 use std::{
+    collections::VecDeque,
     process::exit,
-    sync::{
-        Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
+    sync::atomic::{AtomicBool, Ordering},
+    time::{Duration, Instant},
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -19,6 +18,25 @@ use crate::{
 };
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub static RENDER_TIME: Mutex<VecDeque<Duration>> = Mutex::new(VecDeque::new());
+pub static ESCAPE_STRING_ENCODE_TIME: Mutex<VecDeque<Duration>> = Mutex::new(VecDeque::new());
+
+fn set_render_time(duration: Duration) {
+    let mut lock = RENDER_TIME.lock();
+    lock.push_back(duration);
+    while lock.len() > 60 {
+        lock.pop_front();
+    }
+}
+
+fn set_escape_string_encode_time(duration: Duration) {
+    let mut lock = ESCAPE_STRING_ENCODE_TIME.lock();
+    lock.push_back(duration);
+    while lock.len() > 60 {
+        lock.pop_front();
+    }
+}
 
 pub struct RenderWrapper<'frame, 'cells> {
     pub frame: &'frame [Color],
@@ -78,13 +96,12 @@ pub fn render(frame: &[Color], pitch: usize) {
 
     let delta_time = LAST_TIME
         .lock()
-        .unwrap()
         .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))
         .unwrap_or(None)
         .unwrap_or(Duration::from_millis(0));
 
     if let Some(played_time) = played_time {
-        LAST_TIME.lock().unwrap().replace(played_time);
+        LAST_TIME.lock().replace(played_time);
     }
 
     let wrap = &mut RenderWrapper {
@@ -102,16 +119,18 @@ pub fn render(frame: &[Color], pitch: usize) {
         padding_bottom: VIDEO_PADDING.bottom(),
         pixels_width: VIDEO_PIXELS.x(),
         pixels_height: VIDEO_PIXELS.y(),
-        playing: { PLAYLIST.lock().unwrap().current().cloned() }.unwrap_or_default(),
+        playing: { PLAYLIST.lock().current().cloned() }.unwrap_or_default(),
         played_time,
         delta_time,
         term_font_width: TERM_PIXELS.x() as f32 / TERM_SIZE.x() as f32,
         term_font_height: TERM_PIXELS.y() as f32 / TERM_SIZE.y() as f32,
     };
 
+    let instant = Instant::now();
     for callback in unsafe { &RENDER_CALLBACKS } {
         callback(wrap);
     }
+    set_render_time(instant.elapsed());
 
     TOKIO_RUNTIME.block_on(print_diff(TERM_RESIZED.swap(false, Ordering::SeqCst)));
 
@@ -159,6 +178,7 @@ async fn print_diff_line(cells: &mut [Cell], lasts: &[Cell], force_flush: bool) 
 #[allow(static_mut_refs)]
 async fn print_diff(force_flush: bool) {
     let (term_width, term_height) = TERM_SIZE.get();
+    let instant = Instant::now();
 
     let cells = unsafe {
         THIS_FRAME
@@ -197,6 +217,7 @@ async fn print_diff(force_flush: bool) {
         buf.extend_from_slice(&line);
     }
 
+    set_escape_string_encode_time(instant.elapsed());
     if force_flush {
         remove_pending_frames();
         assert!(buf.len() > 0, "force flush but buffer is empty");
@@ -395,10 +416,9 @@ pub fn init() {
         fn SetConsoleOutputCP(wCodePageID: u32) -> i32;
     }
     unsafe {
-        // 设置控制台输入输出为 UTF-8
         SetConsoleCP(65001);
         SetConsoleOutputCP(65001);
-
+        stdout::print(TERM_INIT_SEQ);
         let h_in: HANDLE = GetStdHandle(STD_INPUT_HANDLE);
         let mut mode: u32 = 0;
         if GetConsoleMode(h_in, &mut mode) != 0 {
