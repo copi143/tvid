@@ -1,10 +1,8 @@
 use anyhow::Result;
-use std::{
-    fs::File,
-    io::Write,
-    path::Path,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::playlist::PLAYLIST;
 

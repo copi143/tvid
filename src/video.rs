@@ -103,7 +103,7 @@ pub fn video_main() {
                 std::thread::sleep(frametime - audio::played_time());
             }
             if TERM_QUIT.load(Ordering::SeqCst) {
-                break;
+                return;
             }
         }
     }

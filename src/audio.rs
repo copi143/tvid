@@ -267,11 +267,11 @@ pub fn audio_main() {
         while buf.len() > AUDIO_BUFFER_LENGTH.load(Ordering::SeqCst) * 2
             && TERM_QUIT.load(Ordering::SeqCst) == false
         {
-            AUDIO_CONSUMED.wait(&mut buf);
+            AUDIO_CONSUMED.wait_for(&mut buf, Duration::from_millis(20));
         }
     }
 
     while audio_buffer.lock().len() > 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(100));
     }
 }
