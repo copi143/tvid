@@ -1,9 +1,7 @@
 use anyhow::Result;
-use std::{
-    ffi::c_void,
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::ffi::c_void;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use crate::term::TERM_QUIT;
 
@@ -176,24 +174,39 @@ impl From<Key> for usize {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-static mut KEYPRESS_CALLBACKS: [Vec<Box<dyn Fn(Key) -> bool + Send + Sync>>; 512] =
-    [const { Vec::new() }; 512];
+#[derive(Default)]
+pub struct KeypressCallbacks {
+    cb: Vec<Box<dyn Fn(Key) -> bool + Send + Sync>>,
+}
+
+impl KeypressCallbacks {
+    pub const fn new() -> Self {
+        KeypressCallbacks { cb: Vec::new() }
+    }
+
+    pub fn push(&mut self, f: impl Fn(Key) -> bool + Send + Sync + 'static) {
+        self.cb.push(Box::new(f));
+    }
+
+    pub fn call(&self, k: Key) -> bool {
+        for f in self.cb.iter().rev() {
+            if f(k) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+static mut KEYPRESS_CALLBACKS: [KeypressCallbacks; 512] = [const { KeypressCallbacks::new() }; 512];
 
 #[allow(static_mut_refs)]
-pub fn register_keypress_callback<F: Fn(Key) -> bool + Send + Sync + 'static>(k: Key, f: F) {
-    unsafe {
-        KEYPRESS_CALLBACKS[usize::from(k)].push(Box::new(f));
-    };
+pub fn register_keypress_callback(k: Key, f: impl Fn(Key) -> bool + Send + Sync + 'static) {
+    unsafe { KEYPRESS_CALLBACKS[usize::from(k)].push(Box::new(f)) };
 }
 
 fn call_keypress_callbacks(c: Key) {
-    unsafe {
-        for f in KEYPRESS_CALLBACKS[usize::from(c)].iter().rev() {
-            if f(c) {
-                break;
-            }
-        }
-    }
+    unsafe { KEYPRESS_CALLBACKS[usize::from(c)].call(c) };
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -225,9 +238,7 @@ static mut MOUSE_CALLBACKS: Vec<Box<dyn Fn(Mouse) -> bool + Send + Sync>> = Vec:
 
 #[allow(static_mut_refs)]
 pub fn register_mouse_callback<F: Fn(Mouse) -> bool + Send + Sync + 'static>(f: F) {
-    unsafe {
-        MOUSE_CALLBACKS.push(Box::new(f));
-    };
+    unsafe { MOUSE_CALLBACKS.push(Box::new(f)) };
 }
 
 #[allow(static_mut_refs)]

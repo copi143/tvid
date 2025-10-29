@@ -1,11 +1,8 @@
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use parking_lot::Mutex;
-
-use crate::{
-    ffmpeg,
-    stdin::{self, Key},
-};
+use crate::ffmpeg;
+use crate::stdin::{self, Key};
 
 pub struct Playlist {
     items: Vec<String>,

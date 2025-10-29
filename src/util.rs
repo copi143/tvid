@@ -1,11 +1,9 @@
 use parking_lot::Mutex;
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    ops::Mul,
-    sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
-    time::Duration,
-};
+use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::ops::Mul;
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
+use std::time::Duration;
 use tokio::task::JoinHandle;
 
 pub struct XY {
@@ -324,21 +322,11 @@ pub fn best_contrast_color(bg: Color) -> Color {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cell {
     pub c: Option<char>,
     pub fg: Color,
     pub bg: Color,
-}
-
-impl Default for Cell {
-    fn default() -> Self {
-        Cell {
-            c: None,
-            fg: Color::default(),
-            bg: Color::default(),
-        }
-    }
 }
 
 impl Cell {

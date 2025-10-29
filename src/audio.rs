@@ -1,12 +1,7 @@
 use anyhow::{Context, Result};
-use av::{
-    ChannelLayout,
-    software::resampling::context::Context as Resampler,
-    util::{
-        format::{Sample, sample::Type as SampleType},
-        frame::Audio as AudioFrame,
-    },
-};
+use av::util::format::{Sample, sample::Type as SampleType};
+use av::util::frame::Audio as AudioFrame;
+use av::{ChannelLayout, software::resampling::context::Context as Resampler};
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ffmpeg_next as av;
@@ -17,8 +12,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::{PAUSE, ffmpeg::FFMPEG_END};
-use crate::{ffmpeg::DECODER_WAKEUP, term::TERM_QUIT};
+use crate::ffmpeg::{DECODER_WAKEUP, FFMPEG_END};
+use crate::{PAUSE, term::TERM_QUIT};
 
 static AUDIO_VSTARTTIME: Mutex<Option<Instant>> = Mutex::new(None);
 static AUDIO_PLAYEDTIME: Mutex<Option<Duration>> = Mutex::new(None);
@@ -144,7 +139,7 @@ fn build_cpal_stream(
                         samples_to_add -= 1;
                         0.0
                     }) * unsafe { VOLUME_K };
-                    *sample = (v.clamp(-1.0, 1.0) * std::i16::MAX as f32) as i16;
+                    *sample = (v.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 }
                 update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();
@@ -167,7 +162,7 @@ fn build_cpal_stream(
                         samples_to_add -= 1;
                         0.0
                     }) * unsafe { VOLUME_K };
-                    *sample = ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
+                    *sample = ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * u16::MAX as f32) as u16;
                 }
                 update_vtime(samples_to_add / channels as u64);
                 AUDIO_CONSUMED.notify_all();

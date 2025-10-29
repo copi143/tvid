@@ -1,23 +1,19 @@
 use parking_lot::Mutex;
-use std::{
-    cmp::min,
-    fs::FileType,
-    path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::cmp::min;
+use std::fs::FileType;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use unicode_width::UnicodeWidthChar;
 
-use crate::{
-    error::get_errors,
-    ffmpeg,
-    playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST},
-    stdin::{self, Key},
-    stdout::OUTPUT_TIME,
-    term::{
-        ESCAPE_STRING_ENCODE_TIME, RENDER_TIME, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG,
-    },
-    util::{Cell, Color, TextBoxInfo, avg_duration, best_contrast_color},
+use crate::error::get_errors;
+use crate::ffmpeg;
+use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
+use crate::stdin::{self, Key};
+use crate::stdout::OUTPUT_TIME;
+use crate::term::{
+    ESCAPE_STRING_ENCODE_TIME, RENDER_TIME, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG,
 };
+use crate::util::{Cell, Color, TextBoxInfo, avg_duration, best_contrast_color};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
@@ -35,6 +31,7 @@ pub fn unifont_get(ch: char) -> &'static [u8; 32] {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+#[allow(clippy::too_many_arguments)]
 pub fn mask(
     wrap: &mut RenderWrapper,
     x: isize,
@@ -95,6 +92,7 @@ pub fn mask(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn putat(
     wrap: &mut RenderWrapper,
     text: &str,
@@ -484,10 +482,7 @@ fn render_file_select(wrap: &mut RenderWrapper) {
         return; // 防炸
     }
 
-    let (w, h) = (
-        wrap.cells_width as usize / 2,
-        wrap.cells_height as usize / 2,
-    );
+    let (w, h) = (wrap.cells_width / 2, wrap.cells_height / 2);
     let (x, y) = (
         (wrap.cells_width as isize - w as isize) / 2,
         (wrap.cells_height as isize - h as isize) / 2,

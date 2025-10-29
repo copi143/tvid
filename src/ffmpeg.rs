@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
-use av::{
-    Subtitle,
-    util::frame::{Audio as AudioFrame, video::Video as VideoFrame},
-};
+use av::Subtitle;
+use av::util::frame::{Audio as AudioFrame, video::Video as VideoFrame};
 use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;

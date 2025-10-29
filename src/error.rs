@@ -1,9 +1,7 @@
 use chrono::{DateTime, Local};
 use parking_lot::{Mutex, MutexGuard};
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant, SystemTime},
-};
+use std::collections::VecDeque;
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::{stdout, util::Color};
 
@@ -62,7 +60,7 @@ pub fn print_errors() {
         if err.fg.is_some() || err.bg.is_some() {
             text.push_str("\x1b[0m");
         }
-        text.push_str("\n");
+        text.push('\n');
         stdout::print(text.as_bytes());
     }
 }

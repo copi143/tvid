@@ -1,23 +1,18 @@
 use anyhow::Context;
-use av::{
-    software::scaling::{context::Context as Scaler, flag::Flags},
-    util::frame::video::Video as VideoFrame,
-};
+use av::software::scaling::{context::Context as Scaler, flag::Flags};
+use av::util::frame::video::Video as VideoFrame;
 use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::mem::MaybeUninit;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::{
-    PAUSE, audio,
-    ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE},
-    term::{
-        self, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_QUIT, VIDEO_ORIGIN_PIXELS_NOW,
-        VIDEO_PIXELS,
-    },
-    util::{Cell, Color},
-};
+use crate::ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE};
+use crate::term;
+use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
+use crate::term::{TERM_QUIT, VIDEO_ORIGIN_PIXELS_NOW, VIDEO_PIXELS};
+use crate::util::{Cell, Color};
+use crate::{PAUSE, audio};
 
 pub static VIDEO_FRAME: Mutex<Option<VideoFrame>> = Mutex::new(None);
 pub static VIDEO_FRAME_SIG: Condvar = Condvar::new();
