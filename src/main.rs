@@ -1,15 +1,13 @@
 use anyhow::{Context, Result};
 use ffmpeg_next as av;
-use std::{
-    env::args,
-    panic,
-    sync::{
-        LazyLock,
-        atomic::{AtomicBool, Ordering},
-    },
-};
+use std::env::args;
+use std::panic;
+use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::Runtime;
 
+use crate::term::FORCEFLUSH_NEXT;
+use crate::util::USE_PALETTE256;
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 
 #[macro_use]
@@ -62,6 +60,12 @@ fn register_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('m'), |_| true);
     stdin::register_keypress_callback(Key::Normal('f'), |_| {
         ui::FILE_SELECT.fetch_xor(true, Ordering::SeqCst);
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal('c'), |_| unsafe {
+        USE_PALETTE256 ^= true;
+        FORCEFLUSH_NEXT.store(true, Ordering::SeqCst);
         true
     });
 

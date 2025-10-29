@@ -445,13 +445,15 @@ pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
     if a == b { None } else { Some(a) }
 }
 
+pub static mut USE_PALETTE256: bool = false;
+
+#[inline(always)]
 pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>) -> String {
-    return match (fg, bg) {
-        (Some(fg), Some(bg)) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
-        (Some(fg), None) => format!("\x1b[38;2;{:?}m", fg),
-        (None, Some(bg)) => format!("\x1b[48;2;{:?}m", bg),
-        (None, None) => String::new(),
-    };
+    if unsafe { USE_PALETTE256 } {
+        escape_set_color_256(fg, bg)
+    } else {
+        escape_set_color_rgb(fg, bg)
+    }
     // 看起来直接全用真彩色快不少
     // match (fg, bg) {
     //     (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
@@ -470,6 +472,30 @@ pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>) -> String {
     //     },
     //     (None, None) => String::new(),
     // }
+}
+
+#[inline(always)]
+pub fn escape_set_color_rgb(fg: Option<Color>, bg: Option<Color>) -> String {
+    return match (fg, bg) {
+        (Some(fg), Some(bg)) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+        (Some(fg), None) => format!("\x1b[38;2;{:?}m", fg),
+        (None, Some(bg)) => format!("\x1b[48;2;{:?}m", bg),
+        (None, None) => String::new(),
+    };
+}
+
+#[inline(always)]
+pub fn escape_set_color_256(fg: Option<Color>, bg: Option<Color>) -> String {
+    return match (fg, bg) {
+        (Some(fg), Some(bg)) => format!(
+            "\x1b[38;5;{};48;5;{}m",
+            palette256_from_color(fg),
+            palette256_from_color(bg),
+        ),
+        (Some(fg), None) => format!("\x1b[38;5;{}m", palette256_from_color(fg)),
+        (None, Some(bg)) => format!("\x1b[48;5;{}m", palette256_from_color(bg)),
+        (None, None) => String::new(),
+    };
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @

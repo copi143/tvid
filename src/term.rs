@@ -1,21 +1,18 @@
 use parking_lot::Mutex;
-use std::{
-    collections::VecDeque,
-    process::exit,
-    sync::atomic::{AtomicBool, Ordering},
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::process::exit;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 use unicode_width::UnicodeWidthChar;
 
-use crate::{
-    TOKIO_RUNTIME, audio,
-    error::print_errors,
-    ffmpeg,
-    playlist::PLAYLIST,
-    stdin,
-    stdout::{self, pend_print, pending_frames, remove_pending_frames},
-    util::*,
-};
+use crate::TOKIO_RUNTIME;
+use crate::audio;
+use crate::error::print_errors;
+use crate::ffmpeg;
+use crate::playlist::PLAYLIST;
+use crate::stdin;
+use crate::stdout::{self, pend_print, pending_frames, remove_pending_frames};
+use crate::util::*;
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
@@ -135,9 +132,9 @@ pub fn render(frame: &[Color], pitch: usize) {
     if pending_frames() > 3 {
         send_error!("Too many pending frames: {}", pending_frames());
         TOKIO_RUNTIME.block_on(print_diff(true));
-        TERM_RESIZED.store(false, Ordering::SeqCst);
+        FORCEFLUSH_NEXT.store(false, Ordering::SeqCst);
     } else {
-        TOKIO_RUNTIME.block_on(print_diff(TERM_RESIZED.swap(false, Ordering::SeqCst)));
+        TOKIO_RUNTIME.block_on(print_diff(FORCEFLUSH_NEXT.swap(false, Ordering::SeqCst)));
     }
 
     unsafe { std::mem::swap(&mut THIS_FRAME, &mut LAST_FRAME) };
@@ -240,7 +237,8 @@ pub static TERM_PIXELS: XY = XY::new();
 pub static VIDEO_PIXELS: XY = XY::new();
 pub static VIDEO_PADDING: TBLR = TBLR::new();
 
-static TERM_RESIZED: AtomicBool = AtomicBool::new(false);
+/// 强制下一帧全屏刷新
+pub static FORCEFLUSH_NEXT: AtomicBool = AtomicBool::new(false);
 
 #[allow(static_mut_refs)]
 pub fn updatesize() -> bool {
@@ -306,7 +304,7 @@ pub fn updatesize() -> bool {
 
     remove_pending_frames();
 
-    TERM_RESIZED.store(true, Ordering::SeqCst);
+    FORCEFLUSH_NEXT.store(true, Ordering::SeqCst);
     return true;
 }
 
