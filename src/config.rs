@@ -25,9 +25,12 @@ fn load_config(file: File) -> Result<()> {
         if parts.len() != 2 {
             send_error!("Invalid config line: {}", line);
         }
-        let key = parts[0].trim();
-        let value = parts[1].trim();
+        let (key, value) = (parts[0].trim(), parts[1].trim());
         match key {
+            "volume" => match value.parse::<u32>() {
+                Ok(v) if v <= 200 => VOLUME.store(v, Ordering::Relaxed),
+                _ => send_error!("Invalid volume value: {}", value),
+            },
             _ => send_error!("Unknown config key: {}", key),
         }
     }
@@ -57,7 +60,12 @@ pub fn load(dir: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-pub fn save_playlist(mut file: File) -> Result<()> {
+fn save_config(mut file: File) -> Result<()> {
+    writeln!(file, "volume = {}", VOLUME.load(Ordering::Relaxed))?;
+    Ok(())
+}
+
+fn save_playlist(mut file: File) -> Result<()> {
     file.write_all(DEFAULT_PLAYLIST_FILE_DATA)?;
     for item in PLAYLIST.lock().get_items() {
         writeln!(file, "{}", item)?;
@@ -67,9 +75,9 @@ pub fn save_playlist(mut file: File) -> Result<()> {
 
 pub fn save(dir: Option<&str>) -> Result<()> {
     let dir = shellexpand::tilde(dir.unwrap_or(DEFAULT_CONFIG_DIR)).to_string();
-    // let path = Path::new(&dir).join(DEFAULT_CONFIG_FILE);
-    // let mut file = File::create(path)?;
-    // writeln!(file, "volume = {}", VOLUME.load(Ordering::Relaxed))?;
+
+    let path = Path::new(&dir).join(DEFAULT_CONFIG_FILE);
+    save_config(File::create(path)?)?;
 
     let path = Path::new(&dir).join(DEFAULT_PLAYLIST_FILE);
     save_playlist(File::create(path)?)?;

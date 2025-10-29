@@ -586,7 +586,7 @@ pub fn register_keypress_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal(' '), |_| {
+    let cb = |_| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
         }
@@ -612,7 +612,9 @@ pub fn register_keypress_callbacks() {
             send_error!("Cannot open non-file: {}", path);
         }
         true
-    });
+    };
+    stdin::register_keypress_callback(Key::Normal(' '), cb);
+    stdin::register_keypress_callback(Key::Enter, cb);
 
     let cb = |_| {
         if !FILE_SELECT.load(Ordering::SeqCst) {

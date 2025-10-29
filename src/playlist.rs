@@ -140,7 +140,7 @@ pub fn register_keypress_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal(' '), |_| {
+    let cb = |_| {
         if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
             return false;
         }
@@ -151,7 +151,9 @@ pub fn register_keypress_callbacks() {
             ffmpeg::notify_quit();
         }
         true
-    });
+    };
+    stdin::register_keypress_callback(Key::Normal(' '), cb);
+    stdin::register_keypress_callback(Key::Enter, cb);
 
     let cb = |_| {
         if !SHOW_PLAYLIST.load(Ordering::SeqCst) {

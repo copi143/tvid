@@ -13,8 +13,8 @@ use crate::{
     PAUSE, audio,
     ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE},
     term::{
-        self, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_QUIT, TERM_SIZE,
-        VIDEO_ORIGIN_PIXELS_NOW, VIDEO_PIXELS,
+        self, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_QUIT, VIDEO_ORIGIN_PIXELS_NOW,
+        VIDEO_PIXELS,
     },
     util::{Cell, Color},
 };
@@ -45,6 +45,20 @@ pub fn video_main() {
         };
         VIDEO_FRAME_SIG.notify_all();
         DECODER_WAKEUP.notify_all();
+
+        let frametime = {
+            let pts = frame.pts().unwrap();
+            let base = VIDEO_TIME_BASE.lock().unwrap();
+            Duration::new(
+                pts as u64 * base.0 as u64 / base.1 as u64,
+                (pts as u64 * base.0 as u64 % base.1 as u64 * 1_000_000_000 / base.1 as u64) as u32,
+            )
+        };
+
+        if frametime + Duration::from_millis(100) < audio::played_time() {
+            send_error!("Video frame too late, skipping");
+            continue;
+        }
 
         VIDEO_ORIGIN_PIXELS_NOW.set(frame.width() as usize, frame.height() as usize);
         let term_size_changed = term::updatesize();
@@ -87,12 +101,6 @@ pub fn video_main() {
 
         term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
 
-        let pts = frame.pts().unwrap();
-        let base = VIDEO_TIME_BASE.lock().unwrap();
-        let frametime = Duration::new(
-            pts as u64 * base.0 as u64 / base.1 as u64,
-            (pts as u64 * base.0 as u64 % base.1 as u64 * 1_000_000_000 / base.1 as u64) as u32,
-        );
         while frametime > audio::played_time() + Duration::from_millis(5) {
             if PAUSE.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(20));

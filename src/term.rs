@@ -132,10 +132,12 @@ pub fn render(frame: &[Color], pitch: usize) {
     }
     set_render_time(instant.elapsed());
 
-    TOKIO_RUNTIME.block_on(print_diff(TERM_RESIZED.swap(false, Ordering::SeqCst)));
-
     if pending_frames() > 3 {
+        send_error!("Too many pending frames: {}", pending_frames());
         TOKIO_RUNTIME.block_on(print_diff(true));
+        TERM_RESIZED.store(false, Ordering::SeqCst);
+    } else {
+        TOKIO_RUNTIME.block_on(print_diff(TERM_RESIZED.swap(false, Ordering::SeqCst)));
     }
 
     unsafe { std::mem::swap(&mut THIS_FRAME, &mut LAST_FRAME) };
@@ -310,7 +312,7 @@ pub fn updatesize() -> bool {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-struct Winsize {
+pub struct Winsize {
     pub row: u16,
     pub col: u16,
     pub xpixel: u16,
@@ -318,7 +320,7 @@ struct Winsize {
 }
 
 #[cfg(unix)]
-fn get_winsize() -> Option<Winsize> {
+pub fn get_winsize() -> Option<Winsize> {
     let mut winsize = std::mem::MaybeUninit::uninit();
     if unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) } < 0 {
         return None;
@@ -333,11 +335,13 @@ fn get_winsize() -> Option<Winsize> {
 }
 
 #[cfg(windows)]
-fn get_winsize() -> Option<Winsize> {
+pub fn get_winsize() -> Option<Winsize> {
     use winapi::shared::minwindef::BOOL;
     use winapi::um::processenv::GetStdHandle;
     use winapi::um::winbase::STD_OUTPUT_HANDLE;
-    use winapi::um::wincon::CONSOLE_SCREEN_BUFFER_INFO;
+    use winapi::um::wincon::{
+        CONSOLE_FONT_INFOEX, CONSOLE_SCREEN_BUFFER_INFO, GetCurrentConsoleFontEx,
+    };
     use winapi::um::winnt::HANDLE;
     unsafe extern "system" {
         pub fn GetConsoleScreenBufferInfo(
@@ -351,13 +355,37 @@ fn get_winsize() -> Option<Winsize> {
         if GetConsoleScreenBufferInfo(handle, &mut csbi) == 0 {
             return None;
         }
+
         let col = (csbi.srWindow.Right - csbi.srWindow.Left + 1) as u16;
         let row = (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as u16;
+
+        // Try to get the actual font cell size in pixels. This works for classic conhost.
+        // If the call fails (e.g. non-conhost terminals), fall back to a reasonable heuristic.
+        let mut font_px_w: u16 = 8;
+        let mut font_px_h: u16 = 16;
+        let mut cfi: CONSOLE_FONT_INFOEX = std::mem::zeroed();
+        cfi.cbSize = std::mem::size_of::<CONSOLE_FONT_INFOEX>() as u32;
+        if GetCurrentConsoleFontEx as usize != 0 {
+            // SAFETY: GetCurrentConsoleFontEx is available on modern Windows; it may still fail at runtime.
+            if GetCurrentConsoleFontEx(handle, 0, &mut cfi) != 0 {
+                // dwFontSize is a COORD (X=width, Y=height) in pixels
+                font_px_w = cfi.dwFontSize.X as u16;
+                font_px_h = cfi.dwFontSize.Y as u16;
+                // guard against zero
+                if font_px_w == 0 {
+                    font_px_w = 8;
+                }
+                if font_px_h == 0 {
+                    font_px_h = 16;
+                }
+            }
+        }
+
         Some(Winsize {
             row,
             col,
-            xpixel: col * 8,
-            ypixel: row * 16,
+            xpixel: col.saturating_mul(font_px_w),
+            ypixel: row.saturating_mul(font_px_h),
         })
     }
 }

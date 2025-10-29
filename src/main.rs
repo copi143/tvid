@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use ffmpeg_next as av;
 use std::{
+    env::args,
     panic,
     sync::{
         LazyLock,
@@ -9,14 +10,13 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
-use crate::{
-    playlist::{PLAYLIST, SHOW_PLAYLIST},
-    stdin::Key,
-    term::TERM_QUIT,
-};
+use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 
 #[macro_use]
 pub mod error;
+
+#[macro_use]
+pub mod ui;
 
 pub mod audio;
 pub mod config;
@@ -28,7 +28,6 @@ pub mod stdin;
 pub mod stdout;
 pub mod subtitle;
 pub mod term;
-pub mod ui;
 pub mod util;
 pub mod video;
 
@@ -90,19 +89,23 @@ fn main() -> Result<()> {
     config::create_if_not_exists(None)?;
     config::load(None)?;
 
-    if std::env::args().len() < 2 && PLAYLIST.lock().len() == 0 {
-        eprintln!(
-            "Usage: {} <input> [input] ...",
-            std::env::args().nth(0).unwrap()
-        );
+    if args().len() < 2 && PLAYLIST.lock().len() == 0 {
+        let divider = "-".repeat(term::get_winsize().map(|w| w.col as usize).unwrap_or(80));
+        eprintln!("No input files.");
+        eprintln!("Usage: {} <input> [input] ...", args().nth(0).unwrap());
+        eprintln!("{}", divider);
+        eprintln!("tvid - Terminal Video Player");
+        eprintln!("version: {}", env!("CARGO_PKG_VERSION"));
+        eprintln!("repo: {}", env!("CARGO_PKG_REPOSITORY"));
+        eprintln!("license: {}", env!("CARGO_PKG_LICENSE"));
         std::process::exit(1);
     }
 
-    if std::env::args().len() > 1 {
+    if args().len() > 1 {
         PLAYLIST
             .lock()
             .clear()
-            .extend(std::env::args().skip(1).collect::<Vec<_>>());
+            .extend(args().skip(1).collect::<Vec<_>>());
     }
 
     // stdout::print(b"\x1bPq");
