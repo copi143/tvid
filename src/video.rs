@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE};
+use crate::statistics::increment_video_skipped_frames;
 use crate::term;
 use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::term::{TERM_QUIT, VIDEO_ORIGIN_PIXELS_NOW, VIDEO_PIXELS};
@@ -50,7 +51,8 @@ pub fn video_main() {
             )
         };
 
-        if frametime + Duration::from_millis(100) < audio::played_time() {
+        if frametime + Duration::from_millis(100) < audio::played_time_or_zero() {
+            increment_video_skipped_frames();
             send_error!("Video frame too late, skipping");
             continue;
         }
@@ -96,11 +98,11 @@ pub fn video_main() {
 
         term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
 
-        while frametime > audio::played_time() + Duration::from_millis(5) {
+        while frametime > audio::played_time_or_zero() + Duration::from_millis(5) {
             if PAUSE.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(20));
             } else {
-                std::thread::sleep(frametime - audio::played_time());
+                std::thread::sleep(frametime - audio::played_time_or_zero());
             }
             if TERM_QUIT.load(Ordering::SeqCst) {
                 return;

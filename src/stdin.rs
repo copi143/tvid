@@ -1,4 +1,5 @@
 use anyhow::Result;
+use parking_lot::Mutex;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -34,7 +35,7 @@ pub fn scan(bytes: &mut [u8]) -> isize {
 static STDIN_QUIT: AtomicBool = AtomicBool::new(false);
 
 #[allow(static_mut_refs)]
-pub fn getc() -> Result<u8> {
+fn getc() -> Result<u8> {
     static mut STDIN_BUF: [u8; 4096] = [0; 4096];
     static mut STDIN_POS: usize = 0;
     static mut STDIN_LEN: usize = 0;
@@ -174,22 +175,25 @@ impl From<Key> for usize {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-#[derive(Default)]
+pub type KeypressCallback = Box<dyn Fn(Key) -> bool + Send + Sync>;
+
 pub struct KeypressCallbacks {
-    cb: Vec<Box<dyn Fn(Key) -> bool + Send + Sync>>,
+    cb: Mutex<Vec<KeypressCallback>>,
 }
 
 impl KeypressCallbacks {
     pub const fn new() -> Self {
-        KeypressCallbacks { cb: Vec::new() }
+        KeypressCallbacks {
+            cb: Mutex::new(Vec::new()),
+        }
     }
 
-    pub fn push(&mut self, f: impl Fn(Key) -> bool + Send + Sync + 'static) {
-        self.cb.push(Box::new(f));
+    pub fn push(&self, f: KeypressCallback) {
+        self.cb.lock().push(f);
     }
 
     pub fn call(&self, k: Key) -> bool {
-        for f in self.cb.iter().rev() {
+        for f in self.cb.lock().iter().rev() {
             if f(k) {
                 return true;
             }
@@ -198,15 +202,14 @@ impl KeypressCallbacks {
     }
 }
 
-static mut KEYPRESS_CALLBACKS: [KeypressCallbacks; 512] = [const { KeypressCallbacks::new() }; 512];
+static KEYPRESS_CALLBACKS: [KeypressCallbacks; 512] = [const { KeypressCallbacks::new() }; 512];
 
-#[allow(static_mut_refs)]
 pub fn register_keypress_callback(k: Key, f: impl Fn(Key) -> bool + Send + Sync + 'static) {
-    unsafe { KEYPRESS_CALLBACKS[usize::from(k)].push(Box::new(f)) };
+    KEYPRESS_CALLBACKS[usize::from(k)].push(Box::new(f));
 }
 
-fn call_keypress_callbacks(c: Key) {
-    unsafe { KEYPRESS_CALLBACKS[usize::from(c)].call(c) };
+pub fn call_keypress_callbacks(c: Key) {
+    KEYPRESS_CALLBACKS[usize::from(c)].call(c);
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -234,22 +237,41 @@ pub struct Mouse {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-static mut MOUSE_CALLBACKS: Vec<Box<dyn Fn(Mouse) -> bool + Send + Sync>> = Vec::new();
+pub type MouseCallback = Box<dyn Fn(Mouse) -> bool + Send + Sync>;
 
-#[allow(static_mut_refs)]
-pub fn register_mouse_callback<F: Fn(Mouse) -> bool + Send + Sync + 'static>(f: F) {
-    unsafe { MOUSE_CALLBACKS.push(Box::new(f)) };
+pub struct MouseCallbacks {
+    cb: Mutex<Vec<MouseCallback>>,
 }
 
-#[allow(static_mut_refs)]
-fn call_mouse_callbacks(m: Mouse) {
-    unsafe {
-        for f in MOUSE_CALLBACKS.iter().rev() {
-            if f(m) {
-                break;
-            }
+impl MouseCallbacks {
+    pub const fn new() -> Self {
+        MouseCallbacks {
+            cb: Mutex::new(Vec::new()),
         }
     }
+
+    pub fn push(&self, f: MouseCallback) {
+        self.cb.lock().push(f);
+    }
+
+    pub fn call(&self, m: Mouse) -> bool {
+        for f in self.cb.lock().iter().rev() {
+            if f(m) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+static MOUSE_CALLBACKS: MouseCallbacks = MouseCallbacks::new();
+
+pub fn register_mouse_callback(f: impl Fn(Mouse) -> bool + Send + Sync + 'static) {
+    MOUSE_CALLBACKS.push(Box::new(f));
+}
+
+pub fn call_mouse_callbacks(m: Mouse) {
+    MOUSE_CALLBACKS.call(m);
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -465,10 +487,9 @@ fn input() -> Result<()> {
     Ok(())
 }
 
-#[allow(static_mut_refs)]
 pub fn input_main() {
     while TERM_QUIT.load(Ordering::SeqCst) == false {
-        if let Err(_) = input() {
+        if input().is_err() {
             break;
         }
     }

@@ -1,11 +1,10 @@
 use parking_lot::Mutex;
-use std::collections::VecDeque;
+use std::panic;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use unicode_width::UnicodeWidthChar;
 
-use crate::TOKIO_RUNTIME;
 use crate::audio;
 use crate::error::print_errors;
 use crate::ffmpeg;
@@ -13,27 +12,9 @@ use crate::playlist::PLAYLIST;
 use crate::stdin;
 use crate::stdout::{self, pend_print, pending_frames, remove_pending_frames};
 use crate::util::*;
+use crate::{TOKIO_RUNTIME, statistics};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
-
-pub static RENDER_TIME: Mutex<VecDeque<Duration>> = Mutex::new(VecDeque::new());
-pub static ESCAPE_STRING_ENCODE_TIME: Mutex<VecDeque<Duration>> = Mutex::new(VecDeque::new());
-
-fn set_render_time(duration: Duration) {
-    let mut lock = RENDER_TIME.lock();
-    lock.push_back(duration);
-    while lock.len() > 60 {
-        lock.pop_front();
-    }
-}
-
-fn set_escape_string_encode_time(duration: Duration) {
-    let mut lock = ESCAPE_STRING_ENCODE_TIME.lock();
-    lock.push_back(duration);
-    while lock.len() > 60 {
-        lock.pop_front();
-    }
-}
 
 pub struct RenderWrapper<'frame, 'cells> {
     pub frame: &'frame [Color],
@@ -76,16 +57,14 @@ impl RenderWrapper<'_, '_> {
     }
 }
 
-static mut THIS_FRAME: Vec<Cell> = Vec::new();
-static mut LAST_FRAME: Vec<Cell> = Vec::new();
-static mut RENDER_CALLBACKS: Vec<fn(&mut RenderWrapper)> = Vec::new();
+/// frames.0 - 当前帧, frames.1 - 上一帧
+static FRAMES: Mutex<(Vec<Cell>, Vec<Cell>)> = Mutex::new((Vec::new(), Vec::new()));
+static RENDER_CALLBACKS: Mutex<Vec<fn(&mut RenderWrapper)>> = Mutex::new(Vec::new());
 
-#[allow(static_mut_refs)]
 pub fn add_render_callback(callback: fn(&mut RenderWrapper<'_, '_>)) {
-    unsafe { RENDER_CALLBACKS.push(callback) };
+    RENDER_CALLBACKS.lock().push(callback);
 }
 
-#[allow(static_mut_refs)]
 pub fn render(frame: &[Color], pitch: usize) {
     static LAST_TIME: Mutex<Option<Duration>> = Mutex::new(None);
 
@@ -94,19 +73,40 @@ pub fn render(frame: &[Color], pitch: usize) {
     let delta_time = LAST_TIME
         .lock()
         .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))
-        .unwrap_or(None)
-        .unwrap_or(Duration::from_millis(0));
+        .flatten()
+        .unwrap_or(Duration::ZERO);
 
     if let Some(played_time) = played_time {
         LAST_TIME.lock().replace(played_time);
     }
+
+    render_frame(frame, pitch, played_time, delta_time);
+
+    let mut force_flush = FORCEFLUSH_NEXT.swap(false, Ordering::SeqCst);
+    if pending_frames() > 3 {
+        send_error!("Too many pending frames: {}", pending_frames());
+        force_flush = true;
+    }
+    print_diff(force_flush);
+
+    let (this_frame, last_frame) = &mut *FRAMES.lock();
+    std::mem::swap(this_frame, last_frame);
+}
+
+fn render_frame(
+    frame: &[Color],
+    pitch: usize,
+    played_time: Option<Duration>,
+    delta_time: Duration,
+) {
+    let (this_frame, _) = &mut *FRAMES.lock();
 
     let wrap = &mut RenderWrapper {
         frame,
         frame_width: VIDEO_PIXELS.x(),
         frame_height: VIDEO_PIXELS.y(),
         frame_pitch: pitch,
-        cells: unsafe { THIS_FRAME.as_mut_slice() },
+        cells: this_frame.as_mut_slice(),
         cells_width: TERM_SIZE.x(),
         cells_height: TERM_SIZE.y(),
         cells_pitch: TERM_SIZE.x(),
@@ -124,20 +124,10 @@ pub fn render(frame: &[Color], pitch: usize) {
     };
 
     let instant = Instant::now();
-    for callback in unsafe { &RENDER_CALLBACKS } {
+    for callback in RENDER_CALLBACKS.lock().iter() {
         callback(wrap);
     }
-    set_render_time(instant.elapsed());
-
-    if pending_frames() > 3 {
-        send_error!("Too many pending frames: {}", pending_frames());
-        TOKIO_RUNTIME.block_on(print_diff(true));
-        FORCEFLUSH_NEXT.store(false, Ordering::SeqCst);
-    } else {
-        TOKIO_RUNTIME.block_on(print_diff(FORCEFLUSH_NEXT.swap(false, Ordering::SeqCst)));
-    }
-
-    unsafe { std::mem::swap(&mut THIS_FRAME, &mut LAST_FRAME) };
+    statistics::set_render_time(instant.elapsed());
 }
 
 async fn print_diff_line(cells: &mut [Cell], lasts: &[Cell], force_flush: bool) -> Vec<u8> {
@@ -151,18 +141,14 @@ async fn print_diff_line(cells: &mut [Cell], lasts: &[Cell], force_flush: bool) 
 
         let cw = cell.c.map_or(1, |c| c.width().unwrap_or(1).max(1));
         if !force_flush && cell == last && cw == 1 {
-            buf.extend_from_slice("\x1b[C".as_bytes());
+            buf.extend_from_slice(b"\x1b[C");
             continue;
         }
 
         let (fg, bg) = (some_if_ne(cell.fg, last_fg), some_if_ne(cell.bg, last_bg));
 
         buf.extend_from_slice(escape_set_color(fg, bg).as_bytes());
-        buf.extend_from_slice(
-            if let Some(c) = cell.c { c } else { '▄' }
-                .to_string()
-                .as_bytes(),
-        );
+        buf.extend_from_slice(cell.c.unwrap_or('▄').to_string().as_bytes());
 
         if let Some(fg) = fg {
             last_fg = fg;
@@ -174,32 +160,12 @@ async fn print_diff_line(cells: &mut [Cell], lasts: &[Cell], force_flush: bool) 
     buf
 }
 
-#[allow(static_mut_refs)]
-async fn print_diff(force_flush: bool) {
-    let (term_width, term_height) = TERM_SIZE.get();
+async fn print_diff_async(
+    force_flush: bool,
+    cells: Vec<&'static mut [Cell]>,
+    lasts: Vec<&'static [Cell]>,
+) {
     let instant = Instant::now();
-
-    let cells = unsafe {
-        THIS_FRAME
-            .as_mut_slice()
-            .split_at_mut(THIS_FRAME.len() - 1)
-            .0
-            .chunks_mut(term_width)
-            .map(|chunk| std::mem::transmute(chunk))
-            .collect::<Vec<_>>()
-    };
-    let lasts = unsafe {
-        LAST_FRAME
-            .as_slice()
-            .split_at(LAST_FRAME.len() - 1)
-            .0
-            .chunks(term_width)
-            .map(|chunk| std::mem::transmute(chunk))
-            .collect::<Vec<_>>()
-    };
-
-    assert!(cells.len() == term_height, "cells length mismatch");
-    assert!(lasts.len() == term_height, "lasts length mismatch");
 
     let result = (cells.into_iter().zip(lasts.into_iter()))
         .map(|(cell, last)| tokio::spawn(print_diff_line(cell, last, force_flush)))
@@ -216,15 +182,45 @@ async fn print_diff(force_flush: bool) {
         buf.extend_from_slice(&line);
     }
 
-    set_escape_string_encode_time(instant.elapsed());
+    statistics::set_escape_string_encode_time(instant.elapsed());
     if force_flush {
         remove_pending_frames();
         assert!(buf.len() > 0, "force flush but buffer is empty");
         pend_print(buf);
-        return;
     } else if buf.len() > 0 {
         pend_print(buf);
     }
+}
+
+fn print_diff(force_flush: bool) {
+    let (term_width, term_height) = TERM_SIZE.get();
+    let (this_frame, last_frame) = &mut *FRAMES.lock();
+
+    let cells = unsafe {
+        let real_len = this_frame.len() - 1;
+        this_frame
+            .as_mut_slice()
+            .split_at_mut(real_len)
+            .0
+            .chunks_mut(term_width)
+            .map(|chunk| std::mem::transmute(chunk))
+            .collect::<Vec<_>>()
+    };
+    let lasts = unsafe {
+        let real_len = last_frame.len() - 1;
+        last_frame
+            .as_slice()
+            .split_at(real_len)
+            .0
+            .chunks(term_width)
+            .map(|chunk| std::mem::transmute(chunk))
+            .collect::<Vec<_>>()
+    };
+
+    assert!(cells.len() == term_height, "cells length mismatch");
+    assert!(lasts.len() == term_height, "lasts length mismatch");
+
+    TOKIO_RUNTIME.block_on(print_diff_async(force_flush, cells, lasts));
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -240,7 +236,6 @@ pub static VIDEO_PADDING: TBLR = TBLR::new();
 /// 强制下一帧全屏刷新
 pub static FORCEFLUSH_NEXT: AtomicBool = AtomicBool::new(false);
 
-#[allow(static_mut_refs)]
 pub fn updatesize() -> bool {
     let Some(winsize) = get_winsize() else {
         return false;
@@ -291,16 +286,17 @@ pub fn updatesize() -> bool {
         }
     }
 
-    unsafe {
+    {
+        let (this_frame, last_frame) = &mut *FRAMES.lock();
+
         // 将大小加一作为哨兵
-        THIS_FRAME.clear();
-        THIS_FRAME.resize(xchars * ychars + 1, Cell::default())
-    };
-    unsafe {
+        this_frame.clear();
+        this_frame.resize(xchars * ychars + 1, Cell::default());
+
         // 将大小加一作为哨兵
-        LAST_FRAME.clear();
-        LAST_FRAME.resize(xchars * ychars + 1, Cell::default())
-    };
+        last_frame.clear();
+        last_frame.resize(xchars * ychars + 1, Cell::default());
+    }
 
     remove_pending_frames();
 
@@ -406,7 +402,7 @@ pub extern "C" fn request_quit() {
 }
 
 #[cfg(unix)]
-static mut ORIG_TERMIOS: Option<libc::termios> = None;
+static ORIG_TERMIOS: Mutex<Option<libc::termios>> = Mutex::new(None);
 
 /// 在初始化终端之前不能启动 stdin 和 stdout 线程
 #[cfg(unix)]
@@ -423,7 +419,7 @@ pub fn init() {
     let mut termios = std::mem::MaybeUninit::uninit();
     if unsafe { libc::tcgetattr(STDIN_FILENO, termios.as_mut_ptr()) } == 0 {
         let mut termios = unsafe { termios.assume_init() };
-        unsafe { ORIG_TERMIOS = Some(termios) };
+        ORIG_TERMIOS.lock().replace(termios);
         termios.c_lflag &= !(libc::ECHO | libc::ICANON);
         termios.c_cc[libc::VMIN] = 0;
         termios.c_cc[libc::VTIME] = 1;
@@ -464,7 +460,7 @@ pub fn init() {
 pub fn quit() -> ! {
     use libc::STDIN_FILENO;
 
-    if let Some(termios) = unsafe { ORIG_TERMIOS } {
+    if let Some(termios) = ORIG_TERMIOS.lock().take() {
         unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
     }
     stdout::print(TERM_EXIT_SEQ);
@@ -478,6 +474,24 @@ pub fn quit() -> ! {
     stdout::print(TERM_EXIT_SEQ);
     print_errors();
     exit(0);
+}
+
+pub fn setup_panic_handler() {
+    panic::set_hook(Box::new(|info| {
+        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "Unknown panic"
+        };
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_default();
+        send_error!("[panic] {} at {}", msg, location);
+        quit();
+    }));
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @

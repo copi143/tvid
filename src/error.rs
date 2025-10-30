@@ -12,15 +12,22 @@ pub struct Error {
     pub ts: Instant,
 }
 
-static ERRORS: Mutex<VecDeque<Error>> = Mutex::new(VecDeque::new());
-static mut ERRMSG_TIMEOUT: Duration = Duration::from_secs(5);
+pub struct Errors {
+    pub queue: VecDeque<Error>,
+    pub timeout: Duration,
+}
+
+static ERRORS: Mutex<Errors> = Mutex::new(Errors {
+    queue: VecDeque::new(),
+    timeout: Duration::from_secs(5),
+});
 
 pub fn remove_expired_errors() {
-    let mut lock = ERRORS.lock();
     let now = Instant::now();
-    while let Some(err) = lock.front() {
-        if now.duration_since(err.ts) >= unsafe { ERRMSG_TIMEOUT } {
-            lock.pop_front();
+    let mut lock = ERRORS.lock();
+    while let Some(err) = lock.queue.front() {
+        if now.duration_since(err.ts) >= lock.timeout {
+            lock.queue.pop_front();
         } else {
             break;
         }
@@ -35,17 +42,17 @@ pub fn send_error(msg: &str, fg: Option<Color>, bg: Option<Color>) {
         ts: Instant::now(),
     };
     let mut lock = ERRORS.lock();
-    lock.push_back(err);
+    lock.queue.push_back(err);
 }
 
-pub fn get_errors<'mutex>() -> MutexGuard<'mutex, VecDeque<Error>> {
+pub fn get_errors<'mutex>() -> MutexGuard<'mutex, Errors> {
     remove_expired_errors();
     ERRORS.lock()
 }
 
 pub fn print_errors() {
     let lock = ERRORS.lock();
-    for err in lock.iter() {
+    for err in lock.queue.iter() {
         let mut text = String::new();
         let system_time = SystemTime::now().checked_sub(err.ts.elapsed()).unwrap();
         let datetime: DateTime<Local> = system_time.into();

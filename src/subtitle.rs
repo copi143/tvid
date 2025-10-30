@@ -2,11 +2,9 @@ use parking_lot::Mutex;
 use std::{collections::VecDeque, time::Duration};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::{
-    audio,
-    term::RenderWrapper,
-    util::{Cell, Color, best_contrast_color},
-};
+use crate::audio;
+use crate::term::RenderWrapper;
+use crate::util::{Cell, Color, best_contrast_color};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AssDialogue {
@@ -107,7 +105,7 @@ pub fn push_ass(start: Duration, end: Duration, ass: &str) {
                 if SUBTITLE_EXTRA_DISPLAY_TIME == Duration::from_millis(0) {
                     *dialogue = None;
                 } else {
-                    dia.end = audio::played_time();
+                    dia.end = audio::played_time_or_zero();
                 }
             }
         }
@@ -125,7 +123,7 @@ pub fn push_text(start: Duration, end: Duration, text: &str) {
                 if SUBTITLE_EXTRA_DISPLAY_TIME == Duration::from_millis(0) {
                     *dialogue = None;
                 } else {
-                    dia.end = audio::played_time();
+                    dia.end = audio::played_time_or_zero();
                 }
             }
         }
@@ -141,7 +139,7 @@ pub fn push_nothing() {
                 if SUBTITLE_EXTRA_DISPLAY_TIME == Duration::from_millis(0) {
                     *dialogue = None;
                 } else {
-                    dia.end = audio::played_time();
+                    dia.end = audio::played_time_or_zero();
                 }
             }
         }
@@ -164,14 +162,12 @@ pub fn get_subtitles(time: Duration) -> Vec<AssDialogue> {
     }
     subtitles
         .iter_mut()
-        .filter(|dialogue| dialogue.is_some())
-        .map(|dialogue| dialogue.as_mut().unwrap())
+        .filter_map(|dialogue| dialogue.as_mut())
         .filter(|dialogue| dialogue.display_time == Duration::from_millis(0))
         .for_each(|dialogue| dialogue.display_time = time);
     let mut result: Vec<AssDialogue> = subtitles
         .iter()
-        .filter(|dialogue| dialogue.is_some())
-        .map(|dialogue| dialogue.as_ref().unwrap())
+        .filter_map(|dialogue| dialogue.as_ref())
         .filter(|dialogue| {
             dialogue.end == Duration::from_millis(0)
                 || (dialogue.start <= time && time <= dialogue.end + SUBTITLE_EXTRA_DISPLAY_TIME)
@@ -202,13 +198,13 @@ pub fn render_subtitle(wrap: &mut RenderWrapper) {
             let mut x = (wrap.cells_width - n) / 2;
             for ch in sub.text.chars() {
                 let k_in = played_time.as_millis() as f32 - sub.display_time.as_millis() as f32;
-                let k_in = ((k_in - 50.0 * i as f32) / 200.0).min(1.0).max(0.0);
+                let k_in = ((k_in - 50.0 * i as f32) / 200.0).clamp(0.0, 1.0);
                 let k_out = if sub.end.as_millis() as f32 == 0.0 {
                     0.0
                 } else {
                     played_time.as_millis() as f32 - sub.end.as_millis() as f32
                 };
-                let k_out = (k_out / 500.0).min(1.0).max(0.0);
+                let k_out = (k_out / 500.0).clamp(0.0, 1.0);
                 let k = k_in * (1.0 - k_out);
                 let cw = ch.width().unwrap_or(1).max(1);
                 if x < wrap.padding_left || x + cw > wrap.cells_width - wrap.padding_right {

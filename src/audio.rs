@@ -18,35 +18,15 @@ use crate::{PAUSE, term::TERM_QUIT};
 static AUDIO_VSTARTTIME: Mutex<Option<Instant>> = Mutex::new(None);
 static AUDIO_PLAYEDTIME: Mutex<Option<Duration>> = Mutex::new(None);
 
-pub fn played_time() -> Duration {
-    if PAUSE.load(Ordering::SeqCst) {
-        if let Some(time) = *AUDIO_PLAYEDTIME.lock() {
-            time
-        } else {
-            Duration::from_millis(0)
-        }
-    } else {
-        if let Some(time) = *AUDIO_VSTARTTIME.lock() {
-            time.elapsed()
-        } else {
-            Duration::from_millis(0)
-        }
-    }
+pub fn played_time_or_zero() -> Duration {
+    played_time_or_none().unwrap_or(Duration::ZERO)
 }
 
 pub fn played_time_or_none() -> Option<Duration> {
     if PAUSE.load(Ordering::SeqCst) {
-        if let Some(time) = *AUDIO_PLAYEDTIME.lock() {
-            Some(time)
-        } else {
-            None
-        }
+        *AUDIO_PLAYEDTIME.lock()
     } else {
-        if let Some(time) = *AUDIO_VSTARTTIME.lock() {
-            Some(time.elapsed())
-        } else {
-            None
-        }
+        AUDIO_VSTARTTIME.lock().map(|time| time.elapsed())
     }
 }
 
@@ -60,8 +40,8 @@ fn update_vtime(add_samples: u64) {
         let secs = samples / samplerate;
         let nanos = samples % samplerate * 1_000_000_000 / samplerate;
         let vtime = Duration::new(secs, nanos as u32);
-        *AUDIO_PLAYEDTIME.lock() = Some(vtime);
-        *AUDIO_VSTARTTIME.lock() = Some(Instant::now() - vtime);
+        AUDIO_PLAYEDTIME.lock().replace(vtime);
+        AUDIO_VSTARTTIME.lock().replace(Instant::now() - vtime);
     };
 }
 

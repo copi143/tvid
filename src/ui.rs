@@ -8,12 +8,10 @@ use unicode_width::UnicodeWidthChar;
 use crate::error::get_errors;
 use crate::ffmpeg;
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
+use crate::statistics::get_statistics;
 use crate::stdin::{self, Key};
-use crate::stdout::OUTPUT_TIME;
-use crate::term::{
-    ESCAPE_STRING_ENCODE_TIME, RENDER_TIME, RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG,
-};
-use crate::util::{Cell, Color, TextBoxInfo, avg_duration, best_contrast_color};
+use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
+use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
@@ -31,7 +29,6 @@ pub fn unifont_get(ch: char) -> &'static [u8; 32] {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-#[allow(clippy::too_many_arguments)]
 pub fn mask(
     wrap: &mut RenderWrapper,
     x: isize,
@@ -92,7 +89,6 @@ pub fn mask(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn putat(
     wrap: &mut RenderWrapper,
     text: &str,
@@ -203,7 +199,7 @@ pub fn textbox(x: isize, y: isize, w: usize, h: usize, autowrap: bool) {
 }
 
 pub fn put(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
-    let (def_fg, def_bg) = TEXTBOX_DEFAULT_COLOR.lock().clone();
+    let (def_fg, def_bg) = *TEXTBOX_DEFAULT_COLOR.lock();
     let (fg, bg) = (fg.or(def_fg), bg.or(def_bg));
     let (x, y, w, h, i, j) = TEXTBOX.get();
     let (_, cx, cy) = putat(wrap, text, i, j, w, h, x, y, fg, bg, TEXTBOX.getwrap());
@@ -220,7 +216,7 @@ macro_rules! put {
 }
 
 pub fn putln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
-    let (def_fg, def_bg) = TEXTBOX_DEFAULT_COLOR.lock().clone();
+    let (def_fg, def_bg) = *TEXTBOX_DEFAULT_COLOR.lock();
     let (fg, bg) = (fg.or(def_fg), bg.or(def_bg));
     let (x, y, w, h, i, j) = TEXTBOX.get();
     let (_, _, cy) = putat(wrap, text, i, j, w, h, x, y, fg, bg, TEXTBOX.getwrap());
@@ -258,8 +254,8 @@ pub fn putunifont(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: O
             }
         }
     }
-    for y in 0..4 {
-        putln(wrap, &data[y], fg, bg);
+    for text in data {
+        putln(wrap, &text, fg, bg);
     }
 }
 
@@ -305,6 +301,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
 
     TEXTBOX_DEFAULT_COLOR.lock().clone_from(&(None, None));
 
+    let statistics = get_statistics();
+
     if wrap.term_font_height > 12.0 {
         putln!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
         putln!(
@@ -316,17 +314,22 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         putln!(
             wrap,
             "Escape String Encode Time: {:.2?} (avg over last 60)",
-            avg_duration(&ESCAPE_STRING_ENCODE_TIME)
+            statistics.escape_string_encode_time.avg(),
         );
         putln!(
             wrap,
             "Render Time: {:.2?} (avg over last 60)",
-            avg_duration(&RENDER_TIME)
+            statistics.render_time.avg(),
         );
         putln!(
             wrap,
             "Output Time: {:.2?} (avg over last 60)",
-            avg_duration(&OUTPUT_TIME)
+            statistics.output_time.avg(),
+        );
+        putln!(
+            wrap,
+            "Video Skipped Frames: {}",
+            statistics.video_skipped_frames,
         );
     } else {
         putunifont!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
@@ -339,17 +342,22 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         putunifont!(
             wrap,
             "Escape String Encode Time: {:.2?} (avg over last 60)",
-            avg_duration(&ESCAPE_STRING_ENCODE_TIME)
+            statistics.escape_string_encode_time.avg(),
         );
         putunifont!(
             wrap,
             "Render Time: {:.2?} (avg over last 60)",
-            avg_duration(&RENDER_TIME)
+            statistics.render_time.avg(),
         );
         putunifont!(
             wrap,
             "Output Time: {:.2?} (avg over last 60)",
-            avg_duration(&OUTPUT_TIME)
+            statistics.output_time.avg(),
+        );
+        putunifont!(
+            wrap,
+            "Video Skipped Frames: {}",
+            statistics.video_skipped_frames,
         );
     }
 }
@@ -424,7 +432,7 @@ fn render_errors(wrap: &mut RenderWrapper) {
         return; // 防炸
     }
 
-    let errors = get_errors();
+    let errors = &get_errors().queue;
 
     mask(
         wrap,

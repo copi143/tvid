@@ -1,7 +1,16 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::bool_comparison)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::iter_nth_zero)]
+#![allow(clippy::len_zero)]
+#![allow(clippy::new_without_default)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::partialeq_to_none)]
+
 use anyhow::{Context, Result};
 use ffmpeg_next as av;
 use std::env::args;
-use std::panic;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::Runtime;
@@ -22,6 +31,7 @@ pub mod ffmpeg;
 pub mod osc;
 pub mod playlist;
 pub mod sixel;
+pub mod statistics;
 pub mod stdin;
 pub mod stdout;
 pub mod subtitle;
@@ -39,6 +49,21 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
 });
 
 pub static PAUSE: AtomicBool = AtomicBool::new(false);
+
+fn print_no_playlist() {
+    let divider = "-".repeat(term::get_winsize().map(|w| w.col as usize).unwrap_or(80));
+    eprintln!("No input files.");
+    eprintln!("Usage: {} <input> [input] ...", args().nth(0).unwrap());
+    eprintln!("{}", divider);
+    eprintln!("tvid - Terminal Video Player");
+    eprintln!("version: {}", env!("CARGO_PKG_VERSION"));
+    eprintln!("repo: {}", env!("CARGO_PKG_REPOSITORY"));
+    eprintln!("license: {}", env!("CARGO_PKG_LICENSE"));
+}
+
+fn print_help() {
+    unimplemented!()
+}
 
 fn register_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal(' '), |_| {
@@ -74,42 +99,19 @@ fn register_keypress_callbacks() {
 }
 
 fn main() -> Result<()> {
-    panic::set_hook(Box::new(|info| {
-        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
-            *s
-        } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            s.as_str()
-        } else {
-            "Unknown panic"
-        };
-        let location = info
-            .location()
-            .map(|l| format!("{}:{}", l.file(), l.line()))
-            .unwrap_or_default();
-        send_error!("[panic] {} at {}", msg, location);
-        term::quit();
-    }));
-
     config::create_if_not_exists(None)?;
     config::load(None)?;
-
-    if args().len() < 2 && PLAYLIST.lock().len() == 0 {
-        let divider = "-".repeat(term::get_winsize().map(|w| w.col as usize).unwrap_or(80));
-        eprintln!("No input files.");
-        eprintln!("Usage: {} <input> [input] ...", args().nth(0).unwrap());
-        eprintln!("{}", divider);
-        eprintln!("tvid - Terminal Video Player");
-        eprintln!("version: {}", env!("CARGO_PKG_VERSION"));
-        eprintln!("repo: {}", env!("CARGO_PKG_REPOSITORY"));
-        eprintln!("license: {}", env!("CARGO_PKG_LICENSE"));
-        std::process::exit(1);
-    }
 
     if args().len() > 1 {
         PLAYLIST
             .lock()
             .clear()
             .extend(args().skip(1).collect::<Vec<_>>());
+    }
+
+    if PLAYLIST.lock().len() == 0 {
+        print_no_playlist();
+        std::process::exit(1);
     }
 
     // stdout::print(b"\x1bPq");
@@ -128,6 +130,7 @@ fn main() -> Result<()> {
     av::init().context("av init failed")?;
 
     term::init();
+    term::setup_panic_handler(); // 一定要在初始化之后设置，且必须立刻设置
 
     register_keypress_callbacks();
 

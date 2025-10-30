@@ -1,11 +1,10 @@
 use parking_lot::{Condvar, Mutex};
-use std::{
-    collections::VecDeque,
-    ffi::c_void,
-    sync::atomic::Ordering,
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::ffi::c_void;
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 
+use crate::statistics::set_output_time;
 use crate::term::TERM_QUIT;
 
 #[cfg(unix)]
@@ -31,16 +30,6 @@ pub fn print(bytes: &[u8]) -> isize {
             std::ptr::null_mut(),
         );
         if res == 0 { -1 } else { written as isize }
-    }
-}
-
-pub static OUTPUT_TIME: Mutex<VecDeque<Duration>> = Mutex::new(VecDeque::new());
-
-fn set_output_time(duration: Duration) {
-    let mut lock = OUTPUT_TIME.lock();
-    lock.push_back(duration);
-    while lock.len() > 60 {
-        lock.pop_front();
     }
 }
 

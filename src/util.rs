@@ -476,17 +476,17 @@ pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>) -> String {
 
 #[inline(always)]
 pub fn escape_set_color_rgb(fg: Option<Color>, bg: Option<Color>) -> String {
-    return match (fg, bg) {
+    match (fg, bg) {
         (Some(fg), Some(bg)) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
         (Some(fg), None) => format!("\x1b[38;2;{:?}m", fg),
         (None, Some(bg)) => format!("\x1b[48;2;{:?}m", bg),
         (None, None) => String::new(),
-    };
+    }
 }
 
 #[inline(always)]
 pub fn escape_set_color_256(fg: Option<Color>, bg: Option<Color>) -> String {
-    return match (fg, bg) {
+    match (fg, bg) {
         (Some(fg), Some(bg)) => format!(
             "\x1b[38;5;{};48;5;{}m",
             palette256_from_color(fg),
@@ -495,7 +495,7 @@ pub fn escape_set_color_256(fg: Option<Color>, bg: Option<Color>) -> String {
         (Some(fg), None) => format!("\x1b[38;5;{}m", palette256_from_color(fg)),
         (None, Some(bg)) => format!("\x1b[48;5;{}m", palette256_from_color(bg)),
         (None, None) => String::new(),
-    };
+    }
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -518,12 +518,3 @@ impl<T: Send + 'static> JoinAll for Vec<JoinHandle<T>> {
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
-
-pub fn avg_duration(durations: &Mutex<VecDeque<Duration>>) -> Duration {
-    let lock = durations.lock();
-    if lock.len() == 0 {
-        Duration::ZERO
-    } else {
-        lock.iter().sum::<Duration>() / lock.len() as u32
-    }
-}
