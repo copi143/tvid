@@ -39,8 +39,7 @@ pub fn video_main() {
             }
             lock.take().unwrap()
         };
-        VIDEO_FRAME_SIG.notify_all();
-        DECODER_WAKEUP.notify_all();
+        DECODER_WAKEUP.notify_one();
 
         let frametime = {
             let pts = frame.pts().unwrap();

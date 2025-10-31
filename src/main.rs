@@ -94,6 +94,11 @@ fn register_keypress_callbacks() {
         true
     });
 
+    stdin::register_keypress_callback(Key::Up, |_| true);
+    stdin::register_keypress_callback(Key::Down, |_| true);
+    stdin::register_keypress_callback(Key::Left, |_| true);
+    stdin::register_keypress_callback(Key::Right, |_| true);
+
     playlist::register_keypress_callbacks();
     ui::register_keypress_callbacks();
 }

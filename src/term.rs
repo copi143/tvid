@@ -432,16 +432,35 @@ pub fn init() {
     use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
     use winapi::um::processenv::GetStdHandle;
     use winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+    use winapi::um::wincon::{CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT};
+    use winapi::um::wincon::{CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT};
     use winapi::um::wincon::{ENABLE_PROCESSED_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING};
     use winapi::um::winnt::HANDLE;
     unsafe extern "system" {
         fn SetConsoleCP(wCodePageID: u32) -> i32;
         fn SetConsoleOutputCP(wCodePageID: u32) -> i32;
+        fn SetConsoleCtrlHandler(
+            handler: Option<unsafe extern "system" fn(u32) -> i32>,
+            add: i32,
+        ) -> i32;
     }
     unsafe {
         SetConsoleCP(65001);
         SetConsoleOutputCP(65001);
         stdout::print(TERM_INIT_SEQ);
+
+        unsafe extern "system" fn console_handler(ctrl_type: u32) -> i32 {
+            match ctrl_type {
+                CTRL_C_EVENT | CTRL_BREAK_EVENT | CTRL_CLOSE_EVENT | CTRL_LOGOFF_EVENT
+                | CTRL_SHUTDOWN_EVENT => {
+                    request_quit();
+                    1
+                }
+                _ => 0,
+            }
+        }
+        SetConsoleCtrlHandler(Some(console_handler), 1);
+
         let h_in: HANDLE = GetStdHandle(STD_INPUT_HANDLE);
         let mut mode: u32 = 0;
         if GetConsoleMode(h_in, &mut mode) != 0 {

@@ -6,6 +6,9 @@ use std::time::Duration;
 
 use crate::term::TERM_QUIT;
 
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+// @ 读取输入 @
+
 #[cfg(unix)]
 pub fn scan(bytes: &mut [u8]) -> isize {
     use libc::STDIN_FILENO;
@@ -58,6 +61,7 @@ fn getc() -> Result<u8> {
                 STDIN_LEN = n as usize;
                 Ok(STDIN_BUF[0])
             } else {
+                send_error!("Failed to read from stdin, ret = {}", n);
                 Err(anyhow::anyhow!("failed to read from stdin"))
             }
         }
@@ -65,6 +69,7 @@ fn getc() -> Result<u8> {
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+// @ 键盘事件 @
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Key {
@@ -174,6 +179,7 @@ impl From<Key> for usize {
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+// @ 键盘回调 @
 
 pub type KeypressCallback = Box<dyn Fn(Key) -> bool + Send + Sync>;
 
@@ -213,9 +219,11 @@ pub fn call_keypress_callbacks(c: Key) {
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+// @ 鼠标事件 @
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseAction {
+    Move,
     LeftDown,
     MiddleDown,
     RightDown,
@@ -235,7 +243,49 @@ pub struct Mouse {
     pub right: bool,
 }
 
+impl Mouse {
+    pub const fn new() -> Self {
+        Mouse {
+            pos: (0, 0),
+            action: MouseAction::Move,
+            left: false,
+            middle: false,
+            right: false,
+        }
+    }
+
+    pub const fn update(&mut self, pos: (i32, i32), action: MouseAction) -> Self {
+        self.pos = pos;
+        self.action = action;
+        match action {
+            MouseAction::Move => {}
+            MouseAction::LeftDown => {
+                self.left = true;
+            }
+            MouseAction::LeftUp => {
+                self.left = false;
+            }
+            MouseAction::MiddleDown => {
+                self.middle = true;
+            }
+            MouseAction::MiddleUp => {
+                self.middle = false;
+            }
+            MouseAction::RightDown => {
+                self.right = true;
+            }
+            MouseAction::RightUp => {
+                self.right = false;
+            }
+            MouseAction::ScrollUp => {}
+            MouseAction::ScrollDown => {}
+        }
+        *self
+    }
+}
+
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+// @ 鼠标回调 @
 
 pub type MouseCallback = Box<dyn Fn(Mouse) -> bool + Send + Sync>;
 
@@ -275,6 +325,7 @@ pub fn call_mouse_callbacks(m: Mouse) {
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+// @ 输入处理 @
 
 fn input_parsenum(mut c: u8, end: u8) -> Result<i64> {
     let mut num = 0i64;
@@ -332,20 +383,20 @@ fn input_escape_square_number(num: i64) -> Result<()> {
 }
 
 fn input_escape_square_angle() -> Result<()> {
-    let params = {
+    let (params, mouseup) = {
         let mut s = String::new();
-        loop {
+        let mouseup = loop {
             match getc()? {
                 c if (b'0' <= c && c <= b'9') || c == b';' => s.push(c as char),
-                b'M' | b'm' => {
-                    break s.split(';').map(|s| s.to_string()).collect::<Vec<_>>();
-                }
+                b'M' => break false,
+                b'm' => break true,
                 _ => {
                     send_error!("Invalid mouse sequence: ESC < ...");
                     return Ok(());
                 }
             }
-        }
+        };
+        (s.split(';').map(String::from).collect::<Vec<_>>(), mouseup)
     };
     if params.len() != 3 {
         send_error!("Invalid mouse sequence: ESC < ...");
@@ -360,27 +411,42 @@ fn input_escape_square_angle() -> Result<()> {
         return Ok(());
     };
     let action = match params[0] {
-        0 => MouseAction::LeftDown,
-        1 => MouseAction::MiddleDown,
-        2 => MouseAction::RightDown,
-        3 => MouseAction::LeftUp,
-        4 => MouseAction::MiddleUp,
-        5 => MouseAction::RightUp,
+        0 => {
+            if mouseup {
+                MouseAction::LeftUp
+            } else {
+                MouseAction::LeftDown
+            }
+        }
+        1 => {
+            if mouseup {
+                MouseAction::MiddleUp
+            } else {
+                MouseAction::MiddleDown
+            }
+        }
+        2 => {
+            if mouseup {
+                MouseAction::RightUp
+            } else {
+                MouseAction::RightDown
+            }
+        }
+        32..36 => MouseAction::Move,
         64 => MouseAction::ScrollUp,
         65 => MouseAction::ScrollDown,
         _ => {
-            // send_error!("Unknown mouse action: {}", params[0]);
+            send_error!(
+                "Unknown mouse action: {}, button up: {}",
+                params[0],
+                mouseup
+            );
             return Ok(());
         }
     };
-    let m = Mouse {
-        pos: (params[1] - 1, params[2] - 1),
-        action,
-        left: params[0] == 0 || params[0] == 3,
-        middle: params[0] == 1 || params[0] == 4,
-        right: params[0] == 2 || params[0] == 5,
-    };
-    call_mouse_callbacks(m);
+    static mut MOUSE_STATE: Mouse = Mouse::new();
+    #[allow(static_mut_refs)]
+    call_mouse_callbacks(unsafe { MOUSE_STATE.update((params[1] - 1, params[2] - 1), action) });
     Ok(())
 }
 

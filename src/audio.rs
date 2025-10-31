@@ -193,8 +193,7 @@ pub fn audio_main() {
             }
             lock.take().unwrap()
         };
-        AUDIO_FRAME_SIG.notify_all();
-        DECODER_WAKEUP.notify_all();
+        DECODER_WAKEUP.notify_one();
 
         if Some(frame.format()) != resampler_format
             || Some(frame.channel_layout()) != resampler_layout

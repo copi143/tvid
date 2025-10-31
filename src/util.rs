@@ -1,9 +1,6 @@
-use parking_lot::Mutex;
-use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::ops::Mul;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
-use std::time::Duration;
 use tokio::task::JoinHandle;
 
 pub struct XY {
@@ -398,15 +395,15 @@ const fn palette256_gray_try_reverse(c: u8) -> Option<u8> {
 
 pub fn palette256_to_color(index: u8) -> Color {
     if index < 16 {
-        return ANSI_COLORS[index as usize];
+        ANSI_COLORS[index as usize]
     } else if index < 232 {
         let r = palette256_scale(index / 36);
         let g = palette256_scale(index % 36 / 6);
         let b = palette256_scale(index % 6);
-        return Color::new(r, g, b);
+        Color::new(r, g, b)
     } else {
         let c = palette256_gray(index - 232);
-        return Color::new(c, c, c);
+        Color::new(c, c, c)
     }
 }
 

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use av::Subtitle;
+use av::codec::context::Context as AVCCtx;
 use av::util::frame::{Audio as AudioFrame, video::Video as VideoFrame};
 use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
@@ -43,8 +44,7 @@ pub fn decode_main(path: &str) -> Result<()> {
         let vs = ictx
             .stream(video_stream_index as usize)
             .context("video stream")?;
-        let codec_ctx = av::codec::context::Context::from_parameters(vs.parameters())
-            .context("video decoder")?;
+        let codec_ctx = AVCCtx::from_parameters(vs.parameters()).context("video decoder")?;
         let codec = codec_ctx.decoder().video().context("video decoder")?;
         Some(codec)
     } else {
@@ -55,8 +55,7 @@ pub fn decode_main(path: &str) -> Result<()> {
         let as_ = ictx
             .stream(audio_stream_index as usize)
             .context("audio stream")?;
-        let codec_ctx = av::codec::context::Context::from_parameters(as_.parameters())
-            .context("audio decoder")?;
+        let codec_ctx = AVCCtx::from_parameters(as_.parameters()).context("audio decoder")?;
         let codec = codec_ctx.decoder().audio().context("audio decoder")?;
         Some(codec)
     } else {
@@ -67,8 +66,7 @@ pub fn decode_main(path: &str) -> Result<()> {
         let ss = ictx
             .stream(subtitle_stream_index as usize)
             .context("subtitle stream")?;
-        let codec_ctx = av::codec::context::Context::from_parameters(ss.parameters())
-            .context("subtitle decoder")?;
+        let codec_ctx = AVCCtx::from_parameters(ss.parameters()).context("subtitle decoder")?;
         let codec = codec_ctx.decoder().subtitle().context("subtitle decoder")?;
         Some(codec)
     } else {
@@ -87,77 +85,11 @@ pub fn decode_main(path: &str) -> Result<()> {
     let mut video_queue = VecDeque::new();
     let mut audio_queue = VecDeque::new();
 
-    let mut decoder = ictx.packets().peekable();
-    while decoder.peek().is_some() {
+    for (stream, packet) in ictx.packets() {
         if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
             break;
         }
 
-        if video_queue.len() > 0 && VIDEO_FRAME.lock().is_none() {
-            let video_decoder = video_decoder.as_mut().unwrap();
-            if let Err(e) = video_decoder.send_packet(&video_queue.pop_front().unwrap()) {
-                eprintln!("video send_packet err: {:?}", e);
-                continue;
-            }
-            let mut frame = VideoFrame::empty();
-            while video_decoder.receive_frame(&mut frame).is_ok() {
-                {
-                    let mut lock = VIDEO_FRAME.lock();
-                    while lock.is_some()
-                        && TERM_QUIT.load(Ordering::SeqCst) == false
-                        && FFMPEG_END.load(Ordering::SeqCst) == false
-                    {
-                        VIDEO_FRAME_SIG.wait(&mut lock);
-                    }
-                    if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    *lock = Some(std::mem::replace(&mut frame, VideoFrame::empty()));
-                }
-                VIDEO_FRAME_SIG.notify_all();
-            }
-            if video_queue.len() > 0 {
-                continue;
-            }
-        }
-
-        if audio_queue.len() > 0 && AUDIO_FRAME.lock().is_none() {
-            let audio_decoder = audio_decoder.as_mut().unwrap();
-            if let Err(e) = audio_decoder.send_packet(&audio_queue.pop_front().unwrap()) {
-                eprintln!("audio send_packet err: {:?}", e);
-                continue;
-            }
-            let mut frame = AudioFrame::empty();
-            while audio_decoder.receive_frame(&mut frame).is_ok() {
-                {
-                    let mut lock = AUDIO_FRAME.lock();
-                    while lock.is_some()
-                        && TERM_QUIT.load(Ordering::SeqCst) == false
-                        && FFMPEG_END.load(Ordering::SeqCst) == false
-                    {
-                        AUDIO_FRAME_SIG.wait(&mut lock);
-                    }
-                    if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    *lock = Some(std::mem::replace(&mut frame, AudioFrame::empty()));
-                }
-                AUDIO_FRAME_SIG.notify_all();
-            }
-            if audio_queue.len() > 0 {
-                continue;
-            }
-        }
-
-        if audio_queue.len() > 0 && video_queue.len() > 0 {
-            static DECODER_WAKEUP_MUTEX: Mutex<()> = Mutex::new(());
-            let timeout = Duration::from_millis(50);
-            let mut guard = DECODER_WAKEUP_MUTEX.lock();
-            DECODER_WAKEUP.wait_for(&mut guard, timeout);
-            continue;
-        }
-
-        let (stream, packet) = decoder.next().unwrap();
         if stream.index() as isize == video_stream_index {
             VIDEO_TIME_BASE.lock().replace(stream.time_base());
             video_queue.push_back(packet);
@@ -198,6 +130,19 @@ pub fn decode_main(path: &str) -> Result<()> {
             }
         }
 
+        while audio_queue.len() > 0 && video_queue.len() > 0 {
+            if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
+                break;
+            }
+
+            decode_video(&mut video_decoder, &mut video_queue);
+            decode_audio(&mut audio_decoder, &mut audio_queue);
+
+            static DECODER_WAKEUP_MUTEX: Mutex<()> = Mutex::new(());
+            DECODER_WAKEUP.wait_for(&mut DECODER_WAKEUP_MUTEX.lock(), Duration::from_millis(50));
+            continue;
+        }
+
         if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
             break;
         }
@@ -223,11 +168,73 @@ pub fn decode_main(path: &str) -> Result<()> {
     Ok(())
 }
 
+fn decode_video(
+    video_decoder: &mut Option<ffmpeg_next::decoder::Video>,
+    video_queue: &mut VecDeque<ffmpeg_next::Packet>,
+) {
+    while video_queue.len() > 0 && VIDEO_FRAME.lock().is_none() {
+        let Some(video_decoder) = video_decoder.as_mut() else {
+            panic!("video_queue is not empty, so video_decoder must exist");
+        };
+        let Some(packet) = video_queue.pop_front() else {
+            panic!("video_queue is not empty, so packet must exist");
+        };
+        if let Err(e) = video_decoder.send_packet(&packet) {
+            eprintln!("video send_packet err: {:?}", e);
+            return;
+        }
+        let pts = packet.pts();
+        drop(packet);
+        let mut frame = VideoFrame::empty();
+        while video_decoder.receive_frame(&mut frame).is_ok() {
+            if frame.pts().is_none() {
+                frame.set_pts(pts);
+            }
+            let mut lock = VIDEO_FRAME.lock();
+            assert!(lock.is_none(), "video frame queue should be empty");
+            lock.replace(std::mem::replace(&mut frame, VideoFrame::empty()));
+            VIDEO_FRAME_SIG.notify_one();
+        }
+    }
+}
+
+fn decode_audio(
+    audio_decoder: &mut Option<ffmpeg_next::decoder::Audio>,
+    audio_queue: &mut VecDeque<ffmpeg_next::Packet>,
+) {
+    while audio_queue.len() > 0 && AUDIO_FRAME.lock().is_none() {
+        let Some(audio_decoder) = audio_decoder.as_mut() else {
+            panic!("audio_queue is not empty, so audio_decoder must exist");
+        };
+        let Some(packet) = audio_queue.pop_front() else {
+            panic!("audio_queue is not empty, so packet must exist");
+        };
+        if let Err(e) = audio_decoder.send_packet(&packet) {
+            eprintln!("audio send_packet err: {:?}", e);
+            return;
+        }
+        let pts = packet.pts();
+        drop(packet);
+        let mut frame = AudioFrame::empty();
+        while audio_decoder.receive_frame(&mut frame).is_ok() {
+            if frame.pts().is_none() {
+                frame.set_pts(pts);
+            }
+            let mut lock = AUDIO_FRAME.lock();
+            assert!(lock.is_none(), "audio frame queue should be empty");
+            lock.replace(std::mem::replace(&mut frame, AudioFrame::empty()));
+            AUDIO_FRAME_SIG.notify_one();
+        }
+    }
+}
+
+/// 通知所有解码相关的线程退出
 pub fn notify_quit() {
     // 标记 ffmpeg 处理结束，以便音频和视频线程可以退出
     FFMPEG_END.store(true, Ordering::SeqCst);
 
     // 唤醒所有等待的线程
-    VIDEO_FRAME_SIG.notify_all();
-    AUDIO_FRAME_SIG.notify_all();
+    DECODER_WAKEUP.notify_one();
+    VIDEO_FRAME_SIG.notify_one();
+    AUDIO_FRAME_SIG.notify_one();
 }
