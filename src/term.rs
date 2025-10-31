@@ -61,6 +61,8 @@ impl RenderWrapper<'_, '_> {
 static FRAMES: Mutex<(Vec<Cell>, Vec<Cell>)> = Mutex::new((Vec::new(), Vec::new()));
 static RENDER_CALLBACKS: Mutex<Vec<fn(&mut RenderWrapper)>> = Mutex::new(Vec::new());
 
+pub static COLOR_MODE: Mutex<ColorMode> = Mutex::new(ColorMode::new());
+
 pub fn add_render_callback(callback: fn(&mut RenderWrapper<'_, '_>)) {
     RENDER_CALLBACKS.lock().push(callback);
 }
@@ -130,10 +132,16 @@ fn render_frame(
     statistics::set_render_time(instant.elapsed());
 }
 
-async fn print_diff_line(cells: &mut [Cell], lasts: &[Cell], force_flush: bool) -> Vec<u8> {
+async fn print_diff_line(
+    cells: &mut [Cell],
+    lasts: &[Cell],
+    force_flush: bool,
+    color_mode: ColorMode,
+) -> Vec<u8> {
     let mut last_bg = Color::transparent();
     let mut last_fg = Color::transparent();
     let mut buf = Vec::with_capacity(1024);
+    let mut skip_count = 0u32;
     for (cell, last) in cells.iter().zip(lasts.iter()) {
         if cell.c == Some('\0') {
             continue;
@@ -141,21 +149,23 @@ async fn print_diff_line(cells: &mut [Cell], lasts: &[Cell], force_flush: bool) 
 
         let cw = cell.c.map_or(1, |c| c.width().unwrap_or(1).max(1));
         if !force_flush && cell == last && cw == 1 {
-            buf.extend_from_slice(b"\x1b[C");
+            skip_count += 1;
             continue;
+        } else if skip_count == 1 {
+            buf.extend_from_slice(b"\x1b[C");
+            skip_count = 0;
+        } else if skip_count > 1 {
+            buf.extend_from_slice(format!("\x1b[{skip_count}C").as_bytes());
+            skip_count = 0;
         }
 
         let (fg, bg) = (some_if_ne(cell.fg, last_fg), some_if_ne(cell.bg, last_bg));
 
-        buf.extend_from_slice(escape_set_color(fg, bg).as_bytes());
+        buf.extend_from_slice(escape_set_color(fg, bg, color_mode).as_bytes());
         buf.extend_from_slice(cell.c.unwrap_or('▄').to_string().as_bytes());
 
-        if let Some(fg) = fg {
-            last_fg = fg;
-        }
-        if let Some(bg) = bg {
-            last_bg = bg;
-        }
+        last_fg = cell.fg;
+        last_bg = cell.bg;
     }
     buf
 }
@@ -165,10 +175,11 @@ async fn print_diff_async(
     cells: Vec<&'static mut [Cell]>,
     lasts: Vec<&'static [Cell]>,
 ) {
+    let color_mode = *COLOR_MODE.lock();
     let instant = Instant::now();
 
     let result = (cells.into_iter().zip(lasts.into_iter()))
-        .map(|(cell, last)| tokio::spawn(print_diff_line(cell, last, force_flush)))
+        .map(|(cell, last)| tokio::spawn(print_diff_line(cell, last, force_flush, color_mode)))
         .collect::<Vec<_>>()
         .join_all()
         .await;
@@ -301,7 +312,7 @@ pub fn updatesize() -> bool {
     remove_pending_frames();
 
     FORCEFLUSH_NEXT.store(true, Ordering::SeqCst);
-    return true;
+    true
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @

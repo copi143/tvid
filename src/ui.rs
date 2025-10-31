@@ -278,6 +278,43 @@ pub fn render_ui(wrap: &mut RenderWrapper) {
     render_playlist(wrap);
     render_file_select(wrap);
     render_errors(wrap);
+    render_help(wrap);
+}
+
+pub static SHOW_HELP: AtomicBool = AtomicBool::new(false);
+
+fn render_help(wrap: &mut RenderWrapper) {
+    if !SHOW_HELP.load(Ordering::SeqCst) {
+        return;
+    }
+    let w = 50;
+    let h = 12;
+    let x = (wrap.cells_width as isize - w as isize) / 2;
+    let y = (wrap.cells_height as isize - h as isize) / 2;
+    mask(
+        wrap,
+        x,
+        y,
+        w,
+        h,
+        Some(TERM_DEFAULT_BG),
+        TERM_DEFAULT_FG,
+        0.7,
+    );
+    textbox(x + 2, y + 1, w - 4, h - 2, true);
+    TEXTBOX_DEFAULT_COLOR
+        .lock()
+        .clone_from(&(Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG)));
+    putln!(wrap, "帮助信息 (按 h 关闭)");
+    putln!(wrap, "------------------------------");
+    putln!(wrap, "q: 退出程序");
+    putln!(wrap, "n: 下一项");
+    putln!(wrap, "l: 打开/关闭播放列表");
+    putln!(wrap, "空格/回车: 选择文件");
+    putln!(wrap, "w/s/↑/↓: 上/下移动");
+    putln!(wrap, "a/d/←/→: 进入/返回目录");
+    putln!(wrap, "h: 打开/关闭帮助");
+    putln!(wrap, "------------------------------");
 }
 
 fn render_overlay_text(wrap: &mut RenderWrapper) {
@@ -410,7 +447,7 @@ fn render_playlist(wrap: &mut RenderWrapper) {
     putln!(wrap, "Playlist ({} items):", PLAYLIST.lock().len());
 
     let selected_index = *PLAYLIST_SELECTED_INDEX.lock();
-    let playing_index = PLAYLIST.lock().get_pos().clone();
+    let playing_index = PLAYLIST.lock().get_pos();
     for (i, item) in PLAYLIST.lock().get_items().iter().enumerate() {
         // 这边的 U+2000 是故意占位的，因为 ▶ 符号在终端上渲染宽度是 2
         let icon = if i == playing_index { "▶ " } else { "  " };
@@ -580,7 +617,7 @@ fn render_file_select(wrap: &mut RenderWrapper) {
     }
 }
 
-pub fn register_keypress_callbacks() {
+fn register_file_select_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('q'), |_| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
@@ -709,4 +746,13 @@ pub fn register_keypress_callbacks() {
     };
     stdin::register_keypress_callback(Key::Normal('d'), cb);
     stdin::register_keypress_callback(Key::Right, cb);
+}
+
+pub fn register_keypress_callbacks() {
+    stdin::register_keypress_callback(Key::Normal('h'), |_| {
+        SHOW_HELP.store(!SHOW_HELP.load(Ordering::SeqCst), Ordering::SeqCst);
+        true
+    });
+
+    register_file_select_keypress_callbacks();
 }

@@ -15,8 +15,7 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::Runtime;
 
-use crate::term::FORCEFLUSH_NEXT;
-use crate::util::USE_PALETTE256;
+use crate::term::{COLOR_MODE, FORCEFLUSH_NEXT};
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 
 #[macro_use]
@@ -50,19 +49,44 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
 
 pub static PAUSE: AtomicBool = AtomicBool::new(false);
 
+macro_rules! eprintlns {
+    ($($fmt:expr $(, $args:expr)*);+ $(;)?) => {
+        $(
+            eprintln!($fmt $(, $args)*);
+        )+
+    };
+}
+
 fn print_no_playlist() {
     let divider = "-".repeat(term::get_winsize().map(|w| w.col as usize).unwrap_or(80));
-    eprintln!("No input files.");
-    eprintln!("Usage: {} <input> [input] ...", args().nth(0).unwrap());
-    eprintln!("{}", divider);
-    eprintln!("tvid - Terminal Video Player");
-    eprintln!("version: {}", env!("CARGO_PKG_VERSION"));
-    eprintln!("repo: {}", env!("CARGO_PKG_REPOSITORY"));
-    eprintln!("license: {}", env!("CARGO_PKG_LICENSE"));
+    eprintlns!(
+        "No input files.";
+        "Usage: {} <input> [input] ...", args().nth(0).unwrap();
+        "{}",  divider;
+        "tvid - Terminal Video Player";
+        "version: {}", env!("CARGO_PKG_VERSION");
+        "repo: {}", env!("CARGO_PKG_REPOSITORY");
+        "license: {}", env!("CARGO_PKG_LICENSE");
+    );
 }
 
 fn print_help() {
-    unimplemented!()
+    eprintlns!(
+        "tvid - Terminal Video Player";
+        "version: {}", env!("CARGO_PKG_VERSION");
+        "repo: {}", env!("CARGO_PKG_REPOSITORY");
+        "license: {}", env!("CARGO_PKG_LICENSE");
+        "";
+        "Usage: {} <input> [input] ...", args().nth(0).unwrap();
+        "";
+        "Controls:";
+        "  Space         : Play/Pause";
+        "  q             : Quit";
+        "  n             : Next video in playlist";
+        "  l             : Toggle playlist display";
+        "  f             : Open file selector";
+        "  c             : Cycle color mode";
+    );
 }
 
 fn register_keypress_callbacks() {
@@ -88,8 +112,8 @@ fn register_keypress_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal('c'), |_| unsafe {
-        USE_PALETTE256 ^= true;
+    stdin::register_keypress_callback(Key::Normal('c'), |_| {
+        COLOR_MODE.lock().switch_next();
         FORCEFLUSH_NEXT.store(true, Ordering::SeqCst);
         true
     });
@@ -106,6 +130,14 @@ fn register_keypress_callbacks() {
 fn main() -> Result<()> {
     config::create_if_not_exists(None)?;
     config::load(None)?;
+
+    if args().len() == 2 {
+        let arg1 = args().nth(1).unwrap();
+        if arg1 == "-h" || arg1 == "--help" {
+            print_help();
+            std::process::exit(0);
+        }
+    }
 
     if args().len() > 1 {
         PLAYLIST

@@ -64,13 +64,13 @@ pub fn output_main() {
 }
 
 pub fn notify_quit() {
-    STDOUT_SIG.notify_all();
+    STDOUT_SIG.notify_one();
 }
 
 pub fn pend_print(data: Vec<u8>) {
     let mut lock = STDOUT_BUF.lock();
     lock.push_back(data);
-    STDOUT_SIG.notify_all();
+    STDOUT_SIG.notify_one();
 }
 
 pub fn pending_frames() -> usize {

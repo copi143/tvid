@@ -273,9 +273,9 @@ impl Mul<f32> for Color {
 
     fn mul(self, rhs: f32) -> Self::Output {
         Color {
-            r: (self.r as f32 * rhs).min(255.0).max(0.0) as u8,
-            g: (self.g as f32 * rhs).min(255.0).max(0.0) as u8,
-            b: (self.b as f32 * rhs).min(255.0).max(0.0) as u8,
+            r: (self.r as f32 * rhs).clamp(0.0, 255.0) as u8,
+            g: (self.g as f32 * rhs).clamp(0.0, 255.0) as u8,
+            b: (self.b as f32 * rhs).clamp(0.0, 255.0) as u8,
             a: self.a,
         }
     }
@@ -362,7 +362,7 @@ const ANSI_COLORS: [Color; 16] = [
 ];
 
 const fn palette256_scale(c: u8) -> u8 {
-    if c == 0 { 0 } else { (c * 40 + 55) as u8 }
+    if c == 0 { 0 } else { c * 40 + 55 }
 }
 
 const fn palette256_reverse(c: u8) -> u8 {
@@ -434,6 +434,32 @@ pub fn try_palette256(c: Color) -> Option<u8> {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ColorMode {
+    #[default]
+    TrueColorOnly,
+    Palette256Prefer,
+    Palette256Only,
+}
+
+impl ColorMode {
+    pub const fn new() -> Self {
+        ColorMode::TrueColorOnly
+    }
+
+    pub const fn default() -> Self {
+        ColorMode::TrueColorOnly
+    }
+
+    pub const fn switch_next(&mut self) {
+        *self = match self {
+            ColorMode::TrueColorOnly => ColorMode::Palette256Prefer,
+            ColorMode::Palette256Prefer => ColorMode::Palette256Only,
+            ColorMode::Palette256Only => ColorMode::TrueColorOnly,
+        };
+    }
+}
+
 pub fn some_if_eq<T: PartialEq>(a: T, b: T) -> Option<T> {
     if a == b { Some(a) } else { None }
 }
@@ -442,33 +468,13 @@ pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
     if a == b { None } else { Some(a) }
 }
 
-pub static mut USE_PALETTE256: bool = false;
-
 #[inline(always)]
-pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>) -> String {
-    if unsafe { USE_PALETTE256 } {
-        escape_set_color_256(fg, bg)
-    } else {
-        escape_set_color_rgb(fg, bg)
+pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>, mode: ColorMode) -> String {
+    match mode {
+        ColorMode::Palette256Prefer => escape_set_color_256_prefer(fg, bg),
+        ColorMode::Palette256Only => escape_set_color_256(fg, bg),
+        ColorMode::TrueColorOnly => escape_set_color_rgb(fg, bg),
     }
-    // 看起来直接全用真彩色快不少
-    // match (fg, bg) {
-    //     (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
-    //         (Some(fgi), Some(bgi)) => format!("\x1b[38;5;{};48;5;{}m", fgi, bgi),
-    //         (Some(fgi), None) => format!("\x1b[38;5;{};48;2;{:?}m", fgi, bg),
-    //         (None, Some(bgi)) => format!("\x1b[38;2;{:?};48;5;{}m", fg, bgi),
-    //         (None, None) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
-    //     },
-    //     (Some(fg), None) => match try_palette256(fg) {
-    //         Some(fgi) => format!("\x1b[38;5;{}m", fgi),
-    //         None => format!("\x1b[38;2;{:?}m", fg),
-    //     },
-    //     (None, Some(bg)) => match try_palette256(bg) {
-    //         Some(bgi) => format!("\x1b[48;5;{}m", bgi),
-    //         None => format!("\x1b[48;2;{:?}m", bg),
-    //     },
-    //     (None, None) => String::new(),
-    // }
 }
 
 #[inline(always)]
@@ -491,6 +497,27 @@ pub fn escape_set_color_256(fg: Option<Color>, bg: Option<Color>) -> String {
         ),
         (Some(fg), None) => format!("\x1b[38;5;{}m", palette256_from_color(fg)),
         (None, Some(bg)) => format!("\x1b[48;5;{}m", palette256_from_color(bg)),
+        (None, None) => String::new(),
+    }
+}
+
+#[inline(always)]
+pub fn escape_set_color_256_prefer(fg: Option<Color>, bg: Option<Color>) -> String {
+    match (fg, bg) {
+        (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
+            (Some(fgi), Some(bgi)) => format!("\x1b[38;5;{};48;5;{}m", fgi, bgi),
+            (Some(fgi), None) => format!("\x1b[38;5;{};48;2;{:?}m", fgi, bg),
+            (None, Some(bgi)) => format!("\x1b[38;2;{:?};48;5;{}m", fg, bgi),
+            (None, None) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+        },
+        (Some(fg), None) => match try_palette256(fg) {
+            Some(fgi) => format!("\x1b[38;5;{}m", fgi),
+            None => format!("\x1b[38;2;{:?}m", fg),
+        },
+        (None, Some(bg)) => match try_palette256(bg) {
+            Some(bgi) => format!("\x1b[48;5;{}m", bgi),
+            None => format!("\x1b[48;2;{:?}m", bg),
+        },
         (None, None) => String::new(),
     }
 }

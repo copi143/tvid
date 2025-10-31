@@ -77,7 +77,7 @@ fn build_cpal_stream(
                     }) * unsafe { VOLUME_K };
                 }
                 update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_all();
+                AUDIO_CONSUMED.notify_one();
             },
             err_fn,
             None,
@@ -99,7 +99,7 @@ fn build_cpal_stream(
                     }) * unsafe { VOLUME_K }) as f64;
                 }
                 update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_all();
+                AUDIO_CONSUMED.notify_one();
             },
             err_fn,
             None,
@@ -122,7 +122,7 @@ fn build_cpal_stream(
                     *sample = (v.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 }
                 update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_all();
+                AUDIO_CONSUMED.notify_one();
             },
             err_fn,
             None,
@@ -145,7 +145,7 @@ fn build_cpal_stream(
                     *sample = ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * u16::MAX as f32) as u16;
                 }
                 update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_all();
+                AUDIO_CONSUMED.notify_one();
             },
             err_fn,
             None,
