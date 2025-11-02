@@ -402,6 +402,11 @@ pub const TERM_DEFAULT_BG: Color = Color::new(35, 39, 46);
 
 pub static TERM_QUIT: AtomicBool = AtomicBool::new(false);
 
+/// - 1049: 切换到备用缓冲区
+/// - 25: 隐藏光标
+/// - 1006: 启用 SGR 扩展的鼠标模式
+/// - 1003: 启用所有鼠标移动事件
+/// - 2004: 启用括号粘贴模式
 const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
 const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
 
