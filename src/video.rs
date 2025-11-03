@@ -5,7 +5,7 @@ use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::mem::MaybeUninit;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE};
 use crate::statistics::increment_video_skipped_frames;
@@ -95,11 +95,15 @@ pub fn video_main() {
             )
         };
 
+        let mut render_start = Instant::now();
         term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
 
         while frametime > audio::played_time_or_zero() + Duration::from_millis(5) {
             if PAUSE.load(Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_millis(20));
+                let remaining = Duration::from_millis(33).saturating_sub(render_start.elapsed());
+                std::thread::sleep(remaining);
+                render_start = Instant::now();
+                term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
             } else {
                 std::thread::sleep(frametime - audio::played_time_or_zero());
             }

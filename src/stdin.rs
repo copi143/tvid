@@ -473,6 +473,8 @@ fn input_escape_square_number(num: i64) -> Result<()> {
             while !data.ends_with(b"\x1b[201~") {
                 data.push(getc()?);
             }
+            let data = &data[..data.len() - 6];
+            send_warn!("Unhandled paste data: {data:?}");
         }
         _ => {
             send_error!("Unknown escape sequence: ESC [ {} ~", num);
@@ -683,7 +685,7 @@ fn input() -> Result<()> {
             call_keypress_callbacks(Key::Ctrl(c));
         }
         c => {
-            send_error!("Unknown key: {} ({})", c as char, c);
+            send_warn!("Unhandled key: {} ({})", c as char, c);
         }
     }
     Ok(())

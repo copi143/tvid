@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use unicode_width::UnicodeWidthChar;
 
-use crate::error::get_errors;
-use crate::ffmpeg;
+use crate::logging::{MessageLevel, get_messages};
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
 use crate::statistics::get_statistics;
 use crate::stdin::{self, Key};
 use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
+use crate::{ffmpeg, term};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
@@ -174,14 +174,11 @@ pub fn putat(
         });
         wrap.cells[p] = Cell::new(ch, fg, bg);
         for i in 1..cw as usize {
-            wrap.cells[p + i] = Cell {
-                c: Some('\0'),
-                ..Default::default()
-            };
+            wrap.cells[p + i].c = Some('\0');
         }
         cx += cw;
     }
-    return (pn, cx, cy);
+    (pn, cx, cy)
 }
 
 macro_rules! putat {
@@ -196,6 +193,11 @@ static TEXTBOX_DEFAULT_COLOR: Mutex<(Option<Color>, Option<Color>)> = Mutex::new
 pub fn textbox(x: isize, y: isize, w: usize, h: usize, autowrap: bool) {
     TEXTBOX.set(x, y, w, h, x, y);
     TEXTBOX.setwrap(autowrap);
+    TEXTBOX_DEFAULT_COLOR.lock().clone_from(&(None, None));
+}
+
+pub fn textbox_default_color(fg: Option<Color>, bg: Option<Color>) {
+    TEXTBOX_DEFAULT_COLOR.lock().clone_from(&(fg, bg));
 }
 
 pub fn put(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
@@ -277,8 +279,9 @@ pub fn render_ui(wrap: &mut RenderWrapper) {
     render_overlay_text(wrap);
     render_playlist(wrap);
     render_file_select(wrap);
-    render_errors(wrap);
+    render_messages(wrap);
     render_help(wrap);
+    render_quit_confirmation(wrap);
 }
 
 pub static SHOW_HELP: AtomicBool = AtomicBool::new(false);
@@ -302,9 +305,7 @@ fn render_help(wrap: &mut RenderWrapper) {
         0.7,
     );
     textbox(x + 2, y + 1, w - 4, h - 2, true);
-    TEXTBOX_DEFAULT_COLOR
-        .lock()
-        .clone_from(&(Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG)));
+    textbox_default_color(Some(TERM_DEFAULT_BG), None);
     putln!(wrap, "帮助信息 (按 h 关闭)");
     putln!(wrap, "------------------------------");
     putln!(wrap, "q: 退出程序");
@@ -322,7 +323,7 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         return; // 防炸
     }
 
-    let time_str = if let Some(t) = wrap.played_time {
+    let video_time_str = if let Some(t) = wrap.played_time {
         format!(
             "{:02}h {:02}m {:02}s {:03}ms",
             t.as_secs() / 3600,
@@ -334,9 +335,24 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         "N/A".to_string()
     };
 
-    textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, true);
+    let app_time_str = {
+        let t = wrap.app_time;
+        format!(
+            "{:02}h {:02}m {:02}s {:03}ms",
+            t.as_secs() / 3600,
+            (t.as_secs() % 3600) / 60,
+            t.as_secs() % 60,
+            t.subsec_millis()
+        )
+    };
 
-    TEXTBOX_DEFAULT_COLOR.lock().clone_from(&(None, None));
+    let playing_or_paused_str = if crate::PAUSE.load(Ordering::SeqCst) {
+        "Paused"
+    } else {
+        "Playing"
+    };
+
+    textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, true);
 
     let statistics = get_statistics();
 
@@ -346,8 +362,9 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             wrap,
             "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
         );
-        putln!(wrap, "Playing: {}", wrap.playing);
-        putln!(wrap, "Time: {}", time_str);
+        putln!(wrap, "{}: {}", playing_or_paused_str, wrap.playing);
+        putln!(wrap, "Video Time: {}", video_time_str);
+        putln!(wrap, "App Time: {}", app_time_str);
         putln!(
             wrap,
             "Escape String Encode Time: {:.2?} (avg over last 60)",
@@ -374,8 +391,9 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             wrap,
             "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
         );
-        putunifont!(wrap, "Playing: {}", wrap.playing);
-        putunifont!(wrap, "Time: {}", time_str);
+        putunifont!(wrap, "{}: {}", playing_or_paused_str, wrap.playing);
+        putunifont!(wrap, "Video Time: {}", video_time_str);
+        putunifont!(wrap, "App Time: {}", app_time_str);
         putunifont!(
             wrap,
             "Escape String Encode Time: {:.2?} (avg over last 60)",
@@ -440,9 +458,7 @@ fn render_playlist(wrap: &mut RenderWrapper) {
         false,
     );
 
-    TEXTBOX_DEFAULT_COLOR
-        .lock()
-        .clone_from(&(Some(TERM_DEFAULT_BG), None));
+    textbox_default_color(Some(TERM_DEFAULT_BG), None);
 
     putln!(wrap, "Playlist ({} items):", PLAYLIST.lock().len());
 
@@ -464,38 +480,24 @@ fn render_playlist(wrap: &mut RenderWrapper) {
     }
 }
 
-fn render_errors(wrap: &mut RenderWrapper) {
+fn render_messages(wrap: &mut RenderWrapper) {
     if wrap.cells_width < 8 && wrap.cells_height < 8 {
         return; // 防炸
     }
 
-    let errors = &get_errors().queue;
-
-    mask(
-        wrap,
-        0,
-        wrap.cells_height as isize - errors.len() as isize,
-        50,
-        errors.len(),
-        None,
-        Color::new(237, 21, 21),
-        0.5,
-    );
-
-    textbox(
-        0,
-        wrap.cells_height as isize - errors.len() as isize,
-        50,
-        errors.len(),
-        false,
-    );
-
-    TEXTBOX_DEFAULT_COLOR
-        .lock()
-        .clone_from(&(Some(TERM_DEFAULT_BG), None));
-
-    for error in errors.iter() {
-        putln(wrap, &error.msg, error.fg, error.bg);
+    for (i, message) in get_messages().queue.iter().rev().enumerate() {
+        let y = wrap.cells_height as isize - i as isize - 1;
+        let color = match message.lv {
+            MessageLevel::Debug => Color::new(150, 150, 150),
+            MessageLevel::Info => Color::new(21, 137, 238),
+            MessageLevel::Warn => Color::new(237, 201, 21),
+            MessageLevel::Error => Color::new(237, 21, 21),
+            MessageLevel::Fatal => Color::new(180, 0, 0),
+        };
+        mask(wrap, 0, y, 50, 1, None, color, 0.5);
+        textbox(0, y, 50, 1, false);
+        textbox_default_color(Some(TERM_DEFAULT_BG), None);
+        putln(wrap, &message.msg, message.fg, message.bg);
     }
 }
 
@@ -546,9 +548,7 @@ fn render_file_select(wrap: &mut RenderWrapper) {
 
     textbox(x + 1, y + 1, w - 2, h - 2, false);
 
-    TEXTBOX_DEFAULT_COLOR
-        .lock()
-        .clone_from(&(Some(TERM_DEFAULT_BG), None));
+    textbox_default_color(Some(TERM_DEFAULT_BG), None);
 
     let mut path = FILE_SELECT_PATH.lock();
     let mut list = FILE_SELECT_LIST.lock();
@@ -748,9 +748,69 @@ fn register_file_select_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Right, cb);
 }
 
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub static QUIT_CONFIRMATION: AtomicBool = AtomicBool::new(false);
+
+fn render_quit_confirmation(wrap: &mut RenderWrapper) {
+    if !QUIT_CONFIRMATION.load(Ordering::SeqCst) {
+        return;
+    }
+
+    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+        return; // 防炸
+    }
+
+    let w = 25;
+    let h = 3;
+    let x = (wrap.cells_width as isize - w as isize) / 2;
+    let y = (wrap.cells_height as isize - h as isize) / 2;
+    mask(
+        wrap,
+        x - 10,
+        y - 2,
+        w + 20,
+        h + 4,
+        Some(TERM_DEFAULT_BG),
+        TERM_DEFAULT_FG,
+        0.5,
+    );
+    textbox(x, y, w, h, false);
+    textbox_default_color(Some(TERM_DEFAULT_BG), None);
+    putln!(wrap, "      Confirm Quit?      ");
+    putln!(wrap, "-------------------------");
+    putln!(wrap, "        q   /   c        ");
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
 pub fn register_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('h'), |_| {
         SHOW_HELP.store(!SHOW_HELP.load(Ordering::SeqCst), Ordering::SeqCst);
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal('q'), |_| {
+        if !QUIT_CONFIRMATION.load(Ordering::SeqCst) {
+            return false;
+        }
+        term::request_quit();
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal('c'), |_| {
+        if !QUIT_CONFIRMATION.load(Ordering::SeqCst) {
+            return false;
+        }
+        QUIT_CONFIRMATION.store(false, Ordering::SeqCst);
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal('t'), |_| {
+        send_debug!("This is a test debug message.");
+        send_info!("This is a test info message.");
+        send_warn!("This is a test warn message.");
+        send_error!("This is a test error message.");
         true
     });
 

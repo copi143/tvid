@@ -36,6 +36,20 @@ impl<T, const SIZE: usize> MaxSizedQueue<T, SIZE> {
         self.queue.iter_mut()
     }
 
+    pub fn last(&self) -> T
+    where
+        T: Copy + Default,
+    {
+        self.queue.back().copied().unwrap_or_default()
+    }
+
+    pub fn last_or_none(&self) -> Option<T>
+    where
+        T: Copy,
+    {
+        self.queue.back().copied()
+    }
+
     pub fn avg<U>(&self) -> T
     where
         T: Add<Output = T> + Div<U, Output = T> + Copy + Default,

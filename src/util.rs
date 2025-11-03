@@ -1,7 +1,11 @@
+use parking_lot::Mutex;
 use std::fmt::Debug;
 use std::ops::Mul;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
+use std::time::Duration;
 use tokio::task::JoinHandle;
+
+use crate::{APP_START_TIME, audio};
 
 pub struct XY {
     x: AtomicUsize,
@@ -539,6 +543,31 @@ impl<T: Send + 'static> JoinAll for Vec<JoinHandle<T>> {
         }
         results
     }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub fn calc_played_time() -> (Option<Duration>, Duration) {
+    static LAST_PLAYED_TIME: Mutex<Option<Duration>> = Mutex::new(None);
+    let played_time = audio::played_time_or_none();
+    let mut lock = LAST_PLAYED_TIME.lock();
+    let delta_played_time = lock
+        .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))
+        .flatten()
+        .unwrap_or(Duration::ZERO);
+    if let Some(played_time) = played_time {
+        *lock = Some(played_time);
+    }
+    (played_time, delta_played_time)
+}
+
+pub fn calc_app_time() -> (Duration, Duration) {
+    static LAST_APP_TIME: Mutex<Duration> = Mutex::new(Duration::ZERO);
+    let app_time = APP_START_TIME.get().unwrap().elapsed();
+    let mut lock = LAST_APP_TIME.lock();
+    let delta_time = app_time.saturating_sub(*lock);
+    *lock = app_time;
+    (app_time, delta_time)
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @

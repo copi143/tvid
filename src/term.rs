@@ -5,9 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use unicode_width::UnicodeWidthChar;
 
-use crate::audio;
-use crate::error::print_errors;
 use crate::ffmpeg;
+use crate::logging::print_messages;
 use crate::playlist::PLAYLIST;
 use crate::stdin;
 use crate::stdout::{self, pend_print, pending_frames, remove_pending_frames};
@@ -37,6 +36,8 @@ pub struct RenderWrapper<'frame, 'cells> {
 
     pub playing: String,
     pub played_time: Option<Duration>,
+    pub delta_played_time: Duration,
+    pub app_time: Duration,
     pub delta_time: Duration,
 
     pub term_font_width: f32,
@@ -68,21 +69,7 @@ pub fn add_render_callback(callback: fn(&mut RenderWrapper<'_, '_>)) {
 }
 
 pub fn render(frame: &[Color], pitch: usize) {
-    static LAST_TIME: Mutex<Option<Duration>> = Mutex::new(None);
-
-    let played_time = audio::played_time_or_none();
-
-    let delta_time = LAST_TIME
-        .lock()
-        .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))
-        .flatten()
-        .unwrap_or(Duration::ZERO);
-
-    if let Some(played_time) = played_time {
-        LAST_TIME.lock().replace(played_time);
-    }
-
-    render_frame(frame, pitch, played_time, delta_time);
+    render_frame(frame, pitch);
 
     let mut force_flush = FORCEFLUSH_NEXT.swap(false, Ordering::SeqCst);
     if pending_frames() > 3 {
@@ -95,12 +82,11 @@ pub fn render(frame: &[Color], pitch: usize) {
     std::mem::swap(this_frame, last_frame);
 }
 
-fn render_frame(
-    frame: &[Color],
-    pitch: usize,
-    played_time: Option<Duration>,
-    delta_time: Duration,
-) {
+fn render_frame(frame: &[Color], pitch: usize) {
+    let (played_time, delta_played_time) = calc_played_time();
+
+    let (app_time, delta_time) = calc_app_time();
+
     let (this_frame, _) = &mut *FRAMES.lock();
 
     let wrap = &mut RenderWrapper {
@@ -120,6 +106,8 @@ fn render_frame(
         pixels_height: VIDEO_PIXELS.y(),
         playing: { PLAYLIST.lock().current().cloned() }.unwrap_or_default(),
         played_time,
+        delta_played_time,
+        app_time,
         delta_time,
         term_font_width: TERM_PIXELS.x() as f32 / TERM_SIZE.x() as f32,
         term_font_height: TERM_PIXELS.y() as f32 / TERM_SIZE.y() as f32,
@@ -408,6 +396,7 @@ pub static TERM_QUIT: AtomicBool = AtomicBool::new(false);
 /// - 1003: 启用所有鼠标移动事件
 /// - 2004: 启用括号粘贴模式
 const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
+/// 见 [`TERM_INIT_SEQ`]
 const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
 
 pub extern "C" fn request_quit() {
@@ -443,6 +432,7 @@ pub fn init() {
     }
 }
 
+/// 在初始化终端之前不能启动 stdin 和 stdout 线程
 #[cfg(windows)]
 pub fn init() {
     use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
@@ -499,15 +489,16 @@ pub fn quit() -> ! {
         unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
     }
     stdout::print(TERM_EXIT_SEQ);
-    print_errors();
+    print_messages();
     unsafe { libc::tcflush(STDIN_FILENO, libc::TCIFLUSH) };
     exit(0);
 }
 
+/// 在退出前必须终止 stdin 和 stdout 线程
 #[cfg(windows)]
 pub fn quit() -> ! {
     stdout::print(TERM_EXIT_SEQ);
-    print_errors();
+    print_messages();
     exit(0);
 }
 

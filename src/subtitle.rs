@@ -218,10 +218,7 @@ pub fn render_subtitle(wrap: &mut RenderWrapper) {
                 let fg = Color::mix(best_contrast_color(bg), bg, k);
                 wrap.cells[p] = Cell::new(ch, fg, bg);
                 for i in 1..cw {
-                    wrap.cells[p + i] = Cell {
-                        c: Some('\0'),
-                        ..Default::default()
-                    };
+                    wrap.cells[p + i].c = Some('\0');
                 }
 
                 i += cw;

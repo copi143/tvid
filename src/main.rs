@@ -7,36 +7,39 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::partialeq_to_none)]
+#![allow(clippy::should_implement_trait)]
 
 use anyhow::{Context, Result};
 use ffmpeg_next as av;
 use std::env::args;
-use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, OnceLock};
+use std::time::Instant;
 use tokio::runtime::Runtime;
 
 use crate::term::{COLOR_MODE, FORCEFLUSH_NEXT};
+use crate::ui::QUIT_CONFIRMATION;
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 
 #[macro_use]
-pub mod error;
+mod logging;
 
 #[macro_use]
-pub mod ui;
+mod ui;
 
-pub mod audio;
-pub mod config;
-pub mod ffmpeg;
-pub mod osc;
-pub mod playlist;
-pub mod sixel;
-pub mod statistics;
-pub mod stdin;
-pub mod stdout;
-pub mod subtitle;
-pub mod term;
-pub mod util;
-pub mod video;
+mod audio;
+mod config;
+mod ffmpeg;
+mod osc;
+mod playlist;
+mod sixel;
+mod statistics;
+mod stdin;
+mod stdout;
+mod subtitle;
+mod term;
+mod util;
+mod video;
 
 pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     let num_cores = std::thread::available_parallelism().unwrap().get();
@@ -47,7 +50,7 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .expect("Failed to create Tokio runtime")
 });
 
-pub static PAUSE: AtomicBool = AtomicBool::new(false);
+static PAUSE: AtomicBool = AtomicBool::new(false);
 
 macro_rules! eprintlns {
     ($($fmt:expr $(, $args:expr)*);+ $(;)?) => {
@@ -95,7 +98,7 @@ fn register_keypress_callbacks() {
         true
     });
     stdin::register_keypress_callback(Key::Normal('q'), |_| {
-        term::request_quit();
+        QUIT_CONFIRMATION.store(true, Ordering::SeqCst);
         true
     });
     stdin::register_keypress_callback(Key::Normal('n'), |_| {
@@ -127,7 +130,11 @@ fn register_keypress_callbacks() {
     ui::register_keypress_callbacks();
 }
 
+static APP_START_TIME: OnceLock<Instant> = OnceLock::new();
+
 fn main() -> Result<()> {
+    APP_START_TIME.set(Instant::now()).unwrap();
+
     config::create_if_not_exists(None)?;
     config::load(None)?;
 
