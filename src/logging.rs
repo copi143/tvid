@@ -1,7 +1,9 @@
+use anyhow::Result;
 use chrono::{DateTime, Local};
 use parking_lot::{Mutex, MutexGuard};
 use std::collections::VecDeque;
-use std::time::{Duration, Instant, SystemTime};
+use std::fmt::Write as _;
+use std::time::{Duration, SystemTime};
 
 use crate::{stdout, util::Color};
 
@@ -32,7 +34,7 @@ pub struct Message {
     pub msg: String,
     pub fg: Option<Color>,
     pub bg: Option<Color>,
-    pub ts: Instant,
+    pub ts: SystemTime,
 }
 
 pub struct Messages {
@@ -46,10 +48,10 @@ static MESSAGES: Mutex<Messages> = Mutex::new(Messages {
 });
 
 pub fn remove_expired_messages() {
-    let now = Instant::now();
+    let now = SystemTime::now();
     let mut lock = MESSAGES.lock();
     while let Some(err) = lock.queue.front() {
-        if now.duration_since(err.ts) >= lock.timeout {
+        if now.duration_since(err.ts).unwrap_or_default() >= lock.timeout {
             lock.queue.pop_front();
         } else {
             break;
@@ -62,26 +64,32 @@ pub fn get_messages<'mutex>() -> MutexGuard<'mutex, Messages> {
     MESSAGES.lock()
 }
 
-pub fn print_messages() {
+pub fn print_messages() -> Result<()> {
     let lock = MESSAGES.lock();
+    if lock.queue.is_empty() {
+        return Ok(());
+    }
+    let mut text = String::new();
     for err in lock.queue.iter() {
-        let mut text = String::new();
-        let system_time = SystemTime::now().checked_sub(err.ts.elapsed()).unwrap();
-        let datetime: DateTime<Local> = system_time.into();
-        text.push_str(&format!("[{}] ", datetime.format("%Y-%m-%d %H:%M:%S")));
-        text.push_str(err.lv.level_str());
+        let datetime = DateTime::<Local>::from(err.ts).format("%Y-%m-%d %H:%M:%S");
+        write!(text, "[{}] {}", datetime, err.lv.level_str())?;
         if let Some(fg) = err.fg {
-            text.push_str(&format!("\x1b[38;2;{};{};{}m", fg.r, fg.g, fg.b));
+            write!(text, "\x1b[38;2;{};{};{}m", fg.r, fg.g, fg.b)?;
         }
         if let Some(bg) = err.bg {
-            text.push_str(&format!("\x1b[48;2;{};{};{}m", bg.r, bg.g, bg.b));
+            write!(text, "\x1b[48;2;{};{};{}m", bg.r, bg.g, bg.b)?;
         }
-        text.push_str(&err.msg);
+        write!(text, "{}", err.msg)?;
         if err.fg.is_some() || err.bg.is_some() {
-            text.push_str("\x1b[0m");
+            write!(text, "\x1b[0m")?;
         }
         text.push('\n');
-        stdout::print(text.as_bytes());
+    }
+    let bytes = text.as_bytes();
+    if stdout::print(bytes) == bytes.len() as isize {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Failed to print all log messages"))
     }
 }
 
@@ -91,7 +99,7 @@ pub fn send_message(lv: MessageLevel, msg: &str, fg: Option<Color>, bg: Option<C
         msg: msg.to_string(),
         fg,
         bg,
-        ts: Instant::now(),
+        ts: SystemTime::now(),
     };
     let mut lock = MESSAGES.lock();
     lock.queue.push_back(err);

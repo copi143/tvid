@@ -17,6 +17,7 @@ use std::sync::{LazyLock, OnceLock};
 use std::time::Instant;
 use tokio::runtime::Runtime;
 
+use crate::ffmpeg::seek_request_relative;
 use crate::term::{COLOR_MODE, FORCEFLUSH_NEXT};
 use crate::ui::QUIT_CONFIRMATION;
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
@@ -92,7 +93,7 @@ fn print_help() {
     );
 }
 
-fn register_keypress_callbacks() {
+fn register_input_callbacks() {
     stdin::register_keypress_callback(Key::Normal(' '), |_| {
         PAUSE.fetch_xor(true, Ordering::SeqCst);
         true
@@ -121,13 +122,25 @@ fn register_keypress_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Up, |_| true);
-    stdin::register_keypress_callback(Key::Down, |_| true);
-    stdin::register_keypress_callback(Key::Left, |_| true);
-    stdin::register_keypress_callback(Key::Right, |_| true);
+    stdin::register_keypress_callback(Key::Up, |_| {
+        seek_request_relative(-30.0);
+        true
+    });
+    stdin::register_keypress_callback(Key::Down, |_| {
+        seek_request_relative(30.0);
+        true
+    });
+    stdin::register_keypress_callback(Key::Left, |_| {
+        seek_request_relative(-5.0);
+        true
+    });
+    stdin::register_keypress_callback(Key::Right, |_| {
+        seek_request_relative(5.0);
+        true
+    });
 
     playlist::register_keypress_callbacks();
-    ui::register_keypress_callbacks();
+    ui::register_input_callbacks();
 }
 
 static APP_START_TIME: OnceLock<Instant> = OnceLock::new();
@@ -176,7 +189,7 @@ fn main() -> Result<()> {
     term::init();
     term::setup_panic_handler(); // 一定要在初始化之后设置，且必须立刻设置
 
-    register_keypress_callbacks();
+    register_input_callbacks();
 
     term::add_render_callback(video::render_frame);
     term::add_render_callback(subtitle::render_subtitle);

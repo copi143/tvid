@@ -5,11 +5,12 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use unicode_width::UnicodeWidthChar;
 
+use crate::ffmpeg::{VIDEO_DURATION, playback_progress};
 use crate::logging::{MessageLevel, get_messages};
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
 use crate::statistics::get_statistics;
-use crate::stdin::{self, Key};
-use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
+use crate::stdin::{self, Key, MouseAction};
+use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_PIXELS, TERM_SIZE};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
 use crate::{ffmpeg, term};
 
@@ -28,7 +29,15 @@ pub fn unifont_get(ch: char) -> &'static [u8; 32] {
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+// @ 直接操作屏幕 @
 
+/// 在指定区域绘制半透明叠加层
+/// - `wrap`: 渲染包装器
+/// - `x`, `y`: 起始位置 (字符)
+/// - `w`, `h`: 宽度和高度 (字符)
+/// - `border`: 可选的边框颜色
+/// - `color`: 叠加层颜色
+/// - `opacity`: 叠加层透明度
 pub fn mask(
     wrap: &mut RenderWrapper,
     x: isize,
@@ -89,6 +98,14 @@ pub fn mask(
     }
 }
 
+/// 在指定位置绘制文本，返回实际绘制的字符数和新的光标位置
+/// - `wrap`: 渲染包装器
+/// - `text`: 要绘制的文本
+/// - `x`, `y`: 起始绘制位置 (字符)
+/// - `w`, `h`: 可绘制区域的宽度和高度 (字符)
+/// - `sx`, `sy`: 可绘制区域的起始位置 (字符)
+/// - `fg`, `bg`: 前景色和背景色
+/// - `autowrap`: 是否自动换行
 pub fn putat(
     wrap: &mut RenderWrapper,
     text: &str,
@@ -106,9 +123,9 @@ pub fn putat(
     if w == 0 || h == 0 {
         return (0, x, y);
     }
-    let mut cx = x;
-    let mut cy = y;
-    let mut pn = 0;
+    let mut cx = x; // 当前光标位置
+    let mut cy = y; // 当前光标位置
+    let mut pn = 0; // 实际打印的字符数
     for ch in text.chars() {
         let cw = ch.width().unwrap_or(0) as isize;
         // 跳过不可见字符
@@ -140,6 +157,7 @@ pub fn putat(
         }
         // 计算索引
         let p = cy as usize * wrap.cells_pitch + cx as usize;
+        // 如果覆盖了一个宽字符那么要清除整个宽字符，防止渲染爆炸
         if wrap.cells[p].c == Some('\0') {
             let mut i = p - 1;
             while wrap.cells[i].c == Some('\0') {
@@ -155,6 +173,7 @@ pub fn putat(
                 i += 1;
             }
         }
+        // 对于空格就直接替换原本的字符为空格，如果原本什么都没有就不动
         if ch == ' ' && bg == None {
             if wrap.cells[p].c.is_some() {
                 wrap.cells[p].c = Some(' ');
@@ -162,17 +181,23 @@ pub fn putat(
             cx += 1;
             continue;
         }
-        let bg = bg.unwrap_or(if wrap.cells[p].c == None {
-            Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg)
-        } else {
-            wrap.cells[p].bg
+        // 然后计算颜色并设置单元格
+        let bg = bg.unwrap_or_else(|| {
+            if wrap.cells[p].c == None {
+                Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg)
+            } else {
+                wrap.cells[p].bg
+            }
         });
-        let fg = fg.unwrap_or(if wrap.cells[p].c == None {
-            best_contrast_color(bg)
-        } else {
-            wrap.cells[p].fg
+        let fg = fg.unwrap_or_else(|| {
+            if wrap.cells[p].c == None {
+                best_contrast_color(bg)
+            } else {
+                wrap.cells[p].fg
+            }
         });
         wrap.cells[p] = Cell::new(ch, fg, bg);
+        // 直接设置为占位符应该是没问题的，颜色应该不需要去动
         for i in 1..cw as usize {
             wrap.cells[p + i].c = Some('\0');
         }
@@ -181,11 +206,14 @@ pub fn putat(
     (pn, cx, cy)
 }
 
+/// 直接在指定的位置开始贴上文本
 macro_rules! putat {
     ($wrap:expr, $x:expr, $y:expr, $($arg:tt)*) => {
-        crate::ui::putat($wrap, &format!($($arg)*), $x, $y, u16::MAX as usize, u16::MAX as usize, i16::MIN as isize, i16::MIN as isize, None, None, false)
+        crate::ui::putat($wrap, &format!($($arg)*), $x, $y, u16::MAX as usize, u16::MAX as usize, i16::MIN as isize, i16::MIN as isize, None, None, false);
     };
 }
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 static TEXTBOX: TextBoxInfo = TextBoxInfo::new();
 static TEXTBOX_DEFAULT_COLOR: Mutex<(Option<Color>, Option<Color>)> = Mutex::new((None, None));
@@ -272,10 +300,14 @@ macro_rules! putunifont {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+static FIRST_RENDERED: AtomicBool = AtomicBool::new(false);
+
 pub fn render_ui(wrap: &mut RenderWrapper) {
-    if wrap.cells_width < 4 && wrap.cells_height < 4 {
+    FIRST_RENDERED.store(true, Ordering::SeqCst);
+    if wrap.cells_width < 4 || wrap.cells_height < 4 {
         return; // 防炸
     }
+    render_progressbar(wrap);
     render_overlay_text(wrap);
     render_playlist(wrap);
     render_file_select(wrap);
@@ -284,12 +316,82 @@ pub fn render_ui(wrap: &mut RenderWrapper) {
     render_quit_confirmation(wrap);
 }
 
+pub static SHOW_PROGRESSBAR: AtomicBool = AtomicBool::new(true);
+
+/// 按像素计的进度条高度
+static mut PROGRESSBAR_HEIGHT: f32 = 16.0;
+
+fn calc_bar_size() -> (usize, usize) {
+    let term_font_height = TERM_PIXELS.y() as f32 / TERM_SIZE.y() as f32;
+    let bar_w = TERM_SIZE.x() as f64 * playback_progress() + 0.5;
+    let bar_h = unsafe { PROGRESSBAR_HEIGHT } / term_font_height * 2.0;
+    let bar_w = (bar_w as usize).clamp(0, TERM_SIZE.x());
+    let bar_h = (bar_h as usize).clamp(1, TERM_SIZE.y() * 2);
+    (bar_w, bar_h)
+}
+
+fn render_progressbar(wrap: &mut RenderWrapper) {
+    if !SHOW_PROGRESSBAR.load(Ordering::SeqCst) {
+        return;
+    }
+
+    let (bar_w, bar_h) = calc_bar_size();
+
+    for y in wrap.pixels_height - bar_h..wrap.pixels_height {
+        for x in 0..bar_w {
+            let i = y / 2 * wrap.cells_pitch + x;
+            if y % 2 == 0 {
+                wrap.cells[i].bg = Color::halfhalf(wrap.cells[i].bg, Color::new(0, 128, 255));
+            } else {
+                wrap.cells[i].fg = Color::halfhalf(wrap.cells[i].fg, Color::new(0, 128, 255));
+            }
+        }
+    }
+}
+
+fn register_input_callbacks_progressbar() {
+    static mut DRAGGING_PROGRESSBAR: bool = false;
+    stdin::register_mouse_callback(|m| {
+        if !FIRST_RENDERED.load(Ordering::SeqCst) {
+            return false;
+        }
+
+        let term_h = TERM_SIZE.y();
+        let bar_h = calc_bar_size().1.div_ceil(2);
+
+        if unsafe { DRAGGING_PROGRESSBAR } {
+            if m.left {
+                let p = m.pos.0 as f64 / TERM_SIZE.x() as f64;
+                ffmpeg::seek_request_absolute(p * VIDEO_DURATION.lock().as_secs_f64());
+            } else {
+                unsafe { DRAGGING_PROGRESSBAR = false };
+            }
+            true
+        } else if (term_h - bar_h..term_h).contains(&(m.pos.1 as usize)) {
+            if m.action != MouseAction::LeftDown {
+                return false;
+            }
+            unsafe { DRAGGING_PROGRESSBAR = true };
+            let p = m.pos.0 as f64 / TERM_SIZE.x() as f64;
+            ffmpeg::seek_request_absolute(p * VIDEO_DURATION.lock().as_secs_f64());
+            true
+        } else {
+            false
+        }
+    });
+}
+
 pub static SHOW_HELP: AtomicBool = AtomicBool::new(false);
 
 fn render_help(wrap: &mut RenderWrapper) {
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
+        return; // 防炸
+    }
+
     if !SHOW_HELP.load(Ordering::SeqCst) {
         return;
     }
+
     let w = 50;
     let h = 12;
     let x = (wrap.cells_width as isize - w as isize) / 2;
@@ -318,9 +420,15 @@ fn render_help(wrap: &mut RenderWrapper) {
     putln!(wrap, "------------------------------");
 }
 
+pub static SHOW_OVERLAY_TEXT: AtomicBool = AtomicBool::new(true);
+
 fn render_overlay_text(wrap: &mut RenderWrapper) {
-    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
+    }
+
+    if !SHOW_OVERLAY_TEXT.load(Ordering::SeqCst) {
+        return;
     }
 
     let video_time_str = if let Some(t) = wrap.played_time {
@@ -435,7 +543,7 @@ fn render_playlist(wrap: &mut RenderWrapper) {
         return;
     }
 
-    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
 
@@ -481,12 +589,15 @@ fn render_playlist(wrap: &mut RenderWrapper) {
 }
 
 fn render_messages(wrap: &mut RenderWrapper) {
-    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
 
     for (i, message) in get_messages().queue.iter().rev().enumerate() {
         let y = wrap.cells_height as isize - i as isize - 1;
+        if y < 0 {
+            continue;
+        }
         let color = match message.lv {
             MessageLevel::Debug => Color::new(150, 150, 150),
             MessageLevel::Info => Color::new(21, 137, 238),
@@ -525,7 +636,7 @@ fn render_file_select(wrap: &mut RenderWrapper) {
         return;
     }
 
-    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
 
@@ -757,7 +868,7 @@ fn render_quit_confirmation(wrap: &mut RenderWrapper) {
         return;
     }
 
-    if wrap.cells_width < 8 && wrap.cells_height < 8 {
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
 
@@ -784,7 +895,9 @@ fn render_quit_confirmation(wrap: &mut RenderWrapper) {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-pub fn register_keypress_callbacks() {
+pub fn register_input_callbacks() {
+    register_input_callbacks_progressbar();
+
     stdin::register_keypress_callback(Key::Normal('h'), |_| {
         SHOW_HELP.store(!SHOW_HELP.load(Ordering::SeqCst), Ordering::SeqCst);
         true
@@ -803,6 +916,11 @@ pub fn register_keypress_callbacks() {
             return false;
         }
         QUIT_CONFIRMATION.store(false, Ordering::SeqCst);
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal('o'), |_| {
+        SHOW_OVERLAY_TEXT.fetch_xor(true, Ordering::SeqCst);
         true
     });
 

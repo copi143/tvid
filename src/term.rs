@@ -1,4 +1,5 @@
 use parking_lot::Mutex;
+use std::io::Write as _;
 use std::panic;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -62,6 +63,10 @@ impl RenderWrapper<'_, '_> {
 static FRAMES: Mutex<(Vec<Cell>, Vec<Cell>)> = Mutex::new((Vec::new(), Vec::new()));
 static RENDER_CALLBACKS: Mutex<Vec<fn(&mut RenderWrapper)>> = Mutex::new(Vec::new());
 
+/// 强制下一帧全屏刷新
+pub static FORCEFLUSH_NEXT: AtomicBool = AtomicBool::new(false);
+
+/// 颜色模式，见 [`ColorMode`]
 pub static COLOR_MODE: Mutex<ColorMode> = Mutex::new(ColorMode::new());
 
 pub fn add_render_callback(callback: fn(&mut RenderWrapper<'_, '_>)) {
@@ -140,16 +145,16 @@ async fn print_diff_line(
             skip_count += 1;
             continue;
         } else if skip_count == 1 {
-            buf.extend_from_slice(b"\x1b[C");
+            write!(buf, "\x1b[C").unwrap();
             skip_count = 0;
         } else if skip_count > 1 {
-            buf.extend_from_slice(format!("\x1b[{skip_count}C").as_bytes());
+            write!(buf, "\x1b[{skip_count}C").unwrap();
             skip_count = 0;
         }
 
         let (fg, bg) = (some_if_ne(cell.fg, last_fg), some_if_ne(cell.bg, last_bg));
 
-        buf.extend_from_slice(escape_set_color(fg, bg, color_mode).as_bytes());
+        escape_set_color(&mut buf, fg, bg, color_mode);
         buf.extend_from_slice(cell.c.unwrap_or('▄').to_string().as_bytes());
 
         last_fg = cell.fg;
@@ -224,25 +229,24 @@ fn print_diff(force_flush: bool) {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-pub static VIDEO_ORIGIN_PIXELS_NOW: XY = XY::new();
-pub static VIDEO_ORIGIN_PIXELS: XY = XY::new();
-
+/// 终端大小 (字符)
 pub static TERM_SIZE: XY = XY::new();
+/// 终端大小 (像素)
 pub static TERM_PIXELS: XY = XY::new();
+/// 视频原始大小 (像素)
+pub static VIDEO_ORIGIN_PIXELS: XY = XY::new();
+/// 视频大小 (x: 字符, y: 半个字符)
 pub static VIDEO_PIXELS: XY = XY::new();
+/// 视频边缘填充大小 (字符)
 pub static VIDEO_PADDING: TBLR = TBLR::new();
 
-/// 强制下一帧全屏刷新
-pub static FORCEFLUSH_NEXT: AtomicBool = AtomicBool::new(false);
-
-pub fn updatesize() -> bool {
+pub fn updatesize(xvideo: usize, yvideo: usize) -> bool {
+    assert!(xvideo > 0 && yvideo > 0, "video size is zero");
     let Some(winsize) = get_winsize() else {
         return false;
     };
     let (xchars, ychars) = (winsize.col as usize, winsize.row as usize);
     let (xpixels, ypixels) = (winsize.xpixel as usize, winsize.ypixel as usize);
-    let (xvideo, yvideo) = VIDEO_ORIGIN_PIXELS_NOW.get();
-    assert!(xvideo > 0 && yvideo > 0, "video size is zero");
     let (xchars, ychars) = if xchars == 0 || ychars == 0 {
         (80, 24)
     } else {
@@ -254,9 +258,9 @@ pub fn updatesize() -> bool {
         (xpixels, ypixels)
     };
 
-    if TERM_SIZE.x() == xchars && TERM_SIZE.y() == ychars {
-        if TERM_PIXELS.x() == xpixels && TERM_PIXELS.y() == ypixels {
-            if VIDEO_ORIGIN_PIXELS.x() == xvideo && VIDEO_ORIGIN_PIXELS.y() == yvideo {
+    if TERM_SIZE.get() == (xchars, ychars) {
+        if TERM_PIXELS.get() == (xpixels, ypixels) {
+            if VIDEO_ORIGIN_PIXELS.get() == (xvideo, yvideo) {
                 return false;
             }
         }
@@ -394,7 +398,7 @@ pub static TERM_QUIT: AtomicBool = AtomicBool::new(false);
 /// - 25: 隐藏光标
 /// - 1006: 启用 SGR 扩展的鼠标模式
 /// - 1003: 启用所有鼠标移动事件
-/// - 2004: 启用括号粘贴模式
+/// - 2004: 启用[括号粘贴](https://en.wikipedia.org/wiki/Bracketed-paste)模式
 const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
 /// 见 [`TERM_INIT_SEQ`]
 const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
@@ -489,7 +493,7 @@ pub fn quit() -> ! {
         unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
     }
     stdout::print(TERM_EXIT_SEQ);
-    print_messages();
+    print_messages().ok();
     unsafe { libc::tcflush(STDIN_FILENO, libc::TCIFLUSH) };
     exit(0);
 }
@@ -498,7 +502,7 @@ pub fn quit() -> ! {
 #[cfg(windows)]
 pub fn quit() -> ! {
     stdout::print(TERM_EXIT_SEQ);
-    print_messages();
+    print_messages().ok();
     exit(0);
 }
 

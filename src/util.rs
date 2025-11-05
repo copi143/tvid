@@ -1,5 +1,6 @@
 use parking_lot::Mutex;
 use std::fmt::Debug;
+use std::io::Write;
 use std::ops::Mul;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -325,6 +326,9 @@ pub fn best_contrast_color(bg: Color) -> Color {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cell {
+    /// 单元格内的字符
+    /// - `None` 表示什么都没有
+    /// - `Some('\0')` 表示占位符，这之前应当有一个宽度大于 1 的字符
     pub c: Option<char>,
     pub fg: Color,
     pub bg: Color,
@@ -438,11 +442,15 @@ pub fn try_palette256(c: Color) -> Option<u8> {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+/// 颜色模式
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ColorMode {
+    /// 真彩色模式，仅使用 24 位真彩色
     #[default]
     TrueColorOnly,
+    /// 256 色模式优先，如果颜色无法表示则使用真彩色
     Palette256Prefer,
+    /// 仅使用 256 色模式
     Palette256Only,
 }
 
@@ -473,57 +481,64 @@ pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
 }
 
 #[inline(always)]
-pub fn escape_set_color(fg: Option<Color>, bg: Option<Color>, mode: ColorMode) -> String {
+pub fn escape_set_color(
+    wr: &mut impl Write,
+    fg: Option<Color>,
+    bg: Option<Color>,
+    mode: ColorMode,
+) {
     match mode {
-        ColorMode::Palette256Prefer => escape_set_color_256_prefer(fg, bg),
-        ColorMode::Palette256Only => escape_set_color_256(fg, bg),
-        ColorMode::TrueColorOnly => escape_set_color_rgb(fg, bg),
+        ColorMode::Palette256Prefer => escape_set_color_256_prefer(wr, fg, bg),
+        ColorMode::Palette256Only => escape_set_color_256(wr, fg, bg),
+        ColorMode::TrueColorOnly => escape_set_color_rgb(wr, fg, bg),
     }
 }
 
 #[inline(always)]
-pub fn escape_set_color_rgb(fg: Option<Color>, bg: Option<Color>) -> String {
+pub fn escape_set_color_rgb(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
     match (fg, bg) {
-        (Some(fg), Some(bg)) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
-        (Some(fg), None) => format!("\x1b[38;2;{:?}m", fg),
-        (None, Some(bg)) => format!("\x1b[48;2;{:?}m", bg),
-        (None, None) => String::new(),
+        (Some(fg), Some(bg)) => write!(wr, "\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+        (Some(fg), None) => write!(wr, "\x1b[38;2;{:?}m", fg),
+        (None, Some(bg)) => write!(wr, "\x1b[48;2;{:?}m", bg),
+        (None, None) => Ok(()),
     }
+    .unwrap()
 }
 
 #[inline(always)]
-pub fn escape_set_color_256(fg: Option<Color>, bg: Option<Color>) -> String {
+pub fn escape_set_color_256(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
     match (fg, bg) {
-        (Some(fg), Some(bg)) => format!(
-            "\x1b[38;5;{};48;5;{}m",
-            palette256_from_color(fg),
-            palette256_from_color(bg),
-        ),
-        (Some(fg), None) => format!("\x1b[38;5;{}m", palette256_from_color(fg)),
-        (None, Some(bg)) => format!("\x1b[48;5;{}m", palette256_from_color(bg)),
-        (None, None) => String::new(),
+        (Some(fg), Some(bg)) => {
+            let (fgi, bgi) = (palette256_from_color(fg), palette256_from_color(bg));
+            write!(wr, "\x1b[38;5;{};48;5;{}m", fgi, bgi)
+        }
+        (Some(fg), None) => write!(wr, "\x1b[38;5;{}m", palette256_from_color(fg)),
+        (None, Some(bg)) => write!(wr, "\x1b[48;5;{}m", palette256_from_color(bg)),
+        (None, None) => Ok(()),
     }
+    .unwrap()
 }
 
 #[inline(always)]
-pub fn escape_set_color_256_prefer(fg: Option<Color>, bg: Option<Color>) -> String {
+pub fn escape_set_color_256_prefer(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
     match (fg, bg) {
         (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
-            (Some(fgi), Some(bgi)) => format!("\x1b[38;5;{};48;5;{}m", fgi, bgi),
-            (Some(fgi), None) => format!("\x1b[38;5;{};48;2;{:?}m", fgi, bg),
-            (None, Some(bgi)) => format!("\x1b[38;2;{:?};48;5;{}m", fg, bgi),
-            (None, None) => format!("\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+            (Some(fgi), Some(bgi)) => write!(wr, "\x1b[38;5;{};48;5;{}m", fgi, bgi),
+            (Some(fgi), None) => write!(wr, "\x1b[38;5;{};48;2;{:?}m", fgi, bg),
+            (None, Some(bgi)) => write!(wr, "\x1b[38;2;{:?};48;5;{}m", fg, bgi),
+            (None, None) => write!(wr, "\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
         },
         (Some(fg), None) => match try_palette256(fg) {
-            Some(fgi) => format!("\x1b[38;5;{}m", fgi),
-            None => format!("\x1b[38;2;{:?}m", fg),
+            Some(fgi) => write!(wr, "\x1b[38;5;{}m", fgi),
+            None => write!(wr, "\x1b[38;2;{:?}m", fg),
         },
         (None, Some(bg)) => match try_palette256(bg) {
-            Some(bgi) => format!("\x1b[48;5;{}m", bgi),
-            None => format!("\x1b[48;2;{:?}m", bg),
+            Some(bgi) => write!(wr, "\x1b[48;5;{}m", bgi),
+            None => write!(wr, "\x1b[48;2;{:?}m", bg),
         },
-        (None, None) => String::new(),
+        (None, None) => Ok(()),
     }
+    .unwrap()
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @

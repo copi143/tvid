@@ -4,16 +4,18 @@ use av::util::frame::video::Video as VideoFrame;
 use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::mem::MaybeUninit;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::ffmpeg::{DECODER_WAKEUP, FFMPEG_END, VIDEO_TIME_BASE};
+use crate::ffmpeg::{DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, FFMPEG_END, VIDEO_TIME_BASE};
 use crate::statistics::increment_video_skipped_frames;
 use crate::term;
 use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
-use crate::term::{TERM_QUIT, VIDEO_ORIGIN_PIXELS_NOW, VIDEO_PIXELS};
+use crate::term::{TERM_QUIT, VIDEO_PIXELS};
 use crate::util::{Cell, Color};
 use crate::{PAUSE, audio};
+
+pub static VIDEO_FRAMETIME: AtomicU64 = AtomicU64::new(1_000_000 / 30);
 
 pub static VIDEO_FRAME: Mutex<Option<VideoFrame>> = Mutex::new(None);
 pub static VIDEO_FRAME_SIG: Condvar = Condvar::new();
@@ -32,13 +34,14 @@ pub fn video_main() {
                 if FFMPEG_END.load(Ordering::SeqCst) {
                     break;
                 }
-                VIDEO_FRAME_SIG.wait(&mut lock);
+                VIDEO_FRAME_SIG.wait_for(&mut lock, Duration::from_millis(100));
             }
             if lock.is_none() {
                 break;
             }
             lock.take().unwrap()
         };
+        *DECODER_WAKEUP_MUTEX.lock() = true;
         DECODER_WAKEUP.notify_one();
 
         let frametime = {
@@ -51,13 +54,17 @@ pub fn video_main() {
         };
 
         if frametime + Duration::from_millis(100) < audio::played_time_or_zero() {
+            send_debug!(
+                "Video frame too late: frame time {:?}, audio time {:?}",
+                frametime,
+                audio::played_time_or_zero()
+            );
             increment_video_skipped_frames();
             send_error!("Video frame too late, skipping");
             continue;
         }
 
-        VIDEO_ORIGIN_PIXELS_NOW.set(frame.width() as usize, frame.height() as usize);
-        let term_size_changed = term::updatesize();
+        let term_size_changed = term::updatesize(frame.width() as usize, frame.height() as usize);
 
         if Some(frame.format()) != scaler_format
             || Some(frame.width()) != scaler_width
@@ -104,11 +111,14 @@ pub fn video_main() {
                 std::thread::sleep(remaining);
                 render_start = Instant::now();
                 term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
+                if TERM_QUIT.load(Ordering::SeqCst) {
+                    return;
+                }
             } else {
-                std::thread::sleep(frametime - audio::played_time_or_zero());
-            }
-            if TERM_QUIT.load(Ordering::SeqCst) {
-                return;
+                let remaining = frametime - audio::played_time_or_zero();
+                let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
+                std::thread::sleep(remaining.min(max));
+                break;
             }
         }
     }

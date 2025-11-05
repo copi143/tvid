@@ -9,10 +9,10 @@ use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::ffmpeg::{DECODER_WAKEUP, FFMPEG_END};
+use crate::ffmpeg::{AUDIO_TIME_BASE, DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, FFMPEG_END};
 use crate::{PAUSE, term::TERM_QUIT};
 
 static AUDIO_VSTARTTIME: Mutex<Option<Instant>> = Mutex::new(None);
@@ -34,15 +34,26 @@ static PLAYED_SAMPLES: AtomicU64 = AtomicU64::new(0);
 static AUDIO_SAMPLERATE: AtomicU64 = AtomicU64::new(0);
 
 fn update_vtime(add_samples: u64) {
-    let samples = PLAYED_SAMPLES.fetch_add(add_samples, Ordering::SeqCst);
-    let samplerate = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
-    if samplerate > 0 {
-        let secs = samples / samplerate;
-        let nanos = samples % samplerate * 1_000_000_000 / samplerate;
-        let vtime = Duration::new(secs, nanos as u32);
-        AUDIO_PLAYEDTIME.lock().replace(vtime);
-        AUDIO_VSTARTTIME.lock().replace(Instant::now() - vtime);
-    };
+    if add_samples == 0 {
+        return;
+    }
+    let sn = PLAYED_SAMPLES.fetch_add(add_samples, Ordering::SeqCst);
+    let sr = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
+    assert!(sr > 0, "samplerate should be set before update_vtime");
+    let secs = sn / sr;
+    let nanos = sn % sr * 1_000_000_000 / sr;
+    let vtime = Duration::new(secs, nanos as u32);
+    AUDIO_PLAYEDTIME.lock().replace(vtime);
+    AUDIO_VSTARTTIME.lock().replace(Instant::now() - vtime);
+}
+
+fn set_vtime(vtime: Duration) {
+    AUDIO_PLAYEDTIME.lock().replace(vtime);
+    AUDIO_VSTARTTIME.lock().replace(Instant::now() - vtime);
+    let sr = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
+    assert!(sr > 0, "samplerate should be set before set_vtime");
+    let sn = vtime.as_secs() * sr + vtime.subsec_nanos() as u64 * sr / 1_000_000_000;
+    PLAYED_SAMPLES.store(sn, Ordering::SeqCst);
 }
 
 static AUDIO_BUFFER_LENGTH: AtomicUsize = AtomicUsize::new(0);
@@ -157,6 +168,7 @@ fn build_cpal_stream(
 
 pub static AUDIO_FRAME: Mutex<Option<AudioFrame>> = Mutex::new(None);
 pub static AUDIO_FRAME_SIG: Condvar = Condvar::new();
+pub static AUDIO_HINT_SEEKED: AtomicBool = AtomicBool::new(false);
 
 pub fn audio_main() {
     let host = cpal::default_host();
@@ -186,14 +198,30 @@ pub fn audio_main() {
                 if FFMPEG_END.load(Ordering::SeqCst) {
                     break;
                 }
-                AUDIO_FRAME_SIG.wait(&mut lock);
+                AUDIO_FRAME_SIG.wait_for(&mut lock, Duration::from_millis(100));
             }
             if lock.is_none() {
                 break;
             }
             lock.take().unwrap()
         };
+        *DECODER_WAKEUP_MUTEX.lock() = true;
         DECODER_WAKEUP.notify_one();
+
+        let frametime = {
+            let pts = frame.pts().unwrap();
+            let base = AUDIO_TIME_BASE.lock().unwrap();
+            Duration::new(
+                pts as u64 * base.0 as u64 / base.1 as u64,
+                (pts as u64 * base.0 as u64 % base.1 as u64 * 1_000_000_000 / base.1 as u64) as u32,
+            )
+        };
+
+        if AUDIO_HINT_SEEKED.swap(false, Ordering::SeqCst) {
+            send_debug!("Audio seeked, resetting audio time to {:?}", frametime);
+            audio_buffer.lock().clear();
+            set_vtime(frametime);
+        }
 
         if Some(frame.format()) != resampler_format
             || Some(frame.channel_layout()) != resampler_layout
