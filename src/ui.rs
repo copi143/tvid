@@ -337,7 +337,7 @@ fn render_progressbar(wrap: &mut RenderWrapper) {
 
     let (bar_w, bar_h) = calc_bar_size();
 
-    for y in wrap.pixels_height - bar_h..wrap.pixels_height {
+    for y in wrap.cells_height * 2 - bar_h..wrap.cells_height * 2 {
         for x in 0..bar_w {
             let i = y / 2 * wrap.cells_pitch + x;
             if y % 2 == 0 {
