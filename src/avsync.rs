@@ -67,7 +67,18 @@ impl AVSyncState {
 
     fn set_pause(&mut self, paused: bool) {
         self.paused = paused;
-        if !paused {
+        if paused {
+            let now = Instant::now();
+            if let Some(sync) = self.sync.as_mut() {
+                sync.playedtime = now.duration_since(sync.vstarttime);
+            }
+            if let Some(audio) = self.audio.as_mut() {
+                audio.playedtime = now.duration_since(audio.vstarttime);
+            }
+            if let Some(video) = self.video.as_mut() {
+                video.playedtime = now.duration_since(video.vstarttime);
+            }
+        } else {
             let now = Instant::now();
             if let Some(sync) = self.sync.as_mut() {
                 sync.resume(now)
