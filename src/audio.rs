@@ -50,11 +50,19 @@ struct AudioFrameWrapper {
     ts: Duration,
     af: AudioFrame,
     cons: usize,
+    prev_ts: Option<Duration>,
+    next_ts: Option<Duration>,
 }
 
 impl AudioFrameWrapper {
     fn new(ts: Duration, af: AudioFrame) -> Self {
-        Self { ts, af, cons: 0 }
+        Self {
+            ts,
+            af,
+            cons: 0,
+            prev_ts: None,
+            next_ts: None,
+        }
     }
 
     fn timestamp(&self) -> Option<Duration> {
@@ -68,6 +76,10 @@ impl AudioFrameWrapper {
         let len = nb_samples * channels;
         let slice = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, len) };
         &slice[self.cons..]
+    }
+
+    fn full_len(&self) -> usize {
+        self.af.samples() * self.af.channel_layout().channels() as usize
     }
 
     fn consume(&mut self, n: usize) {
@@ -96,6 +108,7 @@ macro_rules! data_callback {
                 data.fill($default);
                 return;
             }
+            let sr = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
             let mut dur = None;
             let mut add = None;
             let mut i = 0;
@@ -105,15 +118,56 @@ macro_rules! data_callback {
                     dur = Some(d);
                     add = None;
                 }
-                for (j, &v) in wrap.slice().iter().enumerate() {
-                    data[i] = ($expr)(v * unsafe { VOLUME_K });
-                    i += 1;
-                    if i == data.len() {
-                        let n = j + 1;
-                        wrap.consume(n);
-                        add = Some(n as u64 / channels as u64);
-                        buf.push_front(wrap);
-                        break;
+                let slice_full_len = wrap.full_len();
+                assert!(slice_full_len % channels as usize == 0);
+                let slice_time = slice_full_len as f64 / channels as f64 / sr as f64;
+                // 上一个帧到当前是否被跳过了一些内容
+                let prev_skiped = if wrap.prev_ts.is_some() {
+                    (wrap.ts.as_secs_f64() - wrap.prev_ts.unwrap().as_secs_f64()).abs()
+                        > slice_time * 2.0
+                } else {
+                    false
+                };
+                // 当前帧到下一个是否会跳过一些内容
+                let next_skiped = if wrap.next_ts.is_some() {
+                    (wrap.ts.as_secs_f64() - wrap.next_ts.unwrap().as_secs_f64()).abs()
+                        > slice_time * 2.0
+                } else {
+                    false
+                };
+                let slice_begin = wrap.cons;
+                assert!(slice_begin % channels as usize == 0);
+                if prev_skiped || next_skiped {
+                    for (j, &v) in wrap.slice().iter().enumerate() {
+                        let k = (slice_begin + j) as f32 / slice_full_len as f32;
+                        let mut v = v * unsafe { VOLUME_K };
+                        if prev_skiped {
+                            v *= k;
+                        }
+                        if next_skiped {
+                            v *= 1.0 - k;
+                        }
+                        data[i] = ($expr)(v);
+                        i += 1;
+                        if i == data.len() {
+                            let n = j + 1;
+                            wrap.consume(n);
+                            add = Some(n as u64 / channels as u64);
+                            buf.push_front(wrap);
+                            break;
+                        }
+                    }
+                } else {
+                    for (j, &v) in wrap.slice().iter().enumerate() {
+                        data[i] = ($expr)(v * unsafe { VOLUME_K });
+                        i += 1;
+                        if i == data.len() {
+                            let n = j + 1;
+                            wrap.consume(n);
+                            add = Some(n as u64 / channels as u64);
+                            buf.push_front(wrap);
+                            break;
+                        }
                     }
                 }
                 if i == data.len() {
@@ -236,6 +290,8 @@ pub fn audio_main() {
     let mut resampler_layout = None;
     let mut resampler_rate = None;
 
+    let mut last_frametime = None;
+
     while TERM_QUIT.load(Ordering::SeqCst) == false {
         let frame = {
             let mut lock = AUDIO_FRAME.lock();
@@ -297,7 +353,10 @@ pub fn audio_main() {
         AUDIO_BUFFER_LEN.fetch_add(converted.samples(), Ordering::SeqCst);
 
         let mut buf = AUDIO_BUFFER.lock();
+        buf.back_mut().map(|w| w.next_ts = Some(frametime));
         buf.push_back(AudioFrameWrapper::new(frametime, converted));
+        buf.back_mut().map(|w| w.prev_ts = last_frametime);
+        last_frametime = Some(frametime);
 
         let buflen = || AUDIO_BUFFER_LEN.load(Ordering::SeqCst);
         let maxbuf = || (CPAL_BUFFER_LEN.load(Ordering::SeqCst) * 2).max(1024);
