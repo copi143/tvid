@@ -3,7 +3,7 @@ use std::{collections::VecDeque, time::Duration};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::avsync::played_time_or_zero;
-use crate::term::RenderWrapper;
+use crate::render::RenderWrapper;
 use crate::util::{Cell, Color, best_contrast_color};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

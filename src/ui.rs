@@ -8,9 +8,10 @@ use unicode_width::UnicodeWidthChar;
 use crate::avsync;
 use crate::logging::{MessageLevel, get_messages};
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
+use crate::render::{RenderWrapper, TERM_PIXELS, TERM_SIZE};
 use crate::statistics::get_statistics;
 use crate::stdin::{self, Key, MouseAction};
-use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_PIXELS, TERM_SIZE};
+use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
 use crate::{ffmpeg, term};
 

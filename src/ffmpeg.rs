@@ -188,8 +188,16 @@ pub fn decode_main(path: &str) -> Result<bool> {
 
     avsync::reset(duration);
 
-    let video_main = std::thread::spawn(video_main);
-    let audio_main = std::thread::spawn(audio_main);
+    let video_main = if video_stream_index >= 0 {
+        Some(std::thread::spawn(video_main))
+    } else {
+        None
+    };
+    let audio_main = if audio_stream_index >= 0 {
+        Some(std::thread::spawn(audio_main))
+    } else {
+        None
+    };
 
     let mut video_queue = VecDeque::new();
     let mut audio_queue = VecDeque::new();
@@ -264,7 +272,9 @@ pub fn decode_main(path: &str) -> Result<bool> {
             }
         }
 
-        while audio_queue.len() > 0 && video_queue.len() > 0 {
+        while (audio_stream_index < 0 || audio_queue.len() > 0)
+            && (video_stream_index < 0 || video_queue.len() > 0)
+        {
             if TERM_QUIT.load(Ordering::SeqCst) || avsync::decode_ended() {
                 break;
             }
@@ -287,12 +297,16 @@ pub fn decode_main(path: &str) -> Result<bool> {
     notify_quit();
 
     // 等待所有线程结束
-    video_main.join().unwrap_or_else(|err| {
-        send_error!("video thread join error: {:?}", err);
-    });
-    audio_main.join().unwrap_or_else(|err| {
-        send_error!("audio thread join error: {:?}", err);
-    });
+    if let Some(video_main) = video_main {
+        video_main.join().unwrap_or_else(|err| {
+            send_error!("video thread join error: {:?}", err);
+        });
+    }
+    if let Some(audio_main) = audio_main {
+        audio_main.join().unwrap_or_else(|err| {
+            send_error!("audio thread join error: {:?}", err);
+        });
+    }
 
     // 清除还没处理的音频和视频帧
     let _ = VIDEO_FRAME.lock().take();
@@ -396,6 +410,8 @@ fn decode_audio(
 pub fn notify_quit() {
     // 标记 ffmpeg 处理结束，以便音频和视频线程可以退出
     avsync::end_decode();
+    // 恢复播放状态，防止音视频线程不退出
+    avsync::resume();
 
     // 唤醒所有等待的线程
     DECODER_WAKEUP.notify_one();

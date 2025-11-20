@@ -18,7 +18,7 @@ use std::time::Instant;
 use tokio::runtime::Runtime;
 
 use crate::ffmpeg::seek_request_relative;
-use crate::term::{COLOR_MODE, FORCEFLUSH_NEXT};
+use crate::render::{COLOR_MODE, FORCEFLUSH_NEXT};
 use crate::ui::QUIT_CONFIRMATION;
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 
@@ -34,6 +34,7 @@ mod config;
 mod ffmpeg;
 mod osc;
 mod playlist;
+mod render;
 mod sixel;
 mod statistics;
 mod stdin;
@@ -193,12 +194,13 @@ fn main() -> Result<()> {
 
     register_input_callbacks();
 
-    term::add_render_callback(video::render_frame);
-    term::add_render_callback(subtitle::render_subtitle);
-    term::add_render_callback(ui::render_ui);
+    render::add_render_callback(video::render_frame);
+    render::add_render_callback(subtitle::render_subtitle);
+    render::add_render_callback(ui::render_ui);
 
     let input_main = TOKIO_RUNTIME.spawn(stdin::input_main());
     let output_main = TOKIO_RUNTIME.spawn(stdout::output_main());
+    let render_main = std::thread::spawn(render::render_main);
 
     let mut continuous_failure_count = 0;
     while let Some(path) = { PLAYLIST.lock().next().cloned() } {
@@ -222,12 +224,15 @@ fn main() -> Result<()> {
 
     term::request_quit();
 
+    render_main.join().unwrap_or_else(|err| {
+        send_error!("render thread join error: {:?}", err);
+    });
     TOKIO_RUNTIME.block_on(async {
         output_main.await.unwrap_or_else(|err| {
-            send_error!("output thread join error: {:?}", err);
+            send_error!("output task join error: {:?}", err);
         });
         input_main.await.unwrap_or_else(|err| {
-            send_error!("input thread join error: {:?}", err);
+            send_error!("input task join error: {:?}", err);
         });
     });
 

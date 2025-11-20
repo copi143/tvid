@@ -45,13 +45,19 @@ static STDOUT_SIG: Notify = Notify::const_new();
 pub async fn output_main() {
     while TERM_QUIT.load(Ordering::SeqCst) == false {
         let buf = {
-            while STDOUT_BUF.lock().len() == 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
+            let mut option_buf = None;
+            while TERM_QUIT.load(Ordering::SeqCst) == false {
+                if let Some(buf) = STDOUT_BUF.lock().pop_front() {
+                    option_buf.replace(buf);
+                    break;
+                }
                 STDOUT_SIG.notified().await;
             }
-            if TERM_QUIT.load(Ordering::SeqCst) {
+            if let Some(buf) = option_buf {
+                buf
+            } else {
                 break;
             }
-            STDOUT_BUF.lock().pop_front().unwrap()
         };
 
         if buf.len() == 0 {
