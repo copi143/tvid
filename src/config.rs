@@ -1,8 +1,8 @@
 use anyhow::Result;
+use parking_lot::Mutex;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::playlist::PLAYLIST;
 
@@ -10,7 +10,35 @@ const DEFAULT_CONFIG_DIR: &str = "~/.config/tvid";
 const DEFAULT_CONFIG_FILE: &str = "tvid.cfg";
 const DEFAULT_PLAYLIST_FILE: &str = "playlist.txt";
 
-static VOLUME: AtomicU32 = AtomicU32::new(100);
+pub static CONFIG: Mutex<Config> = Mutex::new(Config { volume: 100 });
+
+pub struct Config {
+    pub volume: u32,
+}
+
+impl Config {
+    pub fn set_entry(&mut self, key: &str, value: &str) -> Result<()> {
+        match key {
+            "volume" => {
+                let v = value.parse::<u32>()?;
+                if v <= 200 {
+                    self.volume = v;
+                } else {
+                    anyhow::bail!("Volume must be between 0 and 200");
+                }
+            }
+            _ => {
+                anyhow::bail!("Unknown config key: {}", key);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn write_to(&self, wr: &mut dyn Write) -> Result<()> {
+        writeln!(wr, "volume = {}", self.volume)?;
+        Ok(())
+    }
+}
 
 fn load_config(file: File) -> Result<()> {
     let config = std::io::read_to_string(file)?;
@@ -21,15 +49,15 @@ fn load_config(file: File) -> Result<()> {
     for line in config {
         let parts = line.splitn(2, '=').collect::<Vec<_>>();
         if parts.len() != 2 {
-            send_error!("Invalid config line: {}", line);
+            send_warn!("Invalid config line: {}", line);
         }
         let (key, value) = (parts[0].trim(), parts[1].trim());
         match key {
             "volume" => match value.parse::<u32>() {
-                Ok(v) if v <= 200 => VOLUME.store(v, Ordering::Relaxed),
+                Ok(v) if v <= 200 => CONFIG.lock().volume = v,
                 _ => send_error!("Invalid volume value: {}", value),
             },
-            _ => send_error!("Unknown config key: {}", key),
+            _ => send_warn!("Unknown config key: {}", key),
         }
     }
     Ok(())
@@ -59,7 +87,7 @@ pub fn load(dir: Option<&str>) -> Result<()> {
 }
 
 fn save_config(mut file: File) -> Result<()> {
-    writeln!(file, "volume = {}", VOLUME.load(Ordering::Relaxed))?;
+    CONFIG.lock().write_to(&mut file)?;
     Ok(())
 }
 

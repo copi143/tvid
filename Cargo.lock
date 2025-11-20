@@ -960,13 +960,14 @@ dependencies = [
 
 [[package]]
 name = "tvid"
-version = "0.0.18"
+version = "0.1.0-alpha"
 dependencies = [
  "anyhow",
  "base64",
  "chrono",
  "cpal",
  "ffmpeg-next",
+ "ffmpeg-sys-next",
  "jpeg-encoder",
  "libc",
  "parking_lot",

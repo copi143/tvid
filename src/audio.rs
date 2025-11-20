@@ -8,27 +8,12 @@ use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
 use std::mem::MaybeUninit;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::ffmpeg::{AUDIO_TIME_BASE, DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, FFMPEG_END};
-use crate::{PAUSE, term::TERM_QUIT};
-
-static AUDIO_VSTARTTIME: Mutex<Option<Instant>> = Mutex::new(None);
-static AUDIO_PLAYEDTIME: Mutex<Option<Duration>> = Mutex::new(None);
-
-pub fn played_time_or_zero() -> Duration {
-    played_time_or_none().unwrap_or(Duration::ZERO)
-}
-
-pub fn played_time_or_none() -> Option<Duration> {
-    if PAUSE.load(Ordering::SeqCst) {
-        *AUDIO_PLAYEDTIME.lock()
-    } else {
-        AUDIO_VSTARTTIME.lock().map(|time| time.elapsed())
-    }
-}
+use crate::term::TERM_QUIT;
+use crate::{avsync, ffmpeg};
 
 static PLAYED_SAMPLES: AtomicU64 = AtomicU64::new(0);
 static AUDIO_SAMPLERATE: AtomicU64 = AtomicU64::new(0);
@@ -43,124 +28,159 @@ fn update_vtime(add_samples: u64) {
     let secs = sn / sr;
     let nanos = sn % sr * 1_000_000_000 / sr;
     let vtime = Duration::new(secs, nanos as u32);
-    AUDIO_PLAYEDTIME.lock().replace(vtime);
-    AUDIO_VSTARTTIME.lock().replace(Instant::now() - vtime);
+    avsync::hint_audio_played_time(vtime);
 }
 
 fn set_vtime(vtime: Duration) {
-    AUDIO_PLAYEDTIME.lock().replace(vtime);
-    AUDIO_VSTARTTIME.lock().replace(Instant::now() - vtime);
     let sr = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
     assert!(sr > 0, "samplerate should be set before set_vtime");
     let sn = vtime.as_secs() * sr + vtime.subsec_nanos() as u64 * sr / 1_000_000_000;
     PLAYED_SAMPLES.store(sn, Ordering::SeqCst);
+    avsync::hint_audio_played_time(vtime);
 }
 
-static AUDIO_BUFFER_LENGTH: AtomicUsize = AtomicUsize::new(0);
+static HINT_SEEKED: AtomicBool = AtomicBool::new(false);
+
+/// 提示音频模块已经 seek 到指定时间点
+pub fn hint_seeked() {
+    HINT_SEEKED.store(true, Ordering::SeqCst);
+}
+
+struct AudioFrameWrapper {
+    ts: Duration,
+    af: AudioFrame,
+    cons: usize,
+}
+
+impl AudioFrameWrapper {
+    fn new(ts: Duration, af: AudioFrame) -> Self {
+        Self { ts, af, cons: 0 }
+    }
+
+    fn timestamp(&self) -> Option<Duration> {
+        if self.cons == 0 { Some(self.ts) } else { None }
+    }
+
+    fn slice(&self) -> &[f32] {
+        let data = self.af.data(0);
+        let nb_samples = self.af.samples();
+        let channels = self.af.channel_layout().channels() as usize;
+        let len = nb_samples * channels;
+        let slice = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, len) };
+        &slice[self.cons..]
+    }
+
+    fn consume(&mut self, n: usize) {
+        self.cons += n;
+    }
+}
+
+static AUDIO_BUFFER: Mutex<VecDeque<AudioFrameWrapper>> = Mutex::new(VecDeque::new());
 static AUDIO_CONSUMED: Condvar = Condvar::new();
 
+/// 当前 CPAL 音频缓冲区长度（采样点数）
+static CPAL_BUFFER_LEN: AtomicUsize = AtomicUsize::new(0);
+/// 当前音频缓冲区长度（采样点数）
+static AUDIO_BUFFER_LEN: AtomicUsize = AtomicUsize::new(0);
+
 static mut VOLUME_K: f32 = 0.25;
+
+macro_rules! data_callback {
+    ($channels:expr, $ty:ty, $default:expr, $expr:expr) => {
+        move |data: &mut [$ty], _| {
+            let channels = $channels;
+            assert!(data.len() != 0);
+            assert!(data.len() % channels as usize == 0);
+            CPAL_BUFFER_LEN.store(data.len() / channels as usize, Ordering::SeqCst);
+            if avsync::is_paused() {
+                data.fill($default);
+                return;
+            }
+            let mut dur = None;
+            let mut add = None;
+            let mut i = 0;
+            let mut buf = AUDIO_BUFFER.lock();
+            while let Some(mut wrap) = buf.pop_front() {
+                if let Some(d) = wrap.timestamp() {
+                    dur = Some(d);
+                    add = None;
+                }
+                for (j, &v) in wrap.slice().iter().enumerate() {
+                    data[i] = ($expr)(v * unsafe { VOLUME_K });
+                    i += 1;
+                    if i == data.len() {
+                        let n = j + 1;
+                        wrap.consume(n);
+                        add = Some(n as u64 / channels as u64);
+                        buf.push_front(wrap);
+                        break;
+                    }
+                }
+                if i == data.len() {
+                    break;
+                }
+            }
+            assert!(i <= data.len() && i % channels as usize == 0);
+            AUDIO_BUFFER_LEN.fetch_sub(i / channels as usize, Ordering::SeqCst);
+            while i < data.len() {
+                data[i] = $default;
+                i += 1;
+            }
+            dur.map(|dur| set_vtime(dur));
+            add.map(|add| update_vtime(add));
+            AUDIO_CONSUMED.notify_one();
+        }
+    };
+}
+
+macro_rules! build_output_stream {
+    ($device:expr, $config:expr, $ty:ty, $default:expr, $expr:expr) => {{
+        let channels = $config.channels();
+        let config = &$config.config();
+        $device.build_output_stream(
+            config,
+            data_callback!(channels, $ty, $default, $expr),
+            |_| { /* ignore */ },
+            None,
+        )
+    }};
+}
 
 fn build_cpal_stream(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
-    audio_buffer: Arc<Mutex<VecDeque<f32>>>,
 ) -> Result<cpal::Stream> {
-    let err_fn = |_| { /* ignore */ };
-    let sample_format = config.sample_format();
-    let channels = config.channels();
-    let config = &config.config();
-    match sample_format {
-        SampleFormat::F32 => device.build_output_stream(
-            config,
-            move |data: &mut [f32], _| {
-                if PAUSE.load(Ordering::SeqCst) {
-                    data.fill(0.0);
-                    return;
-                }
-                AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
-                let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock();
-                for sample in data {
-                    *sample = buf.remove(0).unwrap_or_else(|| {
-                        samples_to_add -= 1;
-                        0.0
-                    }) * unsafe { VOLUME_K };
-                }
-                update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_one();
-            },
-            err_fn,
-            None,
-        ),
-        SampleFormat::F64 => device.build_output_stream(
-            config,
-            move |data: &mut [f64], _| {
-                if PAUSE.load(Ordering::SeqCst) {
-                    data.fill(0.0);
-                    return;
-                }
-                AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
-                let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock();
-                for sample in data {
-                    *sample = (buf.remove(0).unwrap_or_else(|| {
-                        samples_to_add -= 1;
-                        0.0
-                    }) * unsafe { VOLUME_K }) as f64;
-                }
-                update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_one();
-            },
-            err_fn,
-            None,
-        ),
-        SampleFormat::I16 => device.build_output_stream(
-            config,
-            move |data: &mut [i16], _| {
-                if PAUSE.load(Ordering::SeqCst) {
-                    data.fill(0);
-                    return;
-                }
-                AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
-                let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock();
-                for sample in data {
-                    let v = buf.remove(0).unwrap_or_else(|| {
-                        samples_to_add -= 1;
-                        0.0
-                    }) * unsafe { VOLUME_K };
-                    *sample = (v.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-                }
-                update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_one();
-            },
-            err_fn,
-            None,
-        ),
-        SampleFormat::U16 => device.build_output_stream(
-            config,
-            move |data: &mut [u16], _| {
-                if PAUSE.load(Ordering::SeqCst) {
-                    data.fill(128);
-                    return;
-                }
-                AUDIO_BUFFER_LENGTH.store(data.len(), Ordering::SeqCst);
-                let mut samples_to_add = data.len() as u64;
-                let mut buf = audio_buffer.lock();
-                for sample in data {
-                    let v = buf.remove(0).unwrap_or_else(|| {
-                        samples_to_add -= 1;
-                        0.0
-                    }) * unsafe { VOLUME_K };
-                    *sample = ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * u16::MAX as f32) as u16;
-                }
-                update_vtime(samples_to_add / channels as u64);
-                AUDIO_CONSUMED.notify_one();
-            },
-            err_fn,
-            None,
-        ),
+    macro_rules! inorm {
+        ($v:expr) => {
+            $v.clamp(-1.0, 1.0)
+        };
+    }
+    macro_rules! unorm {
+        ($v:expr) => {
+            $v.clamp(-1.0, 1.0) * 0.5 + 0.5
+        };
+    }
+    match config.sample_format() {
+        SampleFormat::F32 => build_output_stream!(device, config, f32, 0.0, |v: f32| v),
+        SampleFormat::F64 => build_output_stream!(device, config, f64, 0.0, |v: f32| v as f64),
+        SampleFormat::I8 => build_output_stream!(device, config, i8, 0, |v: f32| {
+            (inorm!(v) * i8::MAX as f32) as i8
+        }),
+        SampleFormat::U8 => build_output_stream!(device, config, u8, 128, |v: f32| {
+            (unorm!(v) * u8::MAX as f32) as u8
+        }),
+        SampleFormat::I16 => build_output_stream!(device, config, i16, 0, |v: f32| {
+            (inorm!(v) * i16::MAX as f32) as i16
+        }),
+        SampleFormat::U16 => build_output_stream!(device, config, u16, 32768, |v: f32| {
+            (unorm!(v) * u16::MAX as f32) as u16
+        }),
+        SampleFormat::I32 => build_output_stream!(device, config, i32, 0, |v: f32| {
+            (inorm!(v) * i32::MAX as f32) as i32
+        }),
+        SampleFormat::U32 => build_output_stream!(device, config, u32, 2147483648, |v: f32| {
+            (unorm!(v) * u32::MAX as f32) as u32
+        }),
         _ => unimplemented!("不支持的采样格式"),
     }
     .map_err(|e| e.into())
@@ -168,7 +188,6 @@ fn build_cpal_stream(
 
 pub static AUDIO_FRAME: Mutex<Option<AudioFrame>> = Mutex::new(None);
 pub static AUDIO_FRAME_SIG: Condvar = Condvar::new();
-pub static AUDIO_HINT_SEEKED: AtomicBool = AtomicBool::new(false);
 
 pub fn audio_main() {
     let host = cpal::default_host();
@@ -179,11 +198,37 @@ pub fn audio_main() {
     let config = device.default_output_config().unwrap();
     let target_channels = config.channels();
     let target_sample_fmt = Sample::F32(SampleType::Packed);
-    let audio_buffer: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::<f32>::new()));
-    let cpal_stream = build_cpal_stream(&device, &config, audio_buffer.clone()).unwrap();
+    let target_sample_rate = config.sample_rate().0;
+    let cpal_stream = build_cpal_stream(&device, &config).unwrap();
+    if target_sample_rate == 0 {
+        send_error!("Invalid audio sample rate: 0");
+        send_error!("Quiting audio thread");
+        ffmpeg::notify_quit();
+        return;
+    }
     PLAYED_SAMPLES.store(0, Ordering::SeqCst);
-    AUDIO_SAMPLERATE.store(config.sample_rate().0 as u64, Ordering::SeqCst);
+    AUDIO_SAMPLERATE.store(target_sample_rate as u64, Ordering::SeqCst);
+    AUDIO_BUFFER.lock().clear();
+    AUDIO_BUFFER_LEN.store(0, Ordering::SeqCst);
     cpal_stream.play().unwrap();
+    set_vtime(Duration::ZERO);
+
+    let target_channel_layout = match target_channels {
+        1 => ChannelLayout::MONO,
+        2 => ChannelLayout::STEREO,
+        3 => ChannelLayout::SURROUND,
+        4 => ChannelLayout::QUAD,
+        5 => ChannelLayout::_4POINT1,
+        6 => ChannelLayout::_5POINT1,
+        7 => ChannelLayout::_6POINT1,
+        8 => ChannelLayout::_7POINT1,
+        _ => {
+            send_error!("Unsupported channel count: {target_channels}");
+            send_error!("Quiting audio thread");
+            ffmpeg::notify_quit();
+            return;
+        }
+    };
 
     let mut resampler = MaybeUninit::uninit();
 
@@ -217,10 +262,9 @@ pub fn audio_main() {
             )
         };
 
-        if AUDIO_HINT_SEEKED.swap(false, Ordering::SeqCst) {
-            send_debug!("Audio seeked, resetting audio time to {:?}", frametime);
-            audio_buffer.lock().clear();
-            set_vtime(frametime);
+        if HINT_SEEKED.swap(false, Ordering::SeqCst) {
+            AUDIO_BUFFER.lock().clear();
+            AUDIO_BUFFER_LEN.store(0, Ordering::SeqCst);
         }
 
         if Some(frame.format()) != resampler_format
@@ -233,21 +277,8 @@ pub fn audio_main() {
                     frame.channel_layout(),
                     frame.rate(),
                     target_sample_fmt,
-                    match config.channels() {
-                        1 => ChannelLayout::MONO,
-                        2 => ChannelLayout::STEREO,
-                        3 => ChannelLayout::SURROUND,
-                        4 => ChannelLayout::QUAD,
-                        5 => ChannelLayout::_4POINT1,
-                        6 => ChannelLayout::_5POINT1,
-                        7 => ChannelLayout::_6POINT1,
-                        8 => ChannelLayout::_7POINT1,
-                        _ => {
-                            send_error!("Unsupported channel count: {}", config.channels());
-                            return;
-                        }
-                    },
-                    config.sample_rate().0,
+                    target_channel_layout,
+                    target_sample_rate,
                 )
                 .context("Could not create resampler")
                 .unwrap(),
@@ -263,22 +294,19 @@ pub fn audio_main() {
             .context("resampler run failed")
             .unwrap();
 
-        let mut buf = audio_buffer.lock();
-        let data = converted.data(0);
-        let nb_samples = converted.samples();
-        let sample_count = nb_samples * target_channels as usize;
-        let slice =
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, sample_count) };
-        buf.extend(slice);
+        AUDIO_BUFFER_LEN.fetch_add(converted.samples(), Ordering::SeqCst);
 
-        while buf.len() > AUDIO_BUFFER_LENGTH.load(Ordering::SeqCst) * 2
-            && TERM_QUIT.load(Ordering::SeqCst) == false
-        {
+        let mut buf = AUDIO_BUFFER.lock();
+        buf.push_back(AudioFrameWrapper::new(frametime, converted));
+
+        let buflen = || AUDIO_BUFFER_LEN.load(Ordering::SeqCst);
+        let maxbuf = || (CPAL_BUFFER_LEN.load(Ordering::SeqCst) * 2).max(1024);
+        while buflen() > maxbuf() && TERM_QUIT.load(Ordering::SeqCst) == false {
             AUDIO_CONSUMED.wait_for(&mut buf, Duration::from_millis(20));
         }
     }
 
-    while audio_buffer.lock().len() > 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
+    while AUDIO_BUFFER.lock().len() > 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
         std::thread::sleep(Duration::from_millis(100));
     }
 }

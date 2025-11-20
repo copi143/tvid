@@ -12,7 +12,7 @@
 use anyhow::{Context, Result};
 use ffmpeg_next as av;
 use std::env::args;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{LazyLock, OnceLock};
 use std::time::Instant;
 use tokio::runtime::Runtime;
@@ -29,6 +29,7 @@ mod logging;
 mod ui;
 
 mod audio;
+mod avsync;
 mod config;
 mod ffmpeg;
 mod osc;
@@ -44,14 +45,13 @@ mod video;
 
 pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     let num_cores = std::thread::available_parallelism().unwrap().get();
+    let workers = num_cores.max(4); // 防止 I/O 卡顿
     tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(num_cores)
+        .worker_threads(workers)
         .enable_all()
         .build()
         .expect("Failed to create Tokio runtime")
 });
-
-static PAUSE: AtomicBool = AtomicBool::new(false);
 
 macro_rules! eprintlns {
     ($($fmt:expr $(, $args:expr)*);+ $(;)?) => {
@@ -95,7 +95,7 @@ fn print_help() {
 
 fn register_input_callbacks() {
     stdin::register_keypress_callback(Key::Normal(' '), |_| {
-        PAUSE.fetch_xor(true, Ordering::SeqCst);
+        avsync::switch_pause_state();
         true
     });
     stdin::register_keypress_callback(Key::Normal('q'), |_| {
@@ -189,31 +189,35 @@ fn main() -> Result<()> {
     term::init();
     term::setup_panic_handler(); // 一定要在初始化之后设置，且必须立刻设置
 
+    ffmpeg::init();
+
     register_input_callbacks();
 
     term::add_render_callback(video::render_frame);
     term::add_render_callback(subtitle::render_subtitle);
     term::add_render_callback(ui::render_ui);
 
-    let input_main = std::thread::spawn(stdin::input_main);
-    let output_main = std::thread::spawn(stdout::output_main);
+    let input_main = TOKIO_RUNTIME.spawn(stdin::input_main());
+    let output_main = TOKIO_RUNTIME.spawn(stdout::output_main());
 
     while let Some(path) = { PLAYLIST.lock().next().cloned() } {
         ffmpeg::decode_main(&path).unwrap_or_else(|err| {
             send_error!("ffmpeg decode error: {}", err);
         });
-        if TERM_QUIT.load(std::sync::atomic::Ordering::SeqCst) {
+        if TERM_QUIT.load(Ordering::SeqCst) {
             break;
         }
     }
 
     term::request_quit();
 
-    output_main.join().unwrap_or_else(|err| {
-        send_error!("output thread join error: {:?}", err);
-    });
-    input_main.join().unwrap_or_else(|err| {
-        send_error!("input thread join error: {:?}", err);
+    TOKIO_RUNTIME.block_on(async {
+        output_main.await.unwrap_or_else(|err| {
+            send_error!("output thread join error: {:?}", err);
+        });
+        input_main.await.unwrap_or_else(|err| {
+            send_error!("input thread join error: {:?}", err);
+        });
     });
 
     config::save(None).unwrap_or_else(|err| {

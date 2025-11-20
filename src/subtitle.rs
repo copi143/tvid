@@ -2,7 +2,7 @@ use parking_lot::Mutex;
 use std::{collections::VecDeque, time::Duration};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::audio;
+use crate::avsync::played_time_or_zero;
 use crate::term::RenderWrapper;
 use crate::util::{Cell, Color, best_contrast_color};
 
@@ -105,7 +105,7 @@ pub fn push_ass(start: Duration, end: Duration, ass: &str) {
                 if SUBTITLE_EXTRA_DISPLAY_TIME == Duration::from_millis(0) {
                     *dialogue = None;
                 } else {
-                    dia.end = audio::played_time_or_zero();
+                    dia.end = played_time_or_zero();
                 }
             }
         }
@@ -123,7 +123,7 @@ pub fn push_text(start: Duration, end: Duration, text: &str) {
                 if SUBTITLE_EXTRA_DISPLAY_TIME == Duration::from_millis(0) {
                     *dialogue = None;
                 } else {
-                    dia.end = audio::played_time_or_zero();
+                    dia.end = played_time_or_zero();
                 }
             }
         }
@@ -139,7 +139,7 @@ pub fn push_nothing() {
                 if SUBTITLE_EXTRA_DISPLAY_TIME == Duration::from_millis(0) {
                     *dialogue = None;
                 } else {
-                    dia.end = audio::played_time_or_zero();
+                    dia.end = played_time_or_zero();
                 }
             }
         }

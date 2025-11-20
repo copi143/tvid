@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::time::{Duration, SystemTime};
 
+use crate::term;
 use crate::{stdout, util::Color};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -86,7 +87,7 @@ pub fn print_messages() -> Result<()> {
         text.push('\n');
     }
     let bytes = text.as_bytes();
-    if stdout::print(bytes) == bytes.len() as isize {
+    if stdout::print(bytes) == Some(bytes.len()) {
         Ok(())
     } else {
         Err(anyhow::anyhow!("Failed to print all log messages"))
@@ -121,6 +122,11 @@ pub fn send_error(msg: &str, fg: Option<Color>, bg: Option<Color>) {
     send_message(MessageLevel::Error, msg, fg, bg);
 }
 
+pub fn send_fatal(msg: &str, fg: Option<Color>, bg: Option<Color>) -> ! {
+    send_message(MessageLevel::Fatal, msg, fg, bg);
+    term::quit();
+}
+
 macro_rules! send_debug {
     ($($arg:tt)*) => {
         crate::logging::send_debug(&format!($($arg)*), None, None)
@@ -142,5 +148,11 @@ macro_rules! send_warn {
 macro_rules! send_error {
     ($($arg:tt)*) => {
         crate::logging::send_error(&format!($($arg)*), None, None)
+    };
+}
+
+macro_rules! send_fatal {
+    ($($arg:tt)*) => {
+        crate::logging::send_fatal(&format!($($arg)*), None, None)
     };
 }

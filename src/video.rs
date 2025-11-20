@@ -4,21 +4,28 @@ use av::util::frame::video::Video as VideoFrame;
 use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::avsync::{self, played_time_or_zero};
 use crate::ffmpeg::{DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, FFMPEG_END, VIDEO_TIME_BASE};
 use crate::statistics::increment_video_skipped_frames;
 use crate::term;
 use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::term::{TERM_QUIT, VIDEO_PIXELS};
 use crate::util::{Cell, Color};
-use crate::{PAUSE, audio};
 
 pub static VIDEO_FRAMETIME: AtomicU64 = AtomicU64::new(1_000_000 / 30);
 
 pub static VIDEO_FRAME: Mutex<Option<VideoFrame>> = Mutex::new(None);
 pub static VIDEO_FRAME_SIG: Condvar = Condvar::new();
+
+static HINT_SEEKED: AtomicBool = AtomicBool::new(false);
+
+/// 提示视频模块已经 seek 到指定时间点
+pub fn hint_seeked() {
+    HINT_SEEKED.store(true, Ordering::SeqCst);
+}
 
 pub fn video_main() {
     let mut scaler = MaybeUninit::uninit();
@@ -53,12 +60,11 @@ pub fn video_main() {
             )
         };
 
-        if frametime + Duration::from_millis(100) < audio::played_time_or_zero() {
-            send_debug!(
-                "Video frame too late: frame time {:?}, audio time {:?}",
-                frametime,
-                audio::played_time_or_zero()
-            );
+        // 为了防止视频卡死，seek 永远播放一帧旧的画面
+        let seeked = HINT_SEEKED.swap(false, Ordering::SeqCst);
+        let played = played_time_or_zero();
+        if !seeked && frametime + Duration::from_millis(100) < played {
+            send_debug!("Video frame too late: frame time {frametime:?}, audio time {played:?}");
             increment_video_skipped_frames();
             send_error!("Video frame too late, skipping");
             continue;
@@ -104,9 +110,10 @@ pub fn video_main() {
 
         let mut render_start = Instant::now();
         term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
+        avsync::hint_video_played_time(frametime);
 
-        while frametime > audio::played_time_or_zero() + Duration::from_millis(5) {
-            if PAUSE.load(Ordering::SeqCst) {
+        while frametime > played_time_or_zero() + Duration::from_millis(5) {
+            if avsync::is_paused() {
                 let remaining = Duration::from_millis(33).saturating_sub(render_start.elapsed());
                 std::thread::sleep(remaining);
                 render_start = Instant::now();
@@ -115,7 +122,7 @@ pub fn video_main() {
                     return;
                 }
             } else {
-                let remaining = frametime - audio::played_time_or_zero();
+                let remaining = frametime - played_time_or_zero();
                 let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
                 std::thread::sleep(remaining.min(max));
                 break;

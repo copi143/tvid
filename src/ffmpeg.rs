@@ -1,22 +1,67 @@
 use anyhow::{Context, Result};
-use av::Subtitle;
 use av::codec::context::Context as AVCCtx;
-use av::ffi::{AV_TIME_BASE, AVSEEK_FLAG_BACKWARD, av_read_frame, av_seek_frame};
+use av::ffi::{AV_TIME_BASE, av_read_frame, av_seek_frame};
 use av::format::context::Input;
 use av::packet::Mut as _;
 use av::util::frame::{Audio as AudioFrame, video::Video as VideoFrame};
-use ffmpeg_next::{self as av, Packet};
+use av::{Packet, Subtitle};
+use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use crate::audio::{
-    AUDIO_FRAME, AUDIO_FRAME_SIG, AUDIO_HINT_SEEKED, audio_main, played_time_or_zero,
-};
-use crate::subtitle;
+use crate::audio::{self, AUDIO_FRAME, AUDIO_FRAME_SIG, audio_main};
+use crate::avsync::played_time_or_zero;
 use crate::term::TERM_QUIT;
 use crate::video::{VIDEO_FRAME, VIDEO_FRAME_SIG, VIDEO_FRAMETIME, video_main};
+use crate::{avsync, subtitle, video};
+
+#[allow(static_mut_refs)]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe extern "C" fn ffmpeg_log_callback(
+    arg1: *mut libc::c_void,
+    arg2: libc::c_int,
+    arg3: *const libc::c_char,
+    arg4: *mut ffmpeg_sys_next::__va_list_tag,
+) {
+    if arg2 > ffmpeg_sys_next::AV_LOG_WARNING {
+        return;
+    }
+    static mut PRINT_PREFIX: core::ffi::c_int = 0;
+    static mut BUF: [u8; 1024] = [0u8; 1024];
+    ffmpeg_sys_next::av_log_format_line(
+        arg1,
+        arg2,
+        arg3,
+        arg4,
+        BUF.as_mut_ptr() as *mut core::ffi::c_char,
+        BUF.len() as core::ffi::c_int,
+        &mut PRINT_PREFIX as *mut core::ffi::c_int,
+    );
+    let c_str = std::ffi::CStr::from_ptr(BUF.as_ptr() as *const core::ffi::c_char);
+    if let Ok(str_slice) = c_str.to_str() {
+        let str_slice = str_slice.trim_end();
+        match arg2 {
+            ffmpeg_sys_next::AV_LOG_PANIC => send_fatal!("{}", str_slice),
+            ffmpeg_sys_next::AV_LOG_FATAL => send_error!("{}", str_slice),
+            ffmpeg_sys_next::AV_LOG_ERROR => send_warn!("{}", str_slice),
+            ffmpeg_sys_next::AV_LOG_WARNING => send_warn!("{}", str_slice),
+            ffmpeg_sys_next::AV_LOG_INFO => send_info!("{}", str_slice),
+            ffmpeg_sys_next::AV_LOG_VERBOSE => send_debug!("{}", str_slice),
+            ffmpeg_sys_next::AV_LOG_DEBUG => send_debug!("{}", str_slice),
+            ffmpeg_sys_next::AV_LOG_TRACE => send_debug!("{}", str_slice),
+            _ => send_error!("FFmpeg unknown log level {}: {}", arg2, str_slice),
+        }
+    } else {
+        send_error!("FFmpeg log: <invalid UTF-8>");
+    }
+}
+
+/// 初始化 FFmpeg 日志回调
+pub fn init() {
+    unsafe { ffmpeg_sys_next::av_log_set_callback(Some(ffmpeg_log_callback)) };
+}
 
 pub static VIDEO_TIME_BASE: Mutex<Option<av::Rational>> = Mutex::new(None);
 pub static AUDIO_TIME_BASE: Mutex<Option<av::Rational>> = Mutex::new(None);
@@ -26,15 +71,7 @@ pub static DECODER_WAKEUP: Condvar = Condvar::new();
 
 pub static FFMPEG_END: AtomicBool = AtomicBool::new(false);
 
-pub static VIDEO_DURATION: Mutex<Duration> = Mutex::new(Duration::ZERO);
-
-pub fn playback_progress() -> f64 {
-    let playback_time = played_time_or_zero().as_secs_f64();
-    let video_duration = VIDEO_DURATION.lock().as_secs_f64();
-    playback_time / video_duration
-}
-
-/// (是否为绝对寻址, 偏移量)
+/// (是否为绝对寻址: bool, 偏移量: f64)
 static SEEK_REQUEST: Mutex<Option<(bool, f64)>> = Mutex::new(None);
 
 pub fn seek_request_relative(sec: f64) {
@@ -86,7 +123,7 @@ pub fn decode_main(path: &str) -> Result<()> {
         (None, None, None)
     };
 
-    let (mut audio_decoder, audio_timebase, audio_rate) = if audio_stream_index >= 0 {
+    let (mut audio_decoder, audio_timebase, _audio_rate) = if audio_stream_index >= 0 {
         let stream = ictx
             .stream(audio_stream_index as usize)
             .context("audio stream")?;
@@ -101,7 +138,7 @@ pub fn decode_main(path: &str) -> Result<()> {
         (None, None, None)
     };
 
-    let (mut subtitle_decoder, subtitle_timebase) = if subtitle_stream_index >= 0 {
+    let (mut subtitle_decoder, _subtitle_timebase) = if subtitle_stream_index >= 0 {
         let stream = ictx
             .stream(subtitle_stream_index as usize)
             .context("subtitle stream")?;
@@ -130,10 +167,12 @@ pub fn decode_main(path: &str) -> Result<()> {
 
     FFMPEG_END.store(false, Ordering::SeqCst);
 
-    *VIDEO_DURATION.lock() = Duration::new(
+    let duration = Duration::new(
         ictx.duration() as u64 / AV_TIME_BASE as u64,
         (ictx.duration() as u64 % AV_TIME_BASE as u64 * 1_000_000_000 / AV_TIME_BASE as u64) as u32,
     );
+
+    avsync::reset(duration);
 
     let video_main = std::thread::spawn(video_main);
     let audio_main = std::thread::spawn(audio_main);
@@ -257,7 +296,8 @@ fn do_seek(
 ) -> bool {
     let now = || played_time_or_zero().as_secs_f64();
     let ts = (if abs { off } else { now() + off } * AV_TIME_BASE as f64) as i64;
-    let ret = unsafe { av_seek_frame(ictx.as_mut_ptr(), -1, ts, AVSEEK_FLAG_BACKWARD) };
+    let ts = ts.max(0);
+    let ret = unsafe { av_seek_frame(ictx.as_mut_ptr(), -1, ts, 0) };
 
     // 清除还没处理的音频和视频包
     video_queue.clear();
@@ -269,7 +309,9 @@ fn do_seek(
     let _ = VIDEO_FRAME.lock().take();
     let _ = AUDIO_FRAME.lock().take();
 
-    AUDIO_HINT_SEEKED.store(true, Ordering::SeqCst);
+    audio::hint_seeked();
+    video::hint_seeked();
+    avsync::hint_seeked(Duration::from_secs_f64(ts as f64 / AV_TIME_BASE as f64));
 
     ret >= 0
 }

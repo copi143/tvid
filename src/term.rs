@@ -1,3 +1,4 @@
+use libc::winsize;
 use parking_lot::Mutex;
 use std::io::Write as _;
 use std::panic;
@@ -242,9 +243,21 @@ pub static VIDEO_PADDING: TBLR = TBLR::new();
 
 pub fn updatesize(xvideo: usize, yvideo: usize) -> bool {
     assert!(xvideo > 0 && yvideo > 0, "video size is zero");
-    let Some(winsize) = get_winsize() else {
-        return false;
+    static GET_WINSIZE_SUCCESS: AtomicBool = AtomicBool::new(false);
+    let winsize = if let Some(winsize) = get_winsize() {
+        winsize
+    } else {
+        if GET_WINSIZE_SUCCESS.load(Ordering::SeqCst) {
+            return false;
+        }
+        Winsize {
+            row: 24,
+            col: 80,
+            xpixel: 0,
+            ypixel: 0,
+        }
     };
+    GET_WINSIZE_SUCCESS.store(true, Ordering::SeqCst);
     let (xchars, ychars) = (winsize.col as usize, winsize.row as usize);
     let (xpixels, ypixels) = (winsize.xpixel as usize, winsize.ypixel as usize);
     let (xchars, ychars) = if xchars == 0 || ychars == 0 {
@@ -394,13 +407,14 @@ pub const TERM_DEFAULT_BG: Color = Color::new(35, 39, 46);
 
 pub static TERM_QUIT: AtomicBool = AtomicBool::new(false);
 
+/// 初始化终端时开启的特性：
 /// - 1049: 切换到备用缓冲区
 /// - 25: 隐藏光标
 /// - 1006: 启用 SGR 扩展的鼠标模式
 /// - 1003: 启用所有鼠标移动事件
 /// - 2004: 启用[括号粘贴](https://en.wikipedia.org/wiki/Bracketed-paste)模式
 const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
-/// 见 [`TERM_INIT_SEQ`]
+/// 关闭初始化时开启的特性，见 [`TERM_INIT_SEQ`]
 const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
 
 pub extern "C" fn request_quit() {

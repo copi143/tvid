@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
+use crate::avsync::played_time_or_none;
 use crate::{APP_START_TIME, audio};
 
 pub struct XY {
@@ -564,7 +565,7 @@ impl<T: Send + 'static> JoinAll for Vec<JoinHandle<T>> {
 
 pub fn calc_played_time() -> (Option<Duration>, Duration) {
     static LAST_PLAYED_TIME: Mutex<Option<Duration>> = Mutex::new(None);
-    let played_time = audio::played_time_or_none();
+    let played_time = played_time_or_none();
     let mut lock = LAST_PLAYED_TIME.lock();
     let delta_played_time = lock
         .map(|t1| played_time.map(|t2| t2.saturating_sub(t1)))

@@ -1,20 +1,22 @@
-use parking_lot::{Condvar, Mutex};
+use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+use tokio::sync::Notify;
 
 use crate::statistics::set_output_time;
 use crate::term::TERM_QUIT;
 
 #[cfg(unix)]
-pub fn print(bytes: &[u8]) -> isize {
+pub fn print(bytes: &[u8]) -> Option<usize> {
     use libc::STDOUT_FILENO;
-    unsafe { libc::write(STDOUT_FILENO, bytes.as_ptr() as *const c_void, bytes.len()) }
+    let res = unsafe { libc::write(STDOUT_FILENO, bytes.as_ptr() as *const c_void, bytes.len()) };
+    if res < 0 { None } else { Some(res as usize) }
 }
 
 #[cfg(windows)]
-pub fn print(bytes: &[u8]) -> isize {
+pub fn print(bytes: &[u8]) -> Option<usize> {
     use winapi::shared::minwindef::DWORD;
     use winapi::um::consoleapi::WriteConsoleA;
     use winapi::um::processenv::GetStdHandle;
@@ -29,37 +31,48 @@ pub fn print(bytes: &[u8]) -> isize {
             &mut written,
             std::ptr::null_mut(),
         );
-        if res == 0 { -1 } else { written as isize }
+        if res == 0 {
+            None
+        } else {
+            Some(written as usize)
+        }
     }
 }
 
 static STDOUT_BUF: Mutex<VecDeque<Vec<u8>>> = Mutex::new(VecDeque::new());
-static STDOUT_SIG: Condvar = Condvar::new();
+static STDOUT_SIG: Notify = Notify::const_new();
 
-pub fn output_main() {
+pub async fn output_main() {
     while TERM_QUIT.load(Ordering::SeqCst) == false {
         let buf = {
-            let mut lock = STDOUT_BUF.lock();
-            while lock.len() == 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
-                STDOUT_SIG.wait(&mut lock);
+            while STDOUT_BUF.lock().len() == 0 && TERM_QUIT.load(Ordering::SeqCst) == false {
+                STDOUT_SIG.notified().await;
             }
             if TERM_QUIT.load(Ordering::SeqCst) {
                 break;
             }
-            lock.pop_front().unwrap()
+            STDOUT_BUF.lock().pop_front().unwrap()
         };
 
+        if buf.len() == 0 {
+            set_output_time(Duration::ZERO);
+            continue;
+        }
+
         let instant = Instant::now();
+        let mut err = false;
         let mut pos = 0;
-        while pos < buf.len() {
-            let n = print(&buf[pos..]);
-            if n <= 0 {
-                std::thread::sleep(Duration::from_millis(50));
-                break;
+        while !err && pos < buf.len() {
+            if let Some(n) = print(&buf[pos..]) {
+                pos += n;
+            } else {
+                err = true;
             }
-            pos += n as usize;
         }
         set_output_time(instant.elapsed());
+        if err {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 }
 

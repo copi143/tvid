@@ -67,12 +67,12 @@ fn try_getc() -> Result<Option<u8>> {
     }
 }
 
-fn getc_timeout(timeout: Duration) -> Result<Option<u8>> {
+async fn getc_timeout(timeout: Duration) -> Result<Option<u8>> {
     let start = std::time::Instant::now();
     while start.elapsed() < timeout && STDIN_QUIT.load(Ordering::SeqCst) == false {
         match try_getc()? {
             Some(c) => return Ok(Some(c)),
-            None => std::thread::sleep(Duration::from_millis(1)),
+            None => tokio::time::sleep(Duration::from_millis(1)).await,
         }
     }
     if STDIN_QUIT.load(Ordering::SeqCst) {
@@ -81,11 +81,11 @@ fn getc_timeout(timeout: Duration) -> Result<Option<u8>> {
     Ok(None)
 }
 
-fn getc() -> Result<u8> {
+async fn getc() -> Result<u8> {
     while STDIN_QUIT.load(Ordering::SeqCst) == false {
         match try_getc()? {
             Some(c) => return Ok(c),
-            None => std::thread::sleep(Duration::from_millis(10)),
+            None => tokio::time::sleep(Duration::from_millis(10)).await,
         }
     }
     Err(anyhow::anyhow!("stdin quit"))
@@ -426,19 +426,19 @@ pub fn call_mouse_callbacks(m: Mouse) {
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 // @ 输入处理 @
 
-fn input_parsenum(mut c: u8, end: u8) -> Result<i64> {
+async fn input_parsenum(mut c: u8, end: u8) -> Result<i64> {
     let mut num = 0i64;
     while c != end {
         if c < b'0' || c > b'9' {
             return Err(anyhow::anyhow!("Invalid number: {}", c as char));
         }
         num = num * 10 + (c - b'0') as i64;
-        c = getc()?;
+        c = getc().await?;
     }
     Ok(num)
 }
 
-fn input_escape_square_number(num: i64) -> Result<()> {
+async fn input_escape_square_number(num: i64) -> Result<()> {
     match num {
         1 => call_keypress_callbacks(Key::Home),
         2 => call_keypress_callbacks(Key::Insert),
@@ -471,7 +471,7 @@ fn input_escape_square_number(num: i64) -> Result<()> {
         200 => {
             let mut data = Vec::new();
             while !data.ends_with(b"\x1b[201~") {
-                data.push(getc()?);
+                data.push(getc().await?);
             }
             let data = &data[..data.len() - 6];
             send_warn!("Unhandled paste data: {data:?}");
@@ -493,11 +493,11 @@ fn input_escape_square_number(num: i64) -> Result<()> {
 /// - `a`: alt 键是否按下
 /// - `s`: shift 键是否按下
 /// - `bb`: 按钮编号
-fn input_escape_square_angle() -> Result<()> {
+async fn input_escape_square_angle() -> Result<()> {
     let (params, mouseup) = {
         let mut s = String::new();
         let mouseup = loop {
-            match getc()? {
+            match getc().await? {
                 c if (b'0' <= c && c <= b'9') || c == b';' => s.push(c as char),
                 b'M' => break false,
                 b'm' => break true,
@@ -555,10 +555,10 @@ fn input_escape_square_angle() -> Result<()> {
 }
 
 #[allow(non_snake_case)]
-fn input_escape_square_M() -> Result<()> {
-    let b1 = getc()? as i32;
-    let b2 = getc()? as i32 - 32;
-    let b3 = getc()? as i32 - 32;
+async fn input_escape_square_M() -> Result<()> {
+    let b1 = getc().await? as i32;
+    let b2 = getc().await? as i32 - 32;
+    let b3 = getc().await? as i32 - 32;
     if b2 < 0 || b3 < 0 {
         send_error!("Invalid mouse sequence: ESC [ M {} {} {}", b1, b2, b3);
         return Ok(());
@@ -613,8 +613,8 @@ fn input_escape_square_M() -> Result<()> {
     Ok(())
 }
 
-fn input_escape_square() -> Result<()> {
-    match getc()? {
+async fn input_escape_square() -> Result<()> {
+    match getc().await? {
         b'A' => call_keypress_callbacks(Key::Up),
         b'B' => call_keypress_callbacks(Key::Down),
         b'C' => call_keypress_callbacks(Key::Right),
@@ -622,14 +622,14 @@ fn input_escape_square() -> Result<()> {
         b'H' => call_keypress_callbacks(Key::Home),
         b'F' => call_keypress_callbacks(Key::End),
         c if b'0' <= c && c <= b'9' => {
-            if let Ok(num) = input_parsenum(c, b'~') {
-                input_escape_square_number(num)?;
+            if let Ok(num) = input_parsenum(c, b'~').await {
+                input_escape_square_number(num).await?;
             } else {
                 send_error!("Invalid escape sequence: ESC [ <number> ~ (number parsing failed)");
             }
         }
-        b'<' => input_escape_square_angle()?,
-        b'M' => input_escape_square_M()?,
+        b'<' => input_escape_square_angle().await?,
+        b'M' => input_escape_square_M().await?,
         c => {
             send_error!("Unknown escape sequence: ESC [ {} ({})", c as char, c);
             return Ok(());
@@ -638,8 +638,8 @@ fn input_escape_square() -> Result<()> {
     Ok(())
 }
 
-fn input_escape() -> Result<()> {
-    let Some(c) = getc_timeout(Duration::from_millis(20))? else {
+async fn input_escape() -> Result<()> {
+    let Some(c) = getc_timeout(Duration::from_millis(20)).await? else {
         call_keypress_callbacks(Key::Escape);
         return Ok(());
     };
@@ -656,7 +656,7 @@ fn input_escape() -> Result<()> {
             let c = (c as char).to_ascii_lowercase();
             call_keypress_callbacks(Key::AltShift(c));
         }
-        b'[' => input_escape_square()?,
+        b'[' => input_escape_square().await?,
         c => {
             send_error!("Unknown escape sequence: ESC {} ({})", c as char, c);
         }
@@ -664,9 +664,9 @@ fn input_escape() -> Result<()> {
     Ok(())
 }
 
-fn input() -> Result<()> {
-    match getc()? {
-        0x1b => input_escape()?,
+async fn input() -> Result<()> {
+    match getc().await? {
+        0x1b => input_escape().await?,
         b' ' => call_keypress_callbacks(Key::Normal(' ')),
         0x7f => call_keypress_callbacks(Key::Backspace),
         b'\n' | b'\r' => {
@@ -691,9 +691,9 @@ fn input() -> Result<()> {
     Ok(())
 }
 
-pub fn input_main() {
+pub async fn input_main() {
     while TERM_QUIT.load(Ordering::SeqCst) == false {
-        if input().is_err() {
+        if input().await.is_err() {
             break;
         }
     }

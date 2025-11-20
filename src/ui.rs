@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use unicode_width::UnicodeWidthChar;
 
-use crate::ffmpeg::{VIDEO_DURATION, playback_progress};
+use crate::avsync;
 use crate::logging::{MessageLevel, get_messages};
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
 use crate::statistics::get_statistics;
@@ -323,7 +323,7 @@ static mut PROGRESSBAR_HEIGHT: f32 = 16.0;
 
 fn calc_bar_size() -> (usize, usize) {
     let term_font_height = TERM_PIXELS.y() as f32 / TERM_SIZE.y() as f32;
-    let bar_w = TERM_SIZE.x() as f64 * playback_progress() + 0.5;
+    let bar_w = TERM_SIZE.x() as f64 * avsync::playback_progress() + 0.5;
     let bar_h = unsafe { PROGRESSBAR_HEIGHT } / term_font_height * 2.0;
     let bar_w = (bar_w as usize).clamp(0, TERM_SIZE.x());
     let bar_h = (bar_h as usize).clamp(1, TERM_SIZE.y() * 2);
@@ -362,7 +362,7 @@ fn register_input_callbacks_progressbar() {
         if unsafe { DRAGGING_PROGRESSBAR } {
             if m.left {
                 let p = m.pos.0 as f64 / TERM_SIZE.x() as f64;
-                ffmpeg::seek_request_absolute(p * VIDEO_DURATION.lock().as_secs_f64());
+                ffmpeg::seek_request_absolute(p * avsync::total_duration().as_secs_f64());
             } else {
                 unsafe { DRAGGING_PROGRESSBAR = false };
             }
@@ -373,7 +373,7 @@ fn register_input_callbacks_progressbar() {
             }
             unsafe { DRAGGING_PROGRESSBAR = true };
             let p = m.pos.0 as f64 / TERM_SIZE.x() as f64;
-            ffmpeg::seek_request_absolute(p * VIDEO_DURATION.lock().as_secs_f64());
+            ffmpeg::seek_request_absolute(p * avsync::total_duration().as_secs_f64());
             true
         } else {
             false
@@ -431,7 +431,7 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         return;
     }
 
-    let video_time_str = if let Some(t) = wrap.played_time {
+    let playing_time_str = if let Some(t) = wrap.played_time {
         format!(
             "{:02}h {:02}m {:02}s {:03}ms",
             t.as_secs() / 3600,
@@ -442,6 +442,20 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
     } else {
         "N/A".to_string()
     };
+
+    let audio_offset_str = format!(
+        "{:+.3} ms",
+        (avsync::audio_played_time_or_zero().as_secs_f64()
+            - avsync::played_time_or_zero().as_secs_f64())
+            * 1000.0
+    );
+
+    let video_offset_str = format!(
+        "{:+.3} ms",
+        (avsync::video_played_time_or_zero().as_secs_f64()
+            - avsync::played_time_or_zero().as_secs_f64())
+            * 1000.0
+    );
 
     let app_time_str = {
         let t = wrap.app_time;
@@ -454,7 +468,7 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         )
     };
 
-    let playing_or_paused_str = if crate::PAUSE.load(Ordering::SeqCst) {
+    let playing_or_paused_str = if avsync::is_paused() {
         "Paused"
     } else {
         "Playing"
@@ -471,7 +485,10 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
         );
         putln!(wrap, "{}: {}", playing_or_paused_str, wrap.playing);
-        putln!(wrap, "Video Time: {}", video_time_str);
+        putln!(
+            wrap,
+            "Video Time: {playing_time_str} (a: {audio_offset_str}, v: {video_offset_str})",
+        );
         putln!(wrap, "App Time: {}", app_time_str);
         putln!(
             wrap,
@@ -500,7 +517,10 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
         );
         putunifont!(wrap, "{}: {}", playing_or_paused_str, wrap.playing);
-        putunifont!(wrap, "Video Time: {}", video_time_str);
+        putunifont!(
+            wrap,
+            "Video Time: {playing_time_str} (a: {audio_offset_str}, v: {video_offset_str})",
+        );
         putunifont!(wrap, "App Time: {}", app_time_str);
         putunifont!(
             wrap,
@@ -593,6 +613,8 @@ fn render_messages(wrap: &mut RenderWrapper) {
         return; // 防炸
     }
 
+    let width = (wrap.cells_width * 4 / 10).max(50);
+
     for (i, message) in get_messages().queue.iter().rev().enumerate() {
         let y = wrap.cells_height as isize - i as isize - 1;
         if y < 0 {
@@ -605,8 +627,8 @@ fn render_messages(wrap: &mut RenderWrapper) {
             MessageLevel::Error => Color::new(237, 21, 21),
             MessageLevel::Fatal => Color::new(180, 0, 0),
         };
-        mask(wrap, 0, y, 50, 1, None, color, 0.5);
-        textbox(0, y, 50, 1, false);
+        mask(wrap, 0, y, width, 1, None, color, 0.5);
+        textbox(0, y, width, 1, false);
         textbox_default_color(Some(TERM_DEFAULT_BG), None);
         putln(wrap, &message.msg, message.fg, message.bg);
     }
