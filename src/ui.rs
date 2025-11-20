@@ -300,6 +300,7 @@ macro_rules! putunifont {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+/// 是否已经开始渲染第一帧，防止事件在此之前触发
 static FIRST_RENDERED: AtomicBool = AtomicBool::new(false);
 
 pub fn render_ui(wrap: &mut RenderWrapper) {
@@ -444,14 +445,14 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
     };
 
     let audio_offset_str = format!(
-        "{:+.3} ms",
+        "{:+07.3}ms",
         (avsync::audio_played_time_or_zero().as_secs_f64()
             - avsync::played_time_or_zero().as_secs_f64())
             * 1000.0
     );
 
     let video_offset_str = format!(
-        "{:+.3} ms",
+        "{:+07.3}ms",
         (avsync::video_played_time_or_zero().as_secs_f64()
             - avsync::played_time_or_zero().as_secs_f64())
             * 1000.0

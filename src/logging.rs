@@ -124,6 +124,7 @@ pub fn send_error(msg: &str, fg: Option<Color>, bg: Option<Color>) {
 
 pub fn send_fatal(msg: &str, fg: Option<Color>, bg: Option<Color>) -> ! {
     send_message(MessageLevel::Fatal, msg, fg, bg);
+    term::request_quit();
     term::quit();
 }
 

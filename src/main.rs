@@ -200,11 +200,22 @@ fn main() -> Result<()> {
     let input_main = TOKIO_RUNTIME.spawn(stdin::input_main());
     let output_main = TOKIO_RUNTIME.spawn(stdout::output_main());
 
+    let mut continuous_failure_count = 0;
     while let Some(path) = { PLAYLIST.lock().next().cloned() } {
-        ffmpeg::decode_main(&path).unwrap_or_else(|err| {
+        let success = ffmpeg::decode_main(&path).unwrap_or_else(|err| {
             send_error!("ffmpeg decode error: {}", err);
+            false
         });
+        if success {
+            continuous_failure_count = 0;
+        } else {
+            continuous_failure_count += 1;
+        }
         if TERM_QUIT.load(Ordering::SeqCst) {
+            break;
+        }
+        if continuous_failure_count >= PLAYLIST.lock().len() {
+            send_error!("Too many continuous failures, exiting.");
             break;
         }
     }

@@ -11,7 +11,7 @@ use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use crate::ffmpeg::{AUDIO_TIME_BASE, DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, FFMPEG_END};
+use crate::ffmpeg::{AUDIO_TIME_BASE, DECODER_WAKEUP, DECODER_WAKEUP_MUTEX};
 use crate::term::TERM_QUIT;
 use crate::{avsync, ffmpeg};
 
@@ -240,7 +240,7 @@ pub fn audio_main() {
         let frame = {
             let mut lock = AUDIO_FRAME.lock();
             while lock.is_none() && TERM_QUIT.load(Ordering::SeqCst) == false {
-                if FFMPEG_END.load(Ordering::SeqCst) {
+                if avsync::decode_ended() {
                     break;
                 }
                 AUDIO_FRAME_SIG.wait_for(&mut lock, Duration::from_millis(100));

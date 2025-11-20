@@ -8,7 +8,7 @@ use av::{Packet, Subtitle};
 use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::audio::{self, AUDIO_FRAME, AUDIO_FRAME_SIG, audio_main};
@@ -66,17 +66,22 @@ pub fn init() {
 pub static VIDEO_TIME_BASE: Mutex<Option<av::Rational>> = Mutex::new(None);
 pub static AUDIO_TIME_BASE: Mutex<Option<av::Rational>> = Mutex::new(None);
 
+/// 唤醒解码线程的条件变量和互斥锁
+/// - bool 表示是否有新的任务需要处理
 pub static DECODER_WAKEUP_MUTEX: Mutex<bool> = Mutex::new(false);
 pub static DECODER_WAKEUP: Condvar = Condvar::new();
 
-pub static FFMPEG_END: AtomicBool = AtomicBool::new(false);
-
-/// (是否为绝对寻址: bool, 偏移量: f64)
+/// 进度跳转请求
+/// - (是否为绝对寻址: bool, 偏移量: f64)
 static SEEK_REQUEST: Mutex<Option<(bool, f64)>> = Mutex::new(None);
 
 pub fn seek_request_relative(sec: f64) {
     let mut lock = SEEK_REQUEST.lock();
-    lock.replace((false, sec));
+    if let Some((existing_abs, existing_off)) = *lock {
+        lock.replace((existing_abs, existing_off + sec));
+    } else {
+        lock.replace((false, sec));
+    }
     *DECODER_WAKEUP_MUTEX.lock() = true;
     DECODER_WAKEUP.notify_one();
 }
@@ -88,8 +93,11 @@ pub fn seek_request_absolute(sec: f64) {
     DECODER_WAKEUP.notify_one();
 }
 
-pub fn decode_main(path: &str) -> Result<()> {
-    let mut ictx = av::format::input(path).context("could not open input file")?;
+pub fn decode_main(path: &str) -> Result<bool> {
+    let Ok(mut ictx) = av::format::input(path) else {
+        send_error!("Failed to open input file: {}", path);
+        return Ok(false);
+    };
 
     let video_stream_index = ictx
         .streams()
@@ -105,13 +113,14 @@ pub fn decode_main(path: &str) -> Result<()> {
         .map_or(-1, |s| s.index() as isize);
 
     if TERM_QUIT.load(Ordering::SeqCst) != false {
-        return Ok(());
+        return Ok(true);
     }
 
     let (mut video_decoder, video_timebase, video_rate) = if video_stream_index >= 0 {
-        let stream = ictx
-            .stream(video_stream_index as usize)
-            .context("video stream")?;
+        let Some(stream) = ictx.stream(video_stream_index as usize) else {
+            send_error!("video stream index is valid, so stream must exist");
+            send_fatal!("What happened with FFmpeg?");
+        };
         let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context("video decoder")?;
         let codec = codec_ctx.decoder().video().context("video decoder")?;
         (
@@ -124,9 +133,10 @@ pub fn decode_main(path: &str) -> Result<()> {
     };
 
     let (mut audio_decoder, audio_timebase, _audio_rate) = if audio_stream_index >= 0 {
-        let stream = ictx
-            .stream(audio_stream_index as usize)
-            .context("audio stream")?;
+        let Some(stream) = ictx.stream(audio_stream_index as usize) else {
+            send_error!("audio stream index is valid, so stream must exist");
+            send_fatal!("What happened with FFmpeg?");
+        };
         let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context("audio decoder")?;
         let codec = codec_ctx.decoder().audio().context("audio decoder")?;
         (
@@ -161,11 +171,15 @@ pub fn decode_main(path: &str) -> Result<()> {
         AUDIO_TIME_BASE.lock().replace(audio_timebase);
     }
 
-    if TERM_QUIT.load(Ordering::SeqCst) != false {
-        return Ok(());
+    if video_decoder.is_none() && audio_decoder.is_none() {
+        send_error!("No audio or video stream found");
+        send_error!("What the fuck is this file?");
+        return Ok(false);
     }
 
-    FFMPEG_END.store(false, Ordering::SeqCst);
+    if TERM_QUIT.load(Ordering::SeqCst) != false {
+        return Ok(true);
+    }
 
     let duration = Duration::new(
         ictx.duration() as u64 / AV_TIME_BASE as u64,
@@ -180,7 +194,9 @@ pub fn decode_main(path: &str) -> Result<()> {
     let mut video_queue = VecDeque::new();
     let mut audio_queue = VecDeque::new();
 
-    while !(TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst)) {
+    avsync::hint_seeked(Duration::ZERO);
+
+    while !(TERM_QUIT.load(Ordering::SeqCst) || avsync::decode_ended()) {
         if let Some((abs, off)) = SEEK_REQUEST.lock().take() {
             if do_seek(&mut ictx, abs, off, &mut video_queue, &mut audio_queue) {
                 continue;
@@ -205,7 +221,7 @@ pub fn decode_main(path: &str) -> Result<()> {
             }
         }
 
-        if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
+        if TERM_QUIT.load(Ordering::SeqCst) || avsync::decode_ended() {
             break;
         }
 
@@ -249,7 +265,7 @@ pub fn decode_main(path: &str) -> Result<()> {
         }
 
         while audio_queue.len() > 0 && video_queue.len() > 0 {
-            if TERM_QUIT.load(Ordering::SeqCst) || FFMPEG_END.load(Ordering::SeqCst) {
+            if TERM_QUIT.load(Ordering::SeqCst) || avsync::decode_ended() {
                 break;
             }
 
@@ -284,7 +300,7 @@ pub fn decode_main(path: &str) -> Result<()> {
     // 清除字幕
     subtitle::clear();
 
-    Ok(())
+    Ok(true)
 }
 
 fn do_seek(
@@ -379,7 +395,7 @@ fn decode_audio(
 /// 通知所有解码相关的线程退出
 pub fn notify_quit() {
     // 标记 ffmpeg 处理结束，以便音频和视频线程可以退出
-    FFMPEG_END.store(true, Ordering::SeqCst);
+    avsync::end_decode();
 
     // 唤醒所有等待的线程
     DECODER_WAKEUP.notify_one();

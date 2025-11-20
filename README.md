@@ -7,7 +7,7 @@
 ## Features (TODO)
 
 - [x] Play various video and audio formats via FFmpeg
-- [ ] Terminal-based UI for playback control
+- [x] Terminal-based UI for playback control
 - [x] Subtitle support
 - [ ] Playlist management
 - [ ] Audio and video stream selection
@@ -15,7 +15,7 @@
 
 ## Requirements
 
-- Rust (latest stable version recommended)
+- Rust
 - FFmpeg libraries installed on your system
 
 ## Build & Run

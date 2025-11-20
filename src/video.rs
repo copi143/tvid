@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::avsync::{self, played_time_or_zero};
-use crate::ffmpeg::{DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, FFMPEG_END, VIDEO_TIME_BASE};
+use crate::ffmpeg::{DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, VIDEO_TIME_BASE};
 use crate::statistics::increment_video_skipped_frames;
 use crate::term;
 use crate::term::{RenderWrapper, TERM_DEFAULT_BG, TERM_DEFAULT_FG};
@@ -38,7 +38,7 @@ pub fn video_main() {
         let frame = {
             let mut lock = VIDEO_FRAME.lock();
             while lock.is_none() && TERM_QUIT.load(Ordering::SeqCst) == false {
-                if FFMPEG_END.load(Ordering::SeqCst) {
+                if avsync::decode_ended() {
                     break;
                 }
                 VIDEO_FRAME_SIG.wait_for(&mut lock, Duration::from_millis(100));
@@ -108,24 +108,33 @@ pub fn video_main() {
             )
         };
 
+        // 使用 if 防止卡死
+        if !avsync::is_paused() && frametime > played_time_or_zero() + Duration::from_millis(5) {
+            let remaining = frametime - played_time_or_zero();
+            let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
+            std::thread::sleep(remaining.min(max));
+        }
+
         let mut render_start = Instant::now();
         term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
         avsync::hint_video_played_time(frametime);
 
-        while frametime > played_time_or_zero() + Duration::from_millis(5) {
-            if avsync::is_paused() {
-                let remaining = Duration::from_millis(33).saturating_sub(render_start.elapsed());
-                std::thread::sleep(remaining);
-                render_start = Instant::now();
-                term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
-                if TERM_QUIT.load(Ordering::SeqCst) {
-                    return;
-                }
-            } else {
-                let remaining = frametime - played_time_or_zero();
-                let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
-                std::thread::sleep(remaining.min(max));
-                break;
+        // 使用 if 防止卡死
+        if !avsync::is_paused() && frametime > played_time_or_zero() + Duration::from_millis(5) {
+            let remaining = frametime - played_time_or_zero();
+            let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
+            std::thread::sleep(remaining.min(max));
+            render_start = Instant::now();
+            term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
+        }
+
+        while avsync::is_paused() {
+            let remaining = Duration::from_millis(33).saturating_sub(render_start.elapsed());
+            std::thread::sleep(remaining);
+            render_start = Instant::now();
+            term::render(colors, scaled.stride(0) / std::mem::size_of::<Color>());
+            if TERM_QUIT.load(Ordering::SeqCst) {
+                return;
             }
         }
     }

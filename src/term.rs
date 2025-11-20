@@ -243,13 +243,9 @@ pub static VIDEO_PADDING: TBLR = TBLR::new();
 
 pub fn updatesize(xvideo: usize, yvideo: usize) -> bool {
     assert!(xvideo > 0 && yvideo > 0, "video size is zero");
-    static GET_WINSIZE_SUCCESS: AtomicBool = AtomicBool::new(false);
     let winsize = if let Some(winsize) = get_winsize() {
         winsize
     } else {
-        if GET_WINSIZE_SUCCESS.load(Ordering::SeqCst) {
-            return false;
-        }
         Winsize {
             row: 24,
             col: 80,
@@ -257,7 +253,7 @@ pub fn updatesize(xvideo: usize, yvideo: usize) -> bool {
             ypixel: 0,
         }
     };
-    GET_WINSIZE_SUCCESS.store(true, Ordering::SeqCst);
+
     let (xchars, ychars) = (winsize.col as usize, winsize.row as usize);
     let (xpixels, ypixels) = (winsize.xpixel as usize, winsize.ypixel as usize);
     let (xchars, ychars) = if xchars == 0 || ychars == 0 {
@@ -533,8 +529,7 @@ pub fn setup_panic_handler() {
             .location()
             .map(|l| format!("{}:{}", l.file(), l.line()))
             .unwrap_or_default();
-        send_error!("[panic] {} at {}", msg, location);
-        quit();
+        send_fatal!("[panic] {} at {}", msg, location);
     }));
 }
 
