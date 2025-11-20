@@ -43,17 +43,22 @@ struct AVSyncState {
     /// 解码是否应该结束（无论外边或内部导致）
     decode_end: bool,
 
+    has_audio: bool,
+    has_video: bool,
+
     sync: Option<InnerState>,
     audio: Option<InnerState>,
     video: Option<InnerState>,
 }
 
 impl AVSyncState {
-    const fn new(duration: Duration) -> Self {
+    const fn new(duration: Duration, has_audio: bool, has_video: bool) -> Self {
         Self {
             duration,
             paused: false,
             decode_end: false,
+            has_audio,
+            has_video,
             sync: None,
             audio: None,
             video: None,
@@ -140,11 +145,11 @@ impl AVSyncState {
     }
 }
 
-static STATE: Mutex<AVSyncState> = Mutex::new(AVSyncState::new(Duration::ZERO));
+static STATE: Mutex<AVSyncState> = Mutex::new(AVSyncState::new(Duration::ZERO, false, false));
 
 /// 重置 AV 同步状态
-pub fn reset(duration: Duration) {
-    *STATE.lock() = AVSyncState::new(duration);
+pub fn reset(duration: Duration, has_audio: bool, has_video: bool) {
+    *STATE.lock() = AVSyncState::new(duration, has_audio, has_video);
 }
 
 pub fn playback_progress() -> f64 {
@@ -177,6 +182,14 @@ pub fn end_decode() {
 
 pub fn decode_ended() -> bool {
     STATE.lock().decode_end
+}
+
+pub fn has_audio() -> bool {
+    STATE.lock().has_audio
+}
+
+pub fn has_video() -> bool {
+    STATE.lock().has_video
 }
 
 macro_rules! played_time {

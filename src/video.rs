@@ -73,9 +73,9 @@ pub fn video_main() {
             continue;
         }
 
-        loop {
-            updatesize(frame.width() as usize, frame.height() as usize);
+        render::VIDEO_SIZE_CACHE.set(frame.width() as usize, frame.height() as usize);
 
+        loop {
             let ss = frame.width() != scaler_src_width || frame.height() != scaler_src_height;
             let ts = VIDEO_PIXELS.get() != (scaler_dst_width as usize, scaler_dst_height as usize);
             if ss || ts || Some(frame.format()) != scaler_format {
@@ -137,6 +137,7 @@ pub fn video_main() {
                     break;
                 }
                 if TERM_QUIT.load(Ordering::SeqCst) {
+                    render::VIDEO_SIZE_CACHE.set(0, 0);
                     return;
                 }
             }
@@ -147,6 +148,8 @@ pub fn video_main() {
             break;
         }
     }
+
+    render::VIDEO_SIZE_CACHE.set(0, 0);
 }
 
 pub fn render_frame(wrap: &mut RenderWrapper) {

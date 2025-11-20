@@ -85,7 +85,26 @@ impl AudioFrameWrapper {
     fn consume(&mut self, n: usize) {
         self.cons += n;
     }
+
+    fn calc_volume(&self) -> f32 {
+        let data = self.af.data(0);
+        let nb_samples = self.af.samples();
+        let channels = self.af.channel_layout().channels() as usize;
+        let len = nb_samples * channels;
+        let slice = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, len) };
+        let mut max = 0.0f32;
+        for &v in slice.iter() {
+            let av = v.abs();
+            if av > max {
+                max = av;
+            }
+        }
+        max
+    }
 }
+
+pub static AUDIO_VOLUME_STATISTICS: Mutex<VecDeque<f32>> = Mutex::new(VecDeque::new());
+pub const AUDIO_VOLUME_STATISTICS_LEN: usize = 128;
 
 static AUDIO_BUFFER: Mutex<VecDeque<AudioFrameWrapper>> = Mutex::new(VecDeque::new());
 static AUDIO_CONSUMED: Condvar = Condvar::new();
@@ -114,6 +133,7 @@ macro_rules! data_callback {
             let mut i = 0;
             let mut buf = AUDIO_BUFFER.lock();
             while let Some(mut wrap) = buf.pop_front() {
+                let wrap_ptr = &mut wrap as *mut AudioFrameWrapper;
                 if let Some(d) = wrap.timestamp() {
                     dur = Some(d);
                     add = None;
@@ -173,6 +193,12 @@ macro_rules! data_callback {
                 if i == data.len() {
                     break;
                 }
+                let vol = unsafe { (*wrap_ptr).calc_volume() };
+                let mut stat = AUDIO_VOLUME_STATISTICS.lock();
+                while stat.len() >= AUDIO_VOLUME_STATISTICS_LEN {
+                    stat.pop_front();
+                }
+                stat.push_back(vol);
             }
             assert!(i <= data.len() && i % channels as usize == 0);
             AUDIO_BUFFER_LEN.fetch_sub(i / channels as usize, Ordering::SeqCst);

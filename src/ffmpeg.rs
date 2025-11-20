@@ -186,7 +186,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
         (ictx.duration() as u64 % AV_TIME_BASE as u64 * 1_000_000_000 / AV_TIME_BASE as u64) as u32,
     );
 
-    avsync::reset(duration);
+    avsync::reset(duration, audio_decoder.is_some(), video_decoder.is_some());
 
     let video_main = if video_stream_index >= 0 {
         Some(std::thread::spawn(video_main))

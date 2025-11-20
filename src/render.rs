@@ -7,12 +7,13 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use unicode_width::UnicodeWidthChar;
 
+use crate::audio::{AUDIO_VOLUME_STATISTICS, AUDIO_VOLUME_STATISTICS_LEN};
 use crate::playlist::PLAYLIST;
 use crate::stdout::{pend_print, pending_frames, remove_pending_frames};
 use crate::term::Winsize;
 use crate::term::{self, TERM_QUIT};
-use crate::util::*;
 use crate::{TOKIO_RUNTIME, statistics};
+use crate::{avsync, util::*};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
@@ -326,6 +327,8 @@ static VIDEO_FRAME: Mutex<Option<VideoFrame>> = Mutex::new(None);
 static VIDEO_FRAME_COND: Condvar = Condvar::new();
 static VIDEO_FRAME_REQUEST: Condvar = Condvar::new();
 
+pub static VIDEO_SIZE_CACHE: XY = XY::new();
+
 pub fn send_frame(frame: VideoFrame) {
     let mut lock = VIDEO_FRAME.lock();
     lock.replace(frame);
@@ -339,12 +342,10 @@ pub fn wait_frame_request_for(duration: Duration) -> bool {
 }
 
 pub fn render_main() {
-    updatesize(0, 0);
-
     let mut empty_frame = Vec::new();
     let mut now_frame = None;
     while TERM_QUIT.load(Ordering::SeqCst) == false {
-        updatesize(0, 0);
+        updatesize(VIDEO_SIZE_CACHE.x(), VIDEO_SIZE_CACHE.y());
 
         let new_size = VIDEO_PIXELS.x() * VIDEO_PIXELS.y();
         if empty_frame.len() != new_size {
@@ -373,9 +374,32 @@ pub fn render_main() {
                 )
             };
             render(colors, frame.stride(0) / std::mem::size_of::<Color>())
+        } else if !avsync::has_video() {
+            let mut stat = AUDIO_VOLUME_STATISTICS.lock();
+            while stat.len() < AUDIO_VOLUME_STATISTICS_LEN {
+                stat.push_front(0.0);
+            }
+            let (w, h) = VIDEO_PIXELS.get();
+            for x in 0..w {
+                let i0 = x as f32 / w as f32 * stat.len() as f32;
+                let i1 = (i0.floor() as usize).clamp(0, stat.len() - 1);
+                let i2 = (i0.ceil() as usize).clamp(0, stat.len() - 1);
+                let k = i0 - i0.floor();
+                let vol = (stat[i1] * (1.0 - k) + stat[i2] * k) / 2.0;
+                let filled = (vol * h as f32 * 0.8).round().clamp(0.0, h as f32) as usize;
+                for y in (h - filled) / 2..(h + filled) / 2 {
+                    let idx = y * w + x;
+                    empty_frame[idx] = Color::new(255, 255, 255);
+                }
+            }
+            render(&empty_frame, VIDEO_PIXELS.x())
         } else {
             render(&empty_frame, VIDEO_PIXELS.x())
         });
+
+        if now_frame.is_none() && !avsync::has_video() {
+            empty_frame.fill(Color::new(0, 0, 0));
+        }
 
         let remaining = Duration::from_millis(33).saturating_sub(render_start.elapsed());
         let mut lock = VIDEO_FRAME.lock();
