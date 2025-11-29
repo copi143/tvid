@@ -37,3 +37,19 @@ fn image_to_sixel(image: &[Color]) -> Vec<u8> {
     result.extend_from_slice(b"\x1b\\");
     result
 }
+
+// TODO
+fn test() {
+    // stdout::print(b"\x1bPq");
+    // stdout::print(b"#0;2;0;0;0#1;2;100;100;0#2;2;0;100;0");
+    // stdout::print(b"#1~~@@vv@@~~@@~~$");
+    // stdout::print(b"#2??}}GG}}??}}??-");
+    // stdout::print(b"#1!14@-");
+    // stdout::print(b"#0;2;0;0;0#1;2;100;100;100#2;2;0;0;100");
+    // stdout::print(b"#1~~@@vv@@~~@@~~$");
+    // stdout::print(b"#2??}}GG}}??}}??-");
+    // stdout::print(b"#1!14@-");
+    // stdout::print(b"\x1b\\");
+
+    // stdout::print(b"\x1bPq#0;2;100;100;100#1;2;0;100;0#1~\x1b\\");
+}

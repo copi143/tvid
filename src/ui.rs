@@ -8,11 +8,12 @@ use unicode_width::UnicodeWidthChar;
 use crate::avsync;
 use crate::logging::{MessageLevel, get_messages};
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
-use crate::render::{RenderWrapper, TERM_PIXELS, TERM_SIZE};
+use crate::render::{COLOR_MODE, RenderWrapper, TERM_PIXELS, TERM_SIZE};
 use crate::statistics::get_statistics;
 use crate::stdin::{self, Key, MouseAction};
 use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
+use crate::video::CHROMA_KEY_COLOR;
 use crate::{ffmpeg, term};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -442,22 +443,30 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             t.subsec_millis()
         )
     } else {
-        "N/A".to_string()
+        "       N/A       ".to_string()
     };
 
-    let audio_offset_str = format!(
-        "{:+07.3}ms",
-        (avsync::audio_played_time_or_zero().as_secs_f64()
-            - avsync::played_time_or_zero().as_secs_f64())
-            * 1000.0
-    );
+    let audio_offset_str = if avsync::has_audio() {
+        format!(
+            "{:+07.3}ms",
+            (avsync::audio_played_time_or_zero().as_secs_f64()
+                - avsync::played_time_or_zero().as_secs_f64())
+                * 1000.0
+        )
+    } else {
+        "   N/A   ".to_string()
+    };
 
-    let video_offset_str = format!(
-        "{:+07.3}ms",
-        (avsync::video_played_time_or_zero().as_secs_f64()
-            - avsync::played_time_or_zero().as_secs_f64())
-            * 1000.0
-    );
+    let video_offset_str = if avsync::has_video() {
+        format!(
+            "{:+07.3}ms",
+            (avsync::video_played_time_or_zero().as_secs_f64()
+                - avsync::played_time_or_zero().as_secs_f64())
+                * 1000.0
+        )
+    } else {
+        "   N/A   ".to_string()
+    };
 
     let app_time_str = {
         let t = wrap.app_time;
@@ -512,6 +521,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Video Skipped Frames: {}",
             statistics.video_skipped_frames,
         );
+        putln!(wrap, "Color Mode: {:?}", *COLOR_MODE.lock());
+        putln!(wrap, "Chroma Mode: {:?}", *CHROMA_MODE.lock());
     } else {
         putunifont!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
         putunifont!(
@@ -544,6 +555,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Video Skipped Frames: {}",
             statistics.video_skipped_frames,
         );
+        putunifont!(wrap, "Color Mode: {:?}", *COLOR_MODE.lock());
+        putunifont!(wrap, "Chroma Mode: {:?}", *CHROMA_MODE.lock());
     }
 }
 
@@ -622,14 +635,7 @@ fn render_messages(wrap: &mut RenderWrapper) {
         if y < 0 {
             continue;
         }
-        let color = match message.lv {
-            MessageLevel::Debug => Color::new(150, 150, 150),
-            MessageLevel::Info => Color::new(21, 137, 238),
-            MessageLevel::Warn => Color::new(237, 201, 21),
-            MessageLevel::Error => Color::new(237, 21, 21),
-            MessageLevel::Fatal => Color::new(180, 0, 0),
-        };
-        mask(wrap, 0, y, width, 1, None, color, 0.5);
+        mask(wrap, 0, y, width, 1, None, message.lv.level_color(), 0.5);
         textbox(0, y, width, 1, false);
         textbox_default_color(Some(TERM_DEFAULT_BG), None);
         putln(wrap, &message.msg, message.fg, message.bg);
@@ -919,6 +925,53 @@ fn render_quit_confirmation(wrap: &mut RenderWrapper) {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+#[derive(Debug)]
+enum ChromaMode {
+    None,
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Magenta,
+    Cyan,
+    White,
+    Black,
+}
+
+impl ChromaMode {
+    pub const fn next(&self) -> ChromaMode {
+        match self {
+            ChromaMode::None => ChromaMode::Red,
+            ChromaMode::Red => ChromaMode::Green,
+            ChromaMode::Green => ChromaMode::Blue,
+            ChromaMode::Blue => ChromaMode::Yellow,
+            ChromaMode::Yellow => ChromaMode::Magenta,
+            ChromaMode::Magenta => ChromaMode::Cyan,
+            ChromaMode::Cyan => ChromaMode::White,
+            ChromaMode::White => ChromaMode::Black,
+            ChromaMode::Black => ChromaMode::None,
+        }
+    }
+
+    pub const fn color(&self) -> Option<Color> {
+        match self {
+            ChromaMode::None => None,
+            ChromaMode::Red => Some(Color::new(255, 0, 0)),
+            ChromaMode::Green => Some(Color::new(0, 255, 0)),
+            ChromaMode::Blue => Some(Color::new(0, 0, 255)),
+            ChromaMode::Yellow => Some(Color::new(255, 255, 0)),
+            ChromaMode::Magenta => Some(Color::new(255, 0, 255)),
+            ChromaMode::Cyan => Some(Color::new(0, 255, 255)),
+            ChromaMode::White => Some(Color::new(255, 255, 255)),
+            ChromaMode::Black => Some(Color::new(0, 0, 0)),
+        }
+    }
+}
+
+static CHROMA_MODE: Mutex<ChromaMode> = Mutex::new(ChromaMode::None);
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
 pub fn register_input_callbacks() {
     register_input_callbacks_progressbar();
 
@@ -940,6 +993,13 @@ pub fn register_input_callbacks() {
             return false;
         }
         QUIT_CONFIRMATION.store(false, Ordering::SeqCst);
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Normal('x'), |_| {
+        let mut chroma_mode = CHROMA_MODE.lock();
+        *chroma_mode = chroma_mode.next();
+        *CHROMA_KEY_COLOR.lock() = chroma_mode.color();
         true
     });
 

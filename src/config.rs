@@ -1,22 +1,45 @@
 use anyhow::Result;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 
 use crate::playlist::PLAYLIST;
 
+#[cfg(windows)]
+const DEFAULT_CONFIG_DIR: &str = "%LocalAppData%\\tvid";
+#[cfg(unix)]
 const DEFAULT_CONFIG_DIR: &str = "~/.config/tvid";
-const DEFAULT_CONFIG_FILE: &str = "tvid.cfg";
+
+const DEFAULT_CONFIG_FILE: &str = "tvid.toml";
 const DEFAULT_PLAYLIST_FILE: &str = "playlist.txt";
+const DEFAULT_PLAYLIST_SUBDIR: &str = "playlists";
 
-pub static CONFIG: Mutex<Config> = Mutex::new(Config { volume: 100 });
+const DEFAULT_CONFIG_FILE_DATA: &[u8] = include_bytes!("tvid.toml");
+const DEFAULT_PLAYLIST_FILE_DATA: &[u8] = include_bytes!("playlist.txt");
 
+pub static CONFIG: Mutex<Config> = Mutex::new(Config::new());
+
+static ORIG_CONFIG: Mutex<Config> = Mutex::new(Config::new());
+static TOML_SOURCE: Mutex<Option<String>> = Mutex::new(None);
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
+    /// 音量，范围 0-200
     pub volume: u32,
+    /// 是否循环播放播放列表
+    pub looping: bool,
 }
 
 impl Config {
+    pub const fn new() -> Self {
+        Self {
+            volume: 100,
+            looping: false,
+        }
+    }
+
     pub fn set_entry(&mut self, key: &str, value: &str) -> Result<()> {
         match key {
             "volume" => {
@@ -27,6 +50,10 @@ impl Config {
                     anyhow::bail!("Volume must be between 0 and 200");
                 }
             }
+            "looping" => {
+                let b = value.parse::<bool>()?;
+                self.looping = b;
+            }
             _ => {
                 anyhow::bail!("Unknown config key: {}", key);
             }
@@ -35,36 +62,46 @@ impl Config {
     }
 
     pub fn write_to(&self, wr: &mut dyn Write) -> Result<()> {
-        writeln!(wr, "volume = {}", self.volume)?;
+        let mut src_opt = TOML_SOURCE.lock();
+        let src = if let Some(s) = src_opt.take() {
+            s
+        } else {
+            String::from_utf8(DEFAULT_CONFIG_FILE_DATA.to_vec())?
+        };
+
+        let mut doc: toml_edit::DocumentMut = src.parse()?;
+        for (k, v) in toml_edit::ser::to_document(self)?.iter() {
+            doc[k] = v.clone();
+        }
+
+        let out = doc.to_string();
+        wr.write_all(out.as_bytes())?;
+
+        *src_opt = Some(out);
+
         Ok(())
     }
 }
 
 fn load_config(file: File) -> Result<()> {
-    let config = std::io::read_to_string(file)?;
-    let config = config
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty() && !l.starts_with('#'));
-    for line in config {
-        let parts = line.splitn(2, '=').collect::<Vec<_>>();
-        if parts.len() != 2 {
-            send_warn!("Invalid config line: {}", line);
-        }
-        let (key, value) = (parts[0].trim(), parts[1].trim());
-        match key {
-            "volume" => match value.parse::<u32>() {
-                Ok(v) if v <= 200 => CONFIG.lock().volume = v,
-                _ => send_error!("Invalid volume value: {}", value),
-            },
-            _ => send_warn!("Unknown config key: {}", key),
-        }
-    }
+    let mut s = String::new();
+    let mut f = file;
+    f.read_to_string(&mut s)?;
+
+    // 保存文档源以便后续写入保持注释
+    *TOML_SOURCE.lock() = Some(s.clone());
+
+    // 使用 toml_edit 的 serde 支持反序列化整个文档到 Config
+    let cfg: Config = toml_edit::de::from_str(&s)?;
+    *CONFIG.lock() = cfg;
+
     Ok(())
 }
 
-fn load_playlist(file: &File) -> Result<()> {
-    let playlist = std::io::read_to_string(file)?
+fn load_playlist(mut file: File) -> Result<()> {
+    let mut s = String::new();
+    file.read_to_string(&mut s)?;
+    let playlist = s
         .lines()
         .map(|l| l.trim())
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
@@ -81,7 +118,7 @@ pub fn load(dir: Option<&str>) -> Result<()> {
     load_config(File::open(path)?)?;
 
     let path = Path::new(&dir).join(DEFAULT_PLAYLIST_FILE);
-    load_playlist(&File::open(path)?)?;
+    load_playlist(File::open(path)?)?;
 
     Ok(())
 }
@@ -111,22 +148,25 @@ pub fn save(dir: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-const DEFAULT_CONFIG_FILE_DATA: &[u8] = include_bytes!("tvid.cfg");
-const DEFAULT_PLAYLIST_FILE_DATA: &[u8] = include_bytes!("playlist.txt");
-
 pub fn create_if_not_exists(dir: Option<&str>) -> Result<()> {
     let dir = shellexpand::tilde(dir.unwrap_or(DEFAULT_CONFIG_DIR)).to_string();
-    if !Path::new(&dir).exists() {
-        std::fs::create_dir_all(&dir)?;
+    let dir = Path::new(&dir);
+    if !dir.exists() {
+        std::fs::create_dir_all(dir)?;
     }
 
-    let path = Path::new(&dir).join(DEFAULT_CONFIG_FILE);
+    let playlist_dir = dir.join(DEFAULT_PLAYLIST_SUBDIR);
+    if !playlist_dir.exists() {
+        std::fs::create_dir_all(playlist_dir)?;
+    }
+
+    let path = dir.join(DEFAULT_CONFIG_FILE);
     if !path.exists() {
         let mut file = File::create(path)?;
         file.write_all(DEFAULT_CONFIG_FILE_DATA)?;
     }
 
-    let path = Path::new(&dir).join(DEFAULT_PLAYLIST_FILE);
+    let path = dir.join(DEFAULT_PLAYLIST_FILE);
     if !path.exists() {
         let mut file = File::create(path)?;
         file.write_all(DEFAULT_PLAYLIST_FILE_DATA)?;

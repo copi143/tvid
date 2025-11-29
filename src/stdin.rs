@@ -684,6 +684,9 @@ async fn input() -> Result<()> {
             let c = (c - 1 + b'a') as char;
             call_keypress_callbacks(Key::Ctrl(c));
         }
+        c if c >= 33 && c <= 126 => {
+            call_keypress_callbacks(Key::Normal(c as char));
+        }
         c => {
             send_warn!("Unhandled key: {} ({})", c as char, c);
         }

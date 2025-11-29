@@ -99,7 +99,7 @@ impl AudioFrameWrapper {
                 max = av;
             }
         }
-        max
+        max * max
     }
 }
 

@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::io::Write;
 use std::ops::Mul;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
@@ -249,7 +249,7 @@ impl From<ColorF32> for Color {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -268,7 +268,7 @@ impl Default for Color {
     }
 }
 
-impl Debug for Color {
+impl Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{};{};{}", self.r, self.g, self.b)
     }
@@ -301,6 +301,10 @@ impl Color {
         }
     }
 
+    pub const fn is_transparent(&self) -> bool {
+        self.a == 0
+    }
+
     pub fn halfhalf(a: Color, b: Color) -> Self {
         Color::mix(a, b, 0.5)
     }
@@ -313,6 +317,14 @@ impl Color {
         let fg = ColorF32::from(fg);
         let bg = ColorF32::from(bg);
         Color::from(ColorF32::mix(fg, bg, t))
+    }
+
+    pub fn similar_to(&self, other: &Color, threshold: f32) -> bool {
+        let (c1, c2) = (self.as_f32(), other.as_f32());
+        let dr = c1.r - c2.r;
+        let dg = c1.g - c2.g;
+        let db = c1.b - c2.b;
+        dr * dr + dg * dg + db * db < threshold * threshold
     }
 }
 
@@ -342,7 +354,7 @@ impl Cell {
 
     pub const fn transparent() -> Self {
         Cell {
-            c: None,
+            c: Some(' '),
             fg: Color::transparent(),
             bg: Color::transparent(),
         }
@@ -484,10 +496,25 @@ pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
 #[inline(always)]
 pub fn escape_set_color(
     wr: &mut impl Write,
-    fg: Option<Color>,
-    bg: Option<Color>,
+    mut fg: Option<Color>,
+    mut bg: Option<Color>,
     mode: ColorMode,
 ) {
+    let mut b = true;
+    if fg.is_some() && fg.unwrap().is_transparent() {
+        if b {
+            write!(wr, "\x1b[m").unwrap();
+            b = false;
+        }
+        fg = None;
+    };
+    if bg.is_some() && bg.unwrap().is_transparent() {
+        if b {
+            write!(wr, "\x1b[m").unwrap();
+            b = false;
+        }
+        bg = None;
+    };
     match mode {
         ColorMode::Palette256Prefer => escape_set_color_256_prefer(wr, fg, bg),
         ColorMode::Palette256Only => escape_set_color_256(wr, fg, bg),
@@ -498,9 +525,9 @@ pub fn escape_set_color(
 #[inline(always)]
 pub fn escape_set_color_rgb(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
     match (fg, bg) {
-        (Some(fg), Some(bg)) => write!(wr, "\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
-        (Some(fg), None) => write!(wr, "\x1b[38;2;{:?}m", fg),
-        (None, Some(bg)) => write!(wr, "\x1b[48;2;{:?}m", bg),
+        (Some(fg), Some(bg)) => write!(wr, "\x1b[38;2;{fg};48;2;{bg}m"),
+        (Some(fg), None) => write!(wr, "\x1b[38;2;{}m", fg),
+        (None, Some(bg)) => write!(wr, "\x1b[48;2;{}m", bg),
         (None, None) => Ok(()),
     }
     .unwrap()
@@ -524,18 +551,18 @@ pub fn escape_set_color_256(wr: &mut impl Write, fg: Option<Color>, bg: Option<C
 pub fn escape_set_color_256_prefer(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
     match (fg, bg) {
         (Some(fg), Some(bg)) => match (try_palette256(fg), try_palette256(bg)) {
-            (Some(fgi), Some(bgi)) => write!(wr, "\x1b[38;5;{};48;5;{}m", fgi, bgi),
-            (Some(fgi), None) => write!(wr, "\x1b[38;5;{};48;2;{:?}m", fgi, bg),
-            (None, Some(bgi)) => write!(wr, "\x1b[38;2;{:?};48;5;{}m", fg, bgi),
-            (None, None) => write!(wr, "\x1b[38;2;{:?};48;2;{:?}m", fg, bg),
+            (Some(fgi), Some(bgi)) => write!(wr, "\x1b[38;5;{fgi};48;5;{bgi}m"),
+            (Some(fgi), None) => write!(wr, "\x1b[38;5;{fgi};48;2;{bg}m"),
+            (None, Some(bgi)) => write!(wr, "\x1b[38;2;{fg};48;5;{bgi}m"),
+            (None, None) => write!(wr, "\x1b[38;2;{fg};48;2;{bg}m"),
         },
         (Some(fg), None) => match try_palette256(fg) {
-            Some(fgi) => write!(wr, "\x1b[38;5;{}m", fgi),
-            None => write!(wr, "\x1b[38;2;{:?}m", fg),
+            Some(fgi) => write!(wr, "\x1b[38;5;{fgi}m"),
+            None => write!(wr, "\x1b[38;2;{fg}m"),
         },
         (None, Some(bg)) => match try_palette256(bg) {
-            Some(bgi) => write!(wr, "\x1b[48;5;{}m", bgi),
-            None => write!(wr, "\x1b[48;2;{:?}m", bg),
+            Some(bgi) => write!(wr, "\x1b[48;5;{bgi}m"),
+            None => write!(wr, "\x1b[48;2;{bg}m"),
         },
         (None, None) => Ok(()),
     }

@@ -1,24 +1,51 @@
-# tvid
+# <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
-**This project is under active development. Features and functionality may change.**
+`tvid` is a terminal video player written in Rust. It uses FFmpeg for decoding and renders video, audio and subtitles directly inside your terminal, providing an overlay UI, playlist view and basic mouse / keyboard interaction.
 
-`tvid` is a command-line video player written in Rust, utilizing FFmpeg for media decoding and playback. It supports video, audio, and subtitle streams, and provides a terminal-based user interface for interactive control.
+---
 
-## Features (TODO)
+*Translations:*<br />
+**en-us/English** | [zh-cn/简体中文](doc/README.zh-cn.md) | [zh-tw/繁體中文](doc/README.zh-tw.md)
 
-- [x] Play various video and audio formats via FFmpeg
-- [x] Terminal-based UI for playback control
-- [x] Subtitle support
-- [ ] Playlist management
-- [ ] Audio and video stream selection
-- [ ] Keyboard shortcuts for common actions
+*Other languages (translated by ChatGPT):*<br />
+[ja-jp/日本語](doc/README.ja-jp.md) · [fr-fr/Français](doc/README.fr-fr.md) · [de-de/Deutsch](doc/README.de-de.md) · [es-es/Español](doc/README.es-es.md)
+
+---
+
+> This project is under active development. Behaviour and UI may change.
+
+## Features
+
+- **Play almost any format** supported by FFmpeg
+- **Terminal UI overlay**: progress bar, messages and on‑screen help
+- **Playlist support**:
+  - pass multiple files on the command line
+  - in‑memory playlist navigation (next / previous, looping)
+  - optional playlist side panel
+- **Mouse & keyboard control** for seeking and navigation
+- **Config file & default playlist** under `~/.config/tvid/`
+- Uses **Unifont** for better glyph coverage in the overlay UI
 
 ## Requirements
 
-- Rust
-- FFmpeg libraries installed on your system
+- A recent Rust toolchain (nightly is **not** required)
+  - on Debian / Ubuntu: `sudo apt install cargo` or `sudo apt install rustup && rustup install stable`
+  - on Arch: `sudo pacman -S rust` or `sudo pacman -S rustup && rustup install stable`
+- FFmpeg libraries and development headers available on your system
+  - on Debian / Ubuntu: `sudo apt install ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev`
+  - on Arch: `sudo pacman -S ffmpeg`
 
 ## Build & Run
+
+### Using Cargo Install
+
+You can install `tvid` directly using Cargo:
+
+```sh
+cargo install tvid
+```
+
+### Build It Manually
 
 1. Clone the repository:
 
@@ -36,29 +63,79 @@
 3. Run the player:
 
    ```sh
-   cargo run -- <video-file>
+   cargo run -- <input1> [input2] [...]
+   # or, after building
+   target/release/tvid <input1> [input2] [...]
    ```
 
-   Or use the compiled binary in `target/release/tvid`.
+Each input becomes an item in the in‑memory playlist.
 
 ## Usage
 
 ```sh
-tvid <video-file> [video-file] ...
+tvid <input1> [input2] [...]
 ```
 
-### Options (TODO)
+### Configuration & Playlist Files
 
-- [ ] `--playlist <file>`: Load a playlist file
-- [ ] `--subtitle <file>`: Load external subtitle
+On first run, `tvid` creates a config directory and two files:
 
-### Keyboard Shortcuts (TODO)
+- Config directory: `~/.config/tvid/`
+- Config file: `tvid.toml`
+  - example keys:
+    - `volume` (`0`–`200`): initial volume
+    - `looping` (`true` / `false`): whether to loop the playlist
+- Playlist file: `playlist.txt`
+  - lines are treated as file paths
+  - blank lines and `#` comments are ignored
 
-- [x] `Space`: Play/Pause
-- [x] `q`: Quit
-- [ ] `←/→`: Seek backward/forward
-- [ ] `↑/↓`: Volume up/down
-- [ ] `s`: Toggle subtitles
+At startup, `tvid` loads the playlist from `playlist.txt` and then appends any files passed on the command line.
+
+### Keyboard & Mouse Controls
+
+Core playback controls (global):
+
+- `Space` – play / pause
+- `q` – quit player
+- Arrow keys – seeking
+  - `←` – seek backward 5 seconds
+  - `→` – seek forward 5 seconds
+  - `↑` – seek backward 30 seconds
+  - `↓` – seek forward 30 seconds
+
+Playlist controls:
+
+- `n` – play next item in playlist
+- `l` – toggle playlist side panel
+- In playlist panel:
+  - `w` / `↑` – move selection up
+  - `s` / `↓` – move selection down
+  - `Space` / `Enter` – play selected item
+  - `q` – close playlist panel
+
+UI & other controls:
+
+- `f` – open file selector (UI panel)
+- `c` – cycle color mode
+- Progress bar:
+  - left‑click near the bottom progress area to seek
+  - drag with left mouse button to scrub
+
+> Note: additional shortcuts and UI elements may be added while the project evolves.
+
+## Troubleshooting
+
+- Build errors during compilation:
+  - Ensure FFmpeg and its development headers are installed on your system.
+- Error while loading shared libraries (at runtime):
+  - Make sure you compiled and run the program on the same machine — other machines may have different FFmpeg versions.
+  - Ensure the FFmpeg runtime libraries can be found (for example, verify that other FFmpeg-using programs like `vlc` run correctly).
+- At startup: `av init failed`:
+  - Check that FFmpeg works correctly on your system.
+- After startup: `No input files.`:
+  - Ensure either:
+    - you passed at least one readable video/audio file on the command line, or
+    - `~/.config/tvid/playlist.txt` contains valid, accessible paths.
 
 ## License
 

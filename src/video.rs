@@ -3,14 +3,14 @@ use av::util::frame::video::Video as VideoFrame;
 use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::avsync::{self, played_time_or_zero};
 use crate::ffmpeg::{DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, VIDEO_TIME_BASE};
-use crate::render::{self, RenderWrapper, VIDEO_PIXELS, updatesize};
+use crate::render::{self, RenderWrapper, VIDEO_PIXELS};
 use crate::statistics::increment_video_skipped_frames;
-use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG, TERM_QUIT};
-use crate::util::Cell;
+use crate::term::TERM_QUIT;
+use crate::util::{Cell, Color};
 
 pub static VIDEO_FRAMETIME: AtomicU64 = AtomicU64::new(1_000_000 / 30);
 
@@ -152,48 +152,48 @@ pub fn video_main() {
     render::VIDEO_SIZE_CACHE.set(0, 0);
 }
 
+/// 绿幕背景色
+pub static CHROMA_KEY_COLOR: Mutex<Option<Color>> = Mutex::new(None);
+
 pub fn render_frame(wrap: &mut RenderWrapper) {
-    for cy in 0..wrap.padding_top {
-        for cx in 0..wrap.frame_width {
-            wrap.cells[cy * wrap.cells_pitch + cx] = Cell {
-                c: Some(' '),
-                fg: TERM_DEFAULT_FG,
-                bg: TERM_DEFAULT_BG,
-            };
+    if let Some(chroma_key) = *CHROMA_KEY_COLOR.lock() {
+        for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {
+            for cx in wrap.padding_left..(wrap.cells_width - wrap.padding_right) {
+                let fy = cy - wrap.padding_top;
+                let fx = cx - wrap.padding_left;
+                let fg = wrap.frame[fy * wrap.frame_pitch * 2 + fx + wrap.frame_pitch];
+                let bg = wrap.frame[fy * wrap.frame_pitch * 2 + fx];
+                let fs = fg.similar_to(&chroma_key, 0.1);
+                let bs = bg.similar_to(&chroma_key, 0.1);
+                wrap.cells[cy * wrap.cells_pitch + cx] = match (fs, bs) {
+                    (true, true) => Cell {
+                        c: Some(' '),
+                        fg: Color::transparent(),
+                        bg: Color::transparent(),
+                    },
+                    (true, false) => Cell {
+                        c: None,
+                        fg: bg,
+                        bg,
+                    },
+                    (false, true) => Cell {
+                        c: None,
+                        fg,
+                        bg: fg,
+                    },
+                    (false, false) => Cell { c: None, fg, bg },
+                };
+            }
         }
-    }
-    for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {
-        for cx in 0..wrap.padding_left {
-            wrap.cells[cy * wrap.cells_pitch + cx] = Cell {
-                c: Some(' '),
-                fg: TERM_DEFAULT_FG,
-                bg: TERM_DEFAULT_BG,
-            };
-        }
-        for cx in wrap.padding_left..(wrap.cells_width - wrap.padding_right) {
-            let fy = cy - wrap.padding_top;
-            let fx = cx - wrap.padding_left;
-            wrap.cells[cy * wrap.cells_pitch + cx] = Cell {
-                c: None,
-                fg: wrap.frame[fy * wrap.frame_pitch * 2 + fx + wrap.frame_pitch],
-                bg: wrap.frame[fy * wrap.frame_pitch * 2 + fx],
-            };
-        }
-        for cx in (wrap.cells_width - wrap.padding_right)..wrap.cells_width {
-            wrap.cells[cy * wrap.cells_pitch + cx] = Cell {
-                c: Some(' '),
-                fg: TERM_DEFAULT_FG,
-                bg: TERM_DEFAULT_BG,
-            };
-        }
-    }
-    for cy in (wrap.cells_height - wrap.padding_bottom)..wrap.cells_height {
-        for cx in 0..wrap.frame_width {
-            wrap.cells[cy * wrap.cells_pitch + cx] = Cell {
-                c: Some(' '),
-                fg: TERM_DEFAULT_FG,
-                bg: TERM_DEFAULT_BG,
-            };
+    } else {
+        for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {
+            for cx in wrap.padding_left..(wrap.cells_width - wrap.padding_right) {
+                let fy = cy - wrap.padding_top;
+                let fx = cx - wrap.padding_left;
+                let fg = wrap.frame[fy * wrap.frame_pitch * 2 + fx + wrap.frame_pitch];
+                let bg = wrap.frame[fy * wrap.frame_pitch * 2 + fx];
+                wrap.cells[cy * wrap.cells_pitch + cx] = Cell { c: None, fg, bg };
+            }
         }
     }
 }

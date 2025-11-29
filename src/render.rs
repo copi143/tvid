@@ -153,6 +153,8 @@ impl RenderWrapper<'_, '_> {
     }
 }
 
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
 /// frames.0 - 当前帧, frames.1 - 上一帧
 static FRAMES: TokioMutex<(Vec<Cell>, Vec<Cell>)> = TokioMutex::const_new((Vec::new(), Vec::new()));
 static RENDER_CALLBACKS: Mutex<Vec<fn(&mut RenderWrapper)>> = Mutex::new(Vec::new());
@@ -213,11 +215,17 @@ async fn render_frame(frame: &[Color], pitch: usize) {
     };
 
     let instant = Instant::now();
+    wrap.cells.fill(Cell::transparent());
     for callback in RENDER_CALLBACKS.lock().iter() {
         callback(wrap);
     }
     statistics::set_render_time(instant.elapsed());
 }
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+pub const TERM_BACKGROUND: Option<Color> = None;
+pub const TERM_FOREGROUND: Option<Color> = None;
 
 async fn print_diff_line(
     cells: &mut [Cell],
@@ -272,10 +280,10 @@ async fn print_diff_async(
         .await;
 
     let mut buf = Vec::with_capacity(65536);
-    buf.extend_from_slice(b"\x1b[H");
+    buf.extend_from_slice(b"\x1b[m\x1b[H");
     for (i, line) in result.into_iter().enumerate() {
         if i != 0 {
-            buf.extend_from_slice(b"\x1b[E");
+            buf.extend_from_slice(b"\x1b[m\x1b[E");
         }
         buf.extend_from_slice(&line);
     }
@@ -381,11 +389,14 @@ pub fn render_main() {
             }
             let (w, h) = VIDEO_PIXELS.get();
             for x in 0..w {
+                let max = (h as f32 * 0.8).clamp(0.0, h as f32).round() as usize;
+                empty_frame[(h - max) / 2 * w + x] = Color::new(64, 192, 128);
+                empty_frame[(h + max) / 2 * w + x] = Color::new(64, 192, 128);
                 let i0 = x as f32 / w as f32 * stat.len() as f32;
                 let i1 = (i0.floor() as usize).clamp(0, stat.len() - 1);
                 let i2 = (i0.ceil() as usize).clamp(0, stat.len() - 1);
                 let k = i0 - i0.floor();
-                let vol = (stat[i1] * (1.0 - k) + stat[i2] * k) / 2.0;
+                let vol = stat[i1] * (1.0 - k) + stat[i2] * k;
                 let filled = (vol * h as f32 * 0.8).round().clamp(0.0, h as f32) as usize;
                 for y in (h - filled) / 2..(h + filled) / 2 {
                     let idx = y * w + x;
@@ -408,3 +419,5 @@ pub fn render_main() {
         }
     }
 }
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @

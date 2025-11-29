@@ -1,0 +1,5 @@
+# Default configuration for tvid (TOML format)
+# volume: 0-200
+volume = 100
+# looping: whether to loop the playlist
+looping = false

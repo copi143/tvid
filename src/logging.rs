@@ -8,6 +8,12 @@ use std::time::{Duration, SystemTime};
 use crate::term;
 use crate::{stdout, util::Color};
 
+pub const COLOR_DEBUG: Color = Color::new(128, 192, 255);
+pub const COLOR_INFO: Color = Color::new(64, 192, 128);
+pub const COLOR_WARN: Color = Color::new(255, 192, 0);
+pub const COLOR_ERROR: Color = Color::new(255, 128, 64);
+pub const COLOR_FATAL: Color = Color::new(255, 64, 64);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MessageLevel {
     Debug,
@@ -25,6 +31,16 @@ impl MessageLevel {
             MessageLevel::Warn => "[Warn ] ",
             MessageLevel::Error => "[Error] ",
             MessageLevel::Fatal => "[Fatal] ",
+        }
+    }
+
+    pub const fn level_color(&self) -> Color {
+        match self {
+            MessageLevel::Debug => COLOR_DEBUG,
+            MessageLevel::Info => COLOR_INFO,
+            MessageLevel::Warn => COLOR_WARN,
+            MessageLevel::Error => COLOR_ERROR,
+            MessageLevel::Fatal => COLOR_FATAL,
         }
     }
 }
