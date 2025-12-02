@@ -122,54 +122,104 @@ pub fn send_message(lv: MessageLevel, msg: &str, fg: Option<Color>, bg: Option<C
     lock.queue.push_back(err);
 }
 
-pub fn send_debug(msg: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn debug(msg: &str, fg: Option<Color>, bg: Option<Color>) {
     send_message(MessageLevel::Debug, msg, fg, bg);
 }
 
-pub fn send_info(msg: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn info(msg: &str, fg: Option<Color>, bg: Option<Color>) {
     send_message(MessageLevel::Info, msg, fg, bg);
 }
 
-pub fn send_warn(msg: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn warning(msg: &str, fg: Option<Color>, bg: Option<Color>) {
     send_message(MessageLevel::Warn, msg, fg, bg);
 }
 
-pub fn send_error(msg: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn error(msg: &str, fg: Option<Color>, bg: Option<Color>) {
     send_message(MessageLevel::Error, msg, fg, bg);
 }
 
-pub fn send_fatal(msg: &str, fg: Option<Color>, bg: Option<Color>) -> ! {
+pub fn fatal(msg: &str, fg: Option<Color>, bg: Option<Color>) -> ! {
     send_message(MessageLevel::Fatal, msg, fg, bg);
     term::request_quit();
     term::quit();
 }
 
-macro_rules! send_debug {
+macro_rules! debug {
     ($($arg:tt)*) => {
-        crate::logging::send_debug(&format!($($arg)*), None, None)
+        crate::logging::debug(&format!($($arg)*), None, None)
     };
 }
 
-macro_rules! send_info {
+macro_rules! info {
     ($($arg:tt)*) => {
-        crate::logging::send_info(&format!($($arg)*), None, None)
+        crate::logging::info(&format!($($arg)*), None, None)
     };
 }
 
-macro_rules! send_warn {
+macro_rules! warning {
     ($($arg:tt)*) => {
-        crate::logging::send_warn(&format!($($arg)*), None, None)
+        crate::logging::warning(&format!($($arg)*), None, None)
     };
 }
 
-macro_rules! send_error {
+macro_rules! error {
     ($($arg:tt)*) => {
-        crate::logging::send_error(&format!($($arg)*), None, None)
+        crate::logging::error(&format!($($arg)*), None, None)
     };
 }
 
-macro_rules! send_fatal {
+macro_rules! fatal {
     ($($arg:tt)*) => {
-        crate::logging::send_fatal(&format!($($arg)*), None, None)
+        crate::logging::fatal(&format!($($arg)*), None, None)
+    };
+}
+
+macro_rules! debug_l10n {
+    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
+        match crate::LOCALE.as_str() {
+            $(
+                $lang => debug!($($arg),+),
+            )+
+        }
+    };
+}
+
+macro_rules! info_l10n {
+    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
+        match crate::LOCALE.as_str() {
+            $(
+                $lang => info!($($arg),+),
+            )+
+        }
+    };
+}
+
+macro_rules! warning_l10n {
+    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
+        match crate::LOCALE.as_str() {
+            $(
+                $lang => warning!($($arg),+),
+            )+
+        }
+    };
+}
+
+macro_rules! error_l10n {
+    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
+        match crate::LOCALE.as_str() {
+            $(
+                $lang => error!($($arg),+),
+            )+
+        }
+    };
+}
+
+macro_rules! fatal_l10n {
+    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
+        match crate::LOCALE.as_str() {
+            $(
+                $lang => fatal!($($arg),+),
+            )+
+        }
     };
 }

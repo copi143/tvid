@@ -1,12 +1,13 @@
 use parking_lot::Mutex;
 use std::cmp::min;
+use std::fmt::Display;
 use std::fs::FileType;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use unicode_width::UnicodeWidthChar;
 
 use crate::avsync;
-use crate::logging::{MessageLevel, get_messages};
+use crate::logging::get_messages;
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
 use crate::render::{COLOR_MODE, RenderWrapper, TERM_PIXELS, TERM_SIZE};
 use crate::statistics::get_statistics;
@@ -239,9 +240,9 @@ pub fn put(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<C
 }
 
 macro_rules! put {
-    ($wrap:expr, $text:expr) => {
-        crate::ui::put($wrap, &$text, None, None)
-    };
+    // ($wrap:expr, $text:expr) => {
+    //     crate::ui::put($wrap, &$text, None, None)
+    // };
     ($wrap:expr, $($arg:tt)*) => {
         crate::ui::put($wrap, &format!($($arg)*), None, None)
     };
@@ -256,17 +257,22 @@ pub fn putln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option
 }
 
 macro_rules! putln {
-    ($wrap:expr, $text:expr) => {
-        crate::ui::putln($wrap, &$text, None, None)
-    };
     ($wrap:expr, $($arg:tt)*) => {
         crate::ui::putln($wrap, &format!($($arg)*), None, None)
     };
 }
 
+macro_rules! putlns {
+    ($wrap:expr; $($fmt:expr $(, $args:expr)*);+ $(;)?) => {{
+        $(
+            putln!($wrap, $fmt $(, $args)*);
+        )+
+    }};
+}
+
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-pub fn putunifont(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn putufln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     let mut data = [const { String::new() }; 4];
     for ch in text.chars() {
         let font = unifont_get(ch);
@@ -291,12 +297,53 @@ pub fn putunifont(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: O
     }
 }
 
-macro_rules! putunifont {
-    ($wrap:expr, $text:expr) => {
-        crate::ui::putunifont($wrap, &$text, None, None)
-    };
+macro_rules! putufln {
     ($wrap:expr, $($arg:tt)*) => {
-        crate::ui::putunifont($wrap, &format!($($arg)*), None, None)
+        crate::ui::putufln($wrap, &format!($($arg)*), None, None)
+    };
+}
+
+macro_rules! putuflns {
+    ($wrap:expr; $($fmt:expr $(, $args:expr)*);+ $(;)?) => {{
+        $(
+            putufln!($wrap, $fmt $(, $args)*);
+        )+
+    }};
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+const TERM_FONT_HEIGHT_THRESHOLD: f32 = 12.0;
+
+fn font_large_enough(wrap: &RenderWrapper) -> bool {
+    wrap.term_font_height > TERM_FONT_HEIGHT_THRESHOLD
+}
+
+pub fn putln_or_ufln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+    if font_large_enough(wrap) {
+        putln(wrap, text, fg, bg);
+    } else {
+        putufln(wrap, text, fg, bg);
+    }
+}
+
+macro_rules! putln_or_ufln {
+    ($wrap:expr, $($arg:tt)*) => {
+        if font_large_enough($wrap) {
+            putln!($wrap, $($arg)*);
+        } else {
+            putufln!($wrap, $($arg)*);
+        }
+    };
+}
+
+macro_rules! putlns_or_uflns {
+    ($wrap:expr; $($fmt:expr $(, $args:expr)*);+ $(;)?) => {
+        if font_large_enough($wrap) {
+            putlns!($wrap; $($fmt $(, $args)*);+);
+        } else {
+            putuflns!($wrap; $($fmt $(, $args)*);+);
+        }
     };
 }
 
@@ -395,8 +442,8 @@ fn render_help(wrap: &mut RenderWrapper) {
         return;
     }
 
-    let w = 50;
-    let h = 12;
+    let w = if font_large_enough(wrap) { 29 } else { 204 };
+    let h = if font_large_enough(wrap) { 12 } else { 42 };
     let x = (wrap.cells_width as isize - w as isize) / 2;
     let y = (wrap.cells_height as isize - h as isize) / 2;
     mask(
@@ -409,18 +456,94 @@ fn render_help(wrap: &mut RenderWrapper) {
         TERM_DEFAULT_FG,
         0.7,
     );
-    textbox(x + 2, y + 1, w - 4, h - 2, true);
+    textbox(x + 2, y + 1, w - 4, h - 2, false);
     textbox_default_color(Some(TERM_DEFAULT_BG), None);
-    putln!(wrap, "帮助信息 (按 h 关闭)");
-    putln!(wrap, "------------------------------");
-    putln!(wrap, "q: 退出程序");
-    putln!(wrap, "n: 下一项");
-    putln!(wrap, "l: 打开/关闭播放列表");
-    putln!(wrap, "空格/回车: 选择文件");
-    putln!(wrap, "w/s/↑/↓: 上/下移动");
-    putln!(wrap, "a/d/←/→: 进入/返回目录");
-    putln!(wrap, "h: 打开/关闭帮助");
-    putln!(wrap, "------------------------------");
+    match crate::LOCALE.as_str() {
+        "zh-cn" => putlns_or_uflns!(wrap;
+            "               帮助信息 (按 h 关闭)               ";
+            "--------------------------------------------------";
+            "     q:           退出程序                        ";
+            "     n:           下一项                          ";
+            "     l:           打开/关闭播放列表               ";
+            "     空格/回车:   选择文件                        ";
+            "     w/s/↑/↓:     上/下移动                       ";
+            "     a/d/←/→:     进入/返回目录                   ";
+            "     h:           打开/关闭帮助                   ";
+            "--------------------------------------------------";
+        ),
+        "zh-tw" => putlns_or_uflns!(wrap;
+            "               幫助資訊 (按 h 關閉)               ";
+            "--------------------------------------------------";
+            "     q:           離開程式                        ";
+            "     n:           下一項                          ";
+            "     l:           開啟/關閉播放清單               ";
+            "     空格/Enter:  選擇檔案                        ";
+            "     w/s/↑/↓:     上/下移動                       ";
+            "     a/d/←/→:     進入/返回目錄                   ";
+            "     h:           開啟/關閉幫助                   ";
+            "--------------------------------------------------";
+        ),
+        "ja-jp" => putlns_or_uflns!(wrap;
+            "            ヘルプ情報 (hキーで閉じる)            ";
+            "--------------------------------------------------";
+            "     q:           プログラムを終了                ";
+            "     n:           次の項目                        ";
+            "     l:           プレイリストを開く/閉じる       ";
+            "     スペース/エンター: ファイルを選択            ";
+            "     w/s/↑/↓:     上/下に移動                     ";
+            "     a/d/←/→:     ディレクトリに入る/戻る         ";
+            "     h:           ヘルプを開く/閉じる             ";
+            "--------------------------------------------------";
+        ),
+        "fr-fr" => putlns_or_uflns!(wrap;
+            "  Informations d'aide (appuyez sur h pour fermer) ";
+            "--------------------------------------------------";
+            "   q:            Quitter le programme             ";
+            "   n:            Élément suivant                  ";
+            "   l:            Ouvrir/fermer la liste de lecture";
+            "   Espace/Entrée: Sélectionner un fichier         ";
+            "   w/s/↑/↓:      Déplacer vers le haut/bas        ";
+            "   a/d/←/→:      Entrer/revenir au répertoire     ";
+            "   h:            Ouvrir/fermer l'aide             ";
+            "--------------------------------------------------";
+        ),
+        "de-de" => putlns_or_uflns!(wrap;
+            " Hilfeinformationen (drücken Sie h zum Schließen) ";
+            "--------------------------------------------------";
+            "   q:           Programm beenden                  ";
+            "   n:           Nächstes Element                  ";
+            "   l:           Wiedergabeliste öffnen/schließen  ";
+            "   Leertaste/Eingabetaste: Datei auswählen        ";
+            "   w/s/↑/↓:     Nach oben/unten bewegen           ";
+            "   a/d/←/→:     Verzeichnis betreten/zurückkehren ";
+            "   h:           Hilfe öffnen/schließen            ";
+            "--------------------------------------------------";
+        ),
+        "es-es" => putlns_or_uflns!(wrap;
+            "   Información de ayuda (presione h para cerrar)  ";
+            "--------------------------------------------------";
+            "   q:           Salir del programa                ";
+            "   n:           Siguiente elemento                ";
+            "   l:           Abrir/cerrar lista de reproducción";
+            "   Espacio/Enter: Seleccionar archivo             ";
+            "   w/s/↑/↓:     Mover arriba/abajo                ";
+            "   a/d/←/→:     Entrar/volver al directorio       ";
+            "   h:           Abrir/cerrar ayuda                ";
+            "--------------------------------------------------";
+        ),
+        _ => putlns_or_uflns!(wrap;
+            "        Help Information (press h to close)       ";
+            "--------------------------------------------------";
+            "     q:            Quit the program               ";
+            "     n:            Next item                      ";
+            "     l:            Open/close playlist            ";
+            "     Space/Enter:  Select file                    ";
+            "     w/s/↑/↓:      Move up/down                   ";
+            "     a/d/←/→:      Enter/return directory         ";
+            "     h:            Open/close help                ";
+            "--------------------------------------------------";
+        ),
+    }
 }
 
 pub static SHOW_OVERLAY_TEXT: AtomicBool = AtomicBool::new(true);
@@ -479,98 +602,125 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
         )
     };
 
-    let playing_or_paused_str = if avsync::is_paused() {
-        "Paused"
-    } else {
-        "Playing"
-    };
-
-    textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, true);
+    // 这边关闭 autowrap，防止 unifont 渲染出问题
+    textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, false);
 
     let statistics = get_statistics();
 
-    if wrap.term_font_height > 12.0 {
-        putln!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
-        putln!(
-            wrap,
-            "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
-        );
-        putln!(wrap, "{}: {}", playing_or_paused_str, wrap.playing);
-        putln!(
-            wrap,
-            "Video Time: {playing_time_str} (a: {audio_offset_str}, v: {video_offset_str})",
-        );
-        putln!(wrap, "App Time: {}", app_time_str);
-        putln!(
-            wrap,
-            "Escape String Encode Time: {:.2?} (avg over last 60)",
-            statistics.escape_string_encode_time.avg(),
-        );
-        putln!(
-            wrap,
-            "Render Time: {:.2?} (avg over last 60)",
-            statistics.render_time.avg(),
-        );
-        putln!(
-            wrap,
-            "Output Time: {:.2?} (avg over last 60)",
-            statistics.output_time.avg(),
-        );
-        putln!(
-            wrap,
-            "Video Skipped Frames: {}",
-            statistics.video_skipped_frames,
-        );
-        putln!(wrap, "Color Mode: {:?}", *COLOR_MODE.lock());
-        putln!(wrap, "Chroma Mode: {:?}", *CHROMA_MODE.lock());
-    } else {
-        putunifont!(wrap, "tvid v{}", env!("CARGO_PKG_VERSION"));
-        putunifont!(
-            wrap,
-            "Press 'q' to quit, 'n' to skip to next, 'l' for playlist"
-        );
-        putunifont!(wrap, "{}: {}", playing_or_paused_str, wrap.playing);
-        putunifont!(
-            wrap,
-            "Video Time: {playing_time_str} (a: {audio_offset_str}, v: {video_offset_str})",
-        );
-        putunifont!(wrap, "App Time: {}", app_time_str);
-        putunifont!(
-            wrap,
-            "Escape String Encode Time: {:.2?} (avg over last 60)",
-            statistics.escape_string_encode_time.avg(),
-        );
-        putunifont!(
-            wrap,
-            "Render Time: {:.2?} (avg over last 60)",
-            statistics.render_time.avg(),
-        );
-        putunifont!(
-            wrap,
-            "Output Time: {:.2?} (avg over last 60)",
-            statistics.output_time.avg(),
-        );
-        putunifont!(
-            wrap,
-            "Video Skipped Frames: {}",
-            statistics.video_skipped_frames,
-        );
-        putunifont!(wrap, "Color Mode: {:?}", *COLOR_MODE.lock());
-        putunifont!(wrap, "Chroma Mode: {:?}", *CHROMA_MODE.lock());
+    match crate::LOCALE.as_str() {
+        "zh-cn" => putlns_or_uflns!(wrap;
+            "tvid v{}", env!("CARGO_PKG_VERSION");
+            "按 'q' 退出，'n' 跳到下一项，'l' 打开播放列表";
+            "{}: {}", if avsync::is_paused() { "暂停中" } else { "播放中" }, wrap.playing;
+            "视频时间: {playing_time_str} (音频偏移: {audio_offset_str}, 视频偏移: {video_offset_str})";
+            "应用开启时间: {app_time_str}";
+            "转义字符串编码时间: {:.2?} (最近 60 次平均)", statistics.escape_string_encode_time.avg();
+            "渲染时间: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
+            "输出时间: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
+            "视频跳过帧数: {}", statistics.video_skipped_frames;
+            "颜色模式: {}", *COLOR_MODE.lock();
+            "绿幕模式: {}", *CHROMA_MODE.lock();
+        ),
+        "zh-tw" => putlns_or_uflns!(wrap;
+            "tvid v{}", env!("CARGO_PKG_VERSION");
+            "按 'q' 離開，'n' 跳到下一項，'l' 打開播放清單";
+            "{}: {}", if avsync::is_paused() { "暫停中" } else { "播放中" }, wrap.playing;
+            "視頻時間: {playing_time_str} (音頻偏移: {audio_offset_str}, 視頻偏移: {video_offset_str})";
+            "應用開啟時間: {app_time_str}";
+            "轉義字串編碼時間: {:.2?} (最近 60 次平均)", statistics.escape_string_encode_time.avg();
+            "渲染時間: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
+            "輸出時間: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
+            "視頻跳過幀數: {}", statistics.video_skipped_frames;
+            "顏色模式: {}", *COLOR_MODE.lock();
+            "綠幕模式: {}", *CHROMA_MODE.lock();
+        ),
+        "ja-jp" => putlns_or_uflns!(wrap;
+            "tvid v{}", env!("CARGO_PKG_VERSION");
+            "'q'で終了、'n'で次へ、'l'でプレイリストを開く";
+            "{}: {}", if avsync::is_paused() { "一時停止中" } else { "再生中" }, wrap.playing;
+            "ビデオ時間: {playing_time_str} (オーディオオフセット: {audio_offset_str}, ビデオオフセット: {video_offset_str})";
+            "アプリ起動時間: {app_time_str}";
+            "エスケープ文字列エンコード時間: {:.2?} (直近 60 回の平均)", statistics.escape_string_encode_time.avg();
+            "レンダリング時間: {:.2?} (直近 60 回の平均)", statistics.render_time.avg();
+            "出力時間: {:.2?} (直近 60 回の平均)", statistics.output_time.avg();
+            "ビデオスキップフレーム数: {}", statistics.video_skipped_frames;
+            "カラーモード: {}", *COLOR_MODE.lock();
+            "クロマモード: {}", *CHROMA_MODE.lock();
+        ),
+        "fr-fr" => putlns_or_uflns!(wrap;
+            "tvid v{}", env!("CARGO_PKG_VERSION");
+            "Appuyez sur 'q' pour quitter, 'n' pour passer au suivant, 'l' pour la liste de lecture";
+            "{}: {}", if avsync::is_paused() { "En pause" } else { "Lecture" }, wrap.playing;
+            "Temps vidéo: {playing_time_str} (décalage audio: {audio_offset_str}, décalage vidéo: {video_offset_str})";
+            "Temps d'exécution de l'application: {app_time_str}";
+            "Temps d'encodage de la chaîne d'échappement: {:.2?} (moyenne des 60 dernières)", statistics.escape_string_encode_time.avg();
+            "Temps de rendu: {:.2?} (moyenne des 60 dernières)", statistics.render_time.avg();
+            "Temps de sortie: {:.2?} (moyenne des 60 dernières)", statistics.output_time.avg();
+            "Images vidéo sautées: {}", statistics.video_skipped_frames;
+            "Mode couleur: {}", *COLOR_MODE.lock();
+            "Mode chroma: {}", *CHROMA_MODE.lock();
+        ),
+        "de-de" => putlns_or_uflns!(wrap;
+            "tvid v{}", env!("CARGO_PKG_VERSION");
+            "Drücken Sie 'q' zum Beenden, 'n' zum Überspringen zum Nächsten, 'l' für die Wiedergabeliste";
+            "{}: {}", if avsync::is_paused() { "Pausiert" } else { "Wiedergabe" }, wrap.playing;
+            "Videozeit: {playing_time_str} (Audio-Offset: {audio_offset_str}, Video-Offset: {video_offset_str})";
+            "App-Zeit: {app_time_str}";
+            "Escape-String-Kodierungszeit: {:.2?} (Durchschnitt der letzten 60)", statistics.escape_string_encode_time.avg();
+            "Render-Zeit: {:.2?} (Durchschnitt der letzten 60)", statistics.render_time.avg();
+            "Ausgabezeit: {:.2?} (Durchschnitt der letzten 60)", statistics.output_time.avg();
+            "Übersprungene Videoframes: {}", statistics.video_skipped_frames;
+            "Farbmodus: {}", *COLOR_MODE.lock();
+            "Chroma-Modus: {}", *CHROMA_MODE.lock();
+        ),
+        "es-es" => putlns_or_uflns!(wrap;
+            "tvid v{}", env!("CARGO_PKG_VERSION");
+            "Presione 'q' para salir, 'n' para saltar al siguiente, 'l' para la lista de reproducción";
+            "{}: {}", if avsync::is_paused() { "Pausado" } else { "Reproduciendo" }, wrap.playing;
+            "Tiempo de video: {playing_time_str} (desplazamiento de audio: {audio_offset_str}, desplazamiento de video: {video_offset_str})";
+            "Tiempo de la aplicación: {app_time_str}";
+            "Tiempo de codificación de cadena de escape: {:.2?} (promedio de los últimos 60)", statistics.escape_string_encode_time.avg();
+            "Tiempo de renderizado: {:.2?} (promedio de los últimos 60)", statistics.render_time.avg();
+            "Tiempo de salida: {:.2?} (promedio de los últimos 60)", statistics.output_time.avg();
+            "Fotogramas de video omitidos: {}", statistics.video_skipped_frames;
+            "Modo de color: {}", *COLOR_MODE.lock();
+            "Modo de croma: {}", *CHROMA_MODE.lock();
+        ),
+        _ => putlns_or_uflns!(wrap;
+            "tvid v{}", env!("CARGO_PKG_VERSION");
+            "Press 'q' to quit, 'n' to skip to next, 'l' for playlist";
+            "{}: {}", if avsync::is_paused() { "Paused" } else { "Playing" }, wrap.playing;
+            "Video Time: {playing_time_str} (a: {audio_offset_str}, v: {video_offset_str})";
+            "App Time: {app_time_str}";
+            "Escape String Encode Time: {:.2?} (avg over last 60)", statistics.escape_string_encode_time.avg();
+            "Render Time: {:.2?} (avg over last 60)", statistics.render_time.avg();
+            "Output Time: {:.2?} (avg over last 60)", statistics.output_time.avg();
+            "Video Skipped Frames: {}", statistics.video_skipped_frames;
+            "Color Mode: {}", *COLOR_MODE.lock();
+            "Chroma Mode: {}", *CHROMA_MODE.lock();
+        ),
     }
 }
 
 fn render_playlist(wrap: &mut RenderWrapper) {
-    static mut PLAYLIST_POS: f32 = 0.0;
-    const PLAYLIST_WIDTH: usize = 62;
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
+        return; // 防炸
+    }
 
+    let playlist_width = if font_large_enough(wrap) {
+        62.min(wrap.cells_width)
+    } else {
+        482.min(wrap.cells_width)
+    };
+
+    static mut PLAYLIST_POS: f32 = 0.0;
     let mut playlist_pos = unsafe { PLAYLIST_POS };
     if SHOW_PLAYLIST.load(Ordering::SeqCst) {
-        playlist_pos += wrap.delta_time.as_secs_f32() * 300.0;
+        playlist_pos += wrap.delta_time.as_secs_f32() * 3000.0 / wrap.term_font_width;
     } else {
-        playlist_pos -= wrap.delta_time.as_secs_f32() * 300.0;
+        playlist_pos -= wrap.delta_time.as_secs_f32() * 3000.0 / wrap.term_font_width;
     }
-    let playlist_pos = playlist_pos.clamp(0.0, PLAYLIST_WIDTH as f32);
+    let playlist_pos = playlist_pos.clamp(0.0, playlist_width as f32);
     unsafe { PLAYLIST_POS = playlist_pos };
 
     let playlist_pos = playlist_pos as usize;
@@ -586,7 +736,7 @@ fn render_playlist(wrap: &mut RenderWrapper) {
         wrap,
         wrap.cells_width.saturating_sub(playlist_pos) as isize,
         0,
-        PLAYLIST_WIDTH,
+        playlist_width,
         wrap.cells_height,
         Some(TERM_DEFAULT_BG),
         TERM_DEFAULT_FG,
@@ -596,14 +746,23 @@ fn render_playlist(wrap: &mut RenderWrapper) {
     textbox(
         wrap.cells_width.saturating_sub(playlist_pos) as isize + 1,
         1,
-        PLAYLIST_WIDTH - 2,
+        playlist_width - 2,
         wrap.cells_height - 2,
         false,
     );
 
     textbox_default_color(Some(TERM_DEFAULT_BG), None);
 
-    putln!(wrap, "Playlist ({} items):", PLAYLIST.lock().len());
+    let len = PLAYLIST.lock().len();
+    match crate::LOCALE.as_str() {
+        "zh-cn" => putln_or_ufln!(wrap, "播放列表 ({len} 项):"),
+        "zh-tw" => putln_or_ufln!(wrap, "播放清單 ({len} 項):"),
+        "ja-jp" => putln_or_ufln!(wrap, "プレイリスト ({len} アイテム):"),
+        "fr-fr" => putln_or_ufln!(wrap, "Liste de lecture ({len} éléments):"),
+        "de-de" => putln_or_ufln!(wrap, "Wiedergabeliste ({len} Elemente):"),
+        "es-es" => putln_or_ufln!(wrap, "Lista de reproducción ({len} elementos):"),
+        _ => putln_or_ufln!(wrap, "Playlist ({len} items):"),
+    }
 
     let selected_index = *PLAYLIST_SELECTED_INDEX.lock();
     let playing_index = PLAYLIST.lock().get_pos();
@@ -611,14 +770,14 @@ fn render_playlist(wrap: &mut RenderWrapper) {
         // 这边的 U+2000 是故意占位的，因为 ▶ 符号在终端上渲染宽度是 2
         let icon = if i == playing_index { "▶ " } else { "  " };
         if i as isize == selected_index {
-            putln(
+            putln_or_ufln(
                 wrap,
-                &format!("{}{}", icon, item),
+                &format!("{icon}{item}"),
                 Some(TERM_DEFAULT_FG),
                 Some(TERM_DEFAULT_BG),
             );
         } else {
-            putln!(wrap, "{}{}", icon, item);
+            putln_or_ufln!(wrap, "{icon}{item}");
         }
     }
 }
@@ -630,15 +789,28 @@ fn render_messages(wrap: &mut RenderWrapper) {
 
     let width = (wrap.cells_width * 4 / 10).max(50);
 
-    for (i, message) in get_messages().queue.iter().rev().enumerate() {
-        let y = wrap.cells_height as isize - i as isize - 1;
-        if y < 0 {
-            continue;
+    if font_large_enough(wrap) {
+        for (i, message) in get_messages().queue.iter().rev().enumerate() {
+            let y = wrap.cells_height as isize - i as isize - 1;
+            if y < 0 {
+                continue;
+            }
+            mask(wrap, 0, y, width, 1, None, message.lv.level_color(), 0.5);
+            textbox(0, y, width, 1, false);
+            textbox_default_color(Some(TERM_DEFAULT_BG), None);
+            putln(wrap, &message.msg, message.fg, message.bg);
         }
-        mask(wrap, 0, y, width, 1, None, message.lv.level_color(), 0.5);
-        textbox(0, y, width, 1, false);
-        textbox_default_color(Some(TERM_DEFAULT_BG), None);
-        putln(wrap, &message.msg, message.fg, message.bg);
+    } else {
+        for (i, message) in get_messages().queue.iter().rev().enumerate() {
+            let y = wrap.cells_height as isize - i as isize * 4 - 4;
+            if y < 0 {
+                continue;
+            }
+            mask(wrap, 0, y, width, 4, None, message.lv.level_color(), 0.5);
+            textbox(0, y, width, 4, false);
+            textbox_default_color(Some(TERM_DEFAULT_BG), None);
+            putufln(wrap, &message.msg, message.fg, message.bg);
+        }
     }
 }
 
@@ -704,15 +876,43 @@ fn render_file_select(wrap: &mut RenderWrapper) {
     let file_select_shown = file_select_shown.clamp(0.0, min(h - 5, list.len()) as f32);
     unsafe { FILE_SELECT_SHOWN = file_select_shown };
 
-    putln!(wrap, "File Select: {}", path);
-    putln!(
-        wrap,
-        "    Use arrow keys to navigate, Space to select, Q to cancel."
-    );
-    for _ in 0..w - 2 {
-        put!(wrap, "-");
+    match crate::LOCALE.as_str() {
+        "zh-cn" => putlns_or_uflns!(wrap;
+            "文件选择: {path}";
+            "  > 使用方向键导航，空格选择，Q 取消。";
+            "{}", "-".repeat(w - 2);
+        ),
+        "zh-tw" => putlns_or_uflns!(wrap;
+            "檔案選擇: {path}";
+            "  > 使用方向鍵導航，空格選擇，Q 取消。";
+            "{}", "-".repeat(w - 2);
+        ),
+        "ja-jp" => putlns_or_uflns!(wrap;
+            "ファイル選択: {path}";
+            "  > 矢印キーで移動、スペースで選択、Qでキャンセル。";
+            "{}", "-".repeat(w - 2);
+        ),
+        "fr-fr" => putlns_or_uflns!(wrap;
+            "Sélection de fichier : {path}";
+            "  > Utilisez les flèches pour naviguer, Espace pour sélectionner, Q pour annuler.";
+            "{}", "-".repeat(w - 2);
+        ),
+        "de-de" => putlns_or_uflns!(wrap;
+            "Datei auswählen: {path}";
+            "  > Verwenden Sie die Pfeiltasten zum Navigieren, Leertaste zum Auswählen, Q zum Abbrechen.";
+            "{}", "-".repeat(w - 2);
+        ),
+        "es-es" => putlns_or_uflns!(wrap;
+            "Seleccionar archivo: {path}";
+            "  > Use las flechas para navegar, Espacio para seleccionar, Q para cancelar.";
+            "{}", "-".repeat(w - 2);
+        ),
+        _ => putlns_or_uflns!(wrap;
+            "File Select: {path}";
+            "  > Use arrow keys to navigate, Space to select, Q to cancel.";
+            "{}", "-".repeat(w - 2);
+        ),
     }
-    putln!(wrap, "");
 
     if path.is_empty() {
         *path = "/".to_string();
@@ -727,7 +927,8 @@ fn render_file_select(wrap: &mut RenderWrapper) {
         }
     }
 
-    let max_show = h - 5;
+    let l = h - 2;
+    let max_show = (if font_large_enough(wrap) { l } else { l / 4 }) - 3;
     let mut show_cnt = 0;
     for (i, (file_type, file_name)) in list.iter().enumerate() {
         if i + max_show / 2 < *index && i + max_show < list.len() {
@@ -751,9 +952,9 @@ fn render_file_select(wrap: &mut RenderWrapper) {
             file_name
         );
         if i == *index {
-            putln(wrap, &text, Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG));
+            putln_or_ufln(wrap, &text, Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG));
         } else {
-            putln!(wrap, text);
+            putln_or_ufln(wrap, &text, None, None);
         }
     }
 }
@@ -790,7 +991,15 @@ fn register_file_select_keypress_callbacks() {
             PLAYLIST.lock().push_and_setnext(&path);
             ffmpeg::notify_quit();
         } else {
-            send_error!("Cannot open non-file: {}", path);
+            error_l10n!(
+                "zh-cn" => "无法打开非文件: {}", path;
+                "zh-tw" => "無法開啟非檔案: {}", path;
+                "ja-jp" => "ファイルでないものを開けません: {}", path;
+                "fr-fr" => "Impossible d'ouvrir autre qu'un fichier : {}", path;
+                "de-de" => "Kann keine Nicht-Datei öffnen: {}", path;
+                "es-es" => "No se puede abrir no archivo: {}", path;
+                _ => "Cannot open non-file: {}", path;
+            );
         }
         true
     };
@@ -902,25 +1111,33 @@ fn render_quit_confirmation(wrap: &mut RenderWrapper) {
         return; // 防炸
     }
 
-    let w = 25;
-    let h = 3;
+    let w = if font_large_enough(wrap) { 25 } else { 100 };
+    let h = if font_large_enough(wrap) { 3 } else { 12 };
     let x = (wrap.cells_width as isize - w as isize) / 2;
     let y = (wrap.cells_height as isize - h as isize) / 2;
     mask(
         wrap,
-        x - 10,
-        y - 2,
-        w + 20,
-        h + 4,
+        x - if font_large_enough(wrap) { 10 } else { 40 },
+        y - if font_large_enough(wrap) { 2 } else { 8 },
+        w + if font_large_enough(wrap) { 20 } else { 80 },
+        h + if font_large_enough(wrap) { 4 } else { 16 },
         Some(TERM_DEFAULT_BG),
         TERM_DEFAULT_FG,
         0.5,
     );
     textbox(x, y, w, h, false);
     textbox_default_color(Some(TERM_DEFAULT_BG), None);
-    putln!(wrap, "      Confirm Quit?      ");
-    putln!(wrap, "-------------------------");
-    putln!(wrap, "        q   /   c        ");
+    match crate::LOCALE.as_str() {
+        "zh-cn" => putln_or_ufln!(wrap, "        确认退出？       "),
+        "zh-tw" => putln_or_ufln!(wrap, "        確認離開？       "),
+        "ja-jp" => putln_or_ufln!(wrap, "   終了を確認しますか？  "),
+        "fr-fr" => putln_or_ufln!(wrap, " Confirmer la fermeture ?"),
+        "de-de" => putln_or_ufln!(wrap, "   Beenden bestätigen?   "),
+        "es-es" => putln_or_ufln!(wrap, "   ¿Confirmar salida?    "),
+        _ => putln_or_ufln!(wrap, "      Confirm Quit?      "),
+    }
+    putln_or_ufln!(wrap, "-------------------------");
+    putln_or_ufln!(wrap, "        q   /   c        ");
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -936,6 +1153,90 @@ enum ChromaMode {
     Cyan,
     White,
     Black,
+}
+
+impl Display for ChromaMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match crate::LOCALE.as_str() {
+            "zh-cn" => match self {
+                ChromaMode::None => write!(f, "无"),
+                ChromaMode::Red => write!(f, "红色"),
+                ChromaMode::Green => write!(f, "绿色"),
+                ChromaMode::Blue => write!(f, "蓝色"),
+                ChromaMode::Yellow => write!(f, "黄色"),
+                ChromaMode::Magenta => write!(f, "品红色"),
+                ChromaMode::Cyan => write!(f, "青色"),
+                ChromaMode::White => write!(f, "白色"),
+                ChromaMode::Black => write!(f, "黑色"),
+            },
+            "zh-tw" => match self {
+                ChromaMode::None => write!(f, "無"),
+                ChromaMode::Red => write!(f, "紅色"),
+                ChromaMode::Green => write!(f, "綠色"),
+                ChromaMode::Blue => write!(f, "藍色"),
+                ChromaMode::Yellow => write!(f, "黃色"),
+                ChromaMode::Magenta => write!(f, "品紅色"),
+                ChromaMode::Cyan => write!(f, "青色"),
+                ChromaMode::White => write!(f, "白色"),
+                ChromaMode::Black => write!(f, "黑色"),
+            },
+            "ja-jp" => match self {
+                ChromaMode::None => write!(f, "なし"),
+                ChromaMode::Red => write!(f, "赤"),
+                ChromaMode::Green => write!(f, "緑"),
+                ChromaMode::Blue => write!(f, "青"),
+                ChromaMode::Yellow => write!(f, "黄"),
+                ChromaMode::Magenta => write!(f, "マゼンタ"),
+                ChromaMode::Cyan => write!(f, "シアン"),
+                ChromaMode::White => write!(f, "白"),
+                ChromaMode::Black => write!(f, "黒"),
+            },
+            "fr-fr" => match self {
+                ChromaMode::None => write!(f, "Aucun"),
+                ChromaMode::Red => write!(f, "Rouge"),
+                ChromaMode::Green => write!(f, "Vert"),
+                ChromaMode::Blue => write!(f, "Bleu"),
+                ChromaMode::Yellow => write!(f, "Jaune"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cyan"),
+                ChromaMode::White => write!(f, "Blanc"),
+                ChromaMode::Black => write!(f, "Noir"),
+            },
+            "de-de" => match self {
+                ChromaMode::None => write!(f, "Keine"),
+                ChromaMode::Red => write!(f, "Rot"),
+                ChromaMode::Green => write!(f, "Grün"),
+                ChromaMode::Blue => write!(f, "Blau"),
+                ChromaMode::Yellow => write!(f, "Gelb"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cyan"),
+                ChromaMode::White => write!(f, "Weiß"),
+                ChromaMode::Black => write!(f, "Schwarz"),
+            },
+            "es-es" => match self {
+                ChromaMode::None => write!(f, "Ninguno"),
+                ChromaMode::Red => write!(f, "Rojo"),
+                ChromaMode::Green => write!(f, "Verde"),
+                ChromaMode::Blue => write!(f, "Azul"),
+                ChromaMode::Yellow => write!(f, "Amarillo"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cian"),
+                ChromaMode::White => write!(f, "Blanco"),
+                ChromaMode::Black => write!(f, "Negro"),
+            },
+            _ => match self {
+                ChromaMode::None => write!(f, "None"),
+                ChromaMode::Red => write!(f, "Red"),
+                ChromaMode::Green => write!(f, "Green"),
+                ChromaMode::Blue => write!(f, "Blue"),
+                ChromaMode::Yellow => write!(f, "Yellow"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cyan"),
+                ChromaMode::White => write!(f, "White"),
+                ChromaMode::Black => write!(f, "Black"),
+            },
+        }
+    }
 }
 
 impl ChromaMode {
@@ -1009,10 +1310,42 @@ pub fn register_input_callbacks() {
     });
 
     stdin::register_keypress_callback(Key::Normal('t'), |_| {
-        send_debug!("This is a test debug message.");
-        send_info!("This is a test info message.");
-        send_warn!("This is a test warn message.");
-        send_error!("This is a test error message.");
+        debug_l10n!(
+            "zh-cn" => "这是一条测试调试信息。";
+            "zh-tw" => "這是一條測試調試信息。";
+            "ja-jp" => "これはテスト用のデバッグメッセージです。";
+            "fr-fr" => "Ceci est un message de débogage de test.";
+            "de-de" => "Dies ist eine Test-Debug-Nachricht.";
+            "es-es" => "Este es un mensaje de depuración de prueba.";
+            _       => "This is a test debug message.";
+        );
+        info_l10n!(
+            "zh-cn" => "这是一条测试信息。";
+            "zh-tw" => "這是一條測試信息。";
+            "ja-jp" => "これはテスト用のメッセージです。";
+            "fr-fr" => "Ceci est un message de test.";
+            "de-de" => "Dies ist eine Testnachricht.";
+            "es-es" => "Este es un mensaje de prueba.";
+            _       => "This is a test message.";
+        );
+        warning_l10n!(
+            "zh-cn" => "这是一条测试警告。";
+            "zh-tw" => "這是一條測試警告。";
+            "ja-jp" => "これはテスト用の警告です。";
+            "fr-fr" => "Ceci est un avertissement de test.";
+            "de-de" => "Dies ist eine Testwarnung.";
+            "es-es" => "Esta es una advertencia de prueba.";
+            _       => "This is a test warning.";
+        );
+        error_l10n!(
+            "zh-cn" => "这是一条测试错误。";
+            "zh-tw" => "這是一條測試錯誤。";
+            "ja-jp" => "これはテスト用のエラーです。";
+            "fr-fr" => "Ceci est une erreur de test.";
+            "de-de" => "Dies ist ein Testfehler.";
+            "es-es" => "Este es un error de prueba.";
+            _       => "This is a test error.";
+        );
         true
     });
 

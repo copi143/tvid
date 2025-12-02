@@ -10,6 +10,7 @@ pub struct MaxSizedQueue<T, const SIZE: usize> {
     queue: VecDeque<T>,
 }
 
+#[allow(unused)]
 impl<T, const SIZE: usize> MaxSizedQueue<T, SIZE> {
     pub const fn new() -> Self {
         Self {

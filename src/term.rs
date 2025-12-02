@@ -222,7 +222,7 @@ pub fn setup_panic_handler() {
             .location()
             .map(|l| format!("{}:{}", l.file(), l.line()))
             .unwrap_or_default();
-        send_fatal!("[panic] {} at {}", msg, location);
+        fatal!("[panic] {msg} at {location}");
     }));
 }
 

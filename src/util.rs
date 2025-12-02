@@ -467,6 +467,48 @@ pub enum ColorMode {
     Palette256Only,
 }
 
+impl Display for ColorMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match crate::LOCALE.as_str() {
+            "zh-cn" => match self {
+                ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
+                ColorMode::Palette256Prefer => write!(f, "256 色优先"),
+                ColorMode::Palette256Only => write!(f, "仅 256 色"),
+            },
+            "zh-tw" => match self {
+                ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
+                ColorMode::Palette256Prefer => write!(f, "256 色優先"),
+                ColorMode::Palette256Only => write!(f, "僅 256 色"),
+            },
+            "ja-jp" => match self {
+                ColorMode::TrueColorOnly => write!(f, "フルカラー"),
+                ColorMode::Palette256Prefer => write!(f, "256色優先"),
+                ColorMode::Palette256Only => write!(f, "256色のみ"),
+            },
+            "fr-fr" => match self {
+                ColorMode::TrueColorOnly => write!(f, "Couleurs vraies"),
+                ColorMode::Palette256Prefer => write!(f, "Palette 256 couleurs prioritaire"),
+                ColorMode::Palette256Only => write!(f, "Palette 256 couleurs uniquement"),
+            },
+            "de-de" => match self {
+                ColorMode::TrueColorOnly => write!(f, "Truecolor-Modus"),
+                ColorMode::Palette256Prefer => write!(f, "256-Farben-Priorität"),
+                ColorMode::Palette256Only => write!(f, "Nur 256 Farben"),
+            },
+            "es-es" => match self {
+                ColorMode::TrueColorOnly => write!(f, "Modo de color verdadero"),
+                ColorMode::Palette256Prefer => write!(f, "Prioridad de paleta de 256 colores"),
+                ColorMode::Palette256Only => write!(f, "Solo paleta de 256 colores"),
+            },
+            _ => match self {
+                ColorMode::TrueColorOnly => write!(f, "True Color Mode"),
+                ColorMode::Palette256Prefer => write!(f, "256 Color Palette Prefer"),
+                ColorMode::Palette256Only => write!(f, "256 Color Palette Only"),
+            },
+        }
+    }
+}
+
 impl ColorMode {
     pub const fn new() -> Self {
         ColorMode::TrueColorOnly

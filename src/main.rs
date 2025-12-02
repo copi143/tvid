@@ -8,6 +8,7 @@
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::partialeq_to_none)]
 #![allow(clippy::should_implement_trait)]
+#![allow(clippy::option_map_unit_fn)]
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -57,6 +58,12 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .enable_all()
         .build()
         .expect("Failed to create Tokio runtime")
+});
+
+pub static LOCALE: LazyLock<String> = LazyLock::new(|| {
+    get_locale()
+        .map(|l| l.to_lowercase())
+        .unwrap_or("en-us".to_string())
 });
 
 macro_rules! eprintlns {
@@ -135,12 +142,6 @@ fn print_no_playlist(program_name: &str) {
         ),
     }
 }
-
-static LOCALE: LazyLock<String> = LazyLock::new(|| {
-    get_locale()
-        .map(|l| l.to_lowercase())
-        .unwrap_or("en-us".to_string())
-});
 
 fn print_help(program_name: &str) {
     match LOCALE.as_str() {
@@ -350,7 +351,15 @@ fn main() -> Result<()> {
     APP_START_TIME.set(Instant::now()).unwrap();
 
     let program_name = env::args().nth(0).unwrap_or_else(|| {
-        eprintln!("Got 0 args? What the fuck?");
+        match LOCALE.as_str() {
+            "zh-cn" => eprintln!("666 这几把的 0 个参数，没救了属于是"),
+            "zh-tw" => eprintln!("媽的 0 個參數，什麼鳥東西"),
+            "ja-jp" => eprintln!("なんだこれ、引数0個とかありえないだろ"),
+            "fr-fr" => eprintln!("Qu'est-ce que c'est que ça, 0 arguments ?"),
+            "de-de" => eprintln!("Was zum Teufel ist das, 0 Argumente?"),
+            "es-es" => eprintln!("¿Qué diablos es esto, 0 argumentos?"),
+            _ => eprintln!("Got 0 args? What the fuck?"),
+        }
         std::process::exit(1);
     });
 
@@ -399,7 +408,15 @@ fn main() -> Result<()> {
     let mut continuous_failure_count = 0;
     while let Some(path) = { PLAYLIST.lock().next().cloned() } {
         let success = ffmpeg::decode_main(&path).unwrap_or_else(|err| {
-            send_error!("ffmpeg decode error: {}", err);
+            error_l10n!(
+                "zh-cn" => "ffmpeg 解码错误: {err}";
+                "zh-tw" => "ffmpeg 解碼錯誤: {err}";
+                "ja-jp" => "ffmpeg デコードエラー: {err}";
+                "fr-fr" => "erreur de décodage ffmpeg: {err}";
+                "de-de" => "ffmpeg Decode-Fehler: {err}";
+                "es-es" => "error de decodificación de ffmpeg: {err}";
+                _       => "ffmpeg decode error: {err}";
+            );
             false
         });
         if success {
@@ -411,7 +428,15 @@ fn main() -> Result<()> {
             break;
         }
         if continuous_failure_count >= PLAYLIST.lock().len() {
-            send_error!("Too many continuous failures, exiting.");
+            error_l10n!(
+                "zh-cn" => "连续失败次数过多，程序退出。";
+                "zh-tw" => "連續失敗次數過多，程式退出。";
+                "ja-jp" => "連続した失敗が多すぎます。終了します。";
+                "fr-fr" => "Trop d'échecs consécutifs, sortie.";
+                "de-de" => "Zu viele aufeinanderfolgende Fehler, Programm wird beendet.";
+                "es-es" => "Demasiados fallos continuos, saliendo.";
+                _       => "Too many continuous failures, exiting.";
+            );
             break;
         }
     }
@@ -419,19 +444,51 @@ fn main() -> Result<()> {
     term::request_quit();
 
     render_main.join().unwrap_or_else(|err| {
-        send_error!("render thread join error: {:?}", err);
+        error_l10n!(
+            "zh-cn" => "渲染线程 join 错误: {err:?}";
+            "zh-tw" => "渲染執行緒 join 錯誤: {err:?}";
+            "ja-jp" => "レンダリングスレッドの join エラー: {err:?}";
+            "fr-fr" => "Erreur de jointure du thread de rendu : {err:?}";
+            "de-de" => "Render-Thread Join-Fehler: {err:?}";
+            "es-es" => "Error al unir el hilo de render: {err:?}";
+            _ => "render thread join error: {err:?}";
+        );
     });
     TOKIO_RUNTIME.block_on(async {
         output_main.await.unwrap_or_else(|err| {
-            send_error!("output task join error: {:?}", err);
+            error_l10n!(
+                "zh-cn" => "输出任务 join 错误: {err:?}";
+                "zh-tw" => "輸出任務 join 錯誤: {err:?}";
+                "ja-jp" => "出力タスクの join エラー: {err:?}";
+                "fr-fr" => "Erreur de jointure de la tâche de sortie : {err:?}";
+                "de-de" => "Output-Task Join-Fehler: {err:?}";
+                "es-es" => "Error de unión de la tarea de salida: {err:?}";
+                _ => "output task join error: {err:?}";
+            );
         });
         input_main.await.unwrap_or_else(|err| {
-            send_error!("input task join error: {:?}", err);
+            error_l10n!(
+                "zh-cn" => "输入任务 join 错误: {err:?}";
+                "zh-tw" => "輸入任務 join 錯誤: {err:?}";
+                "ja-jp" => "入力タスクの join エラー: {err:?}";
+                "fr-fr" => "Erreur de jointure de la tâche d'entrée : {err:?}";
+                "de-de" => "Input-Task Join-Fehler: {err:?}";
+                "es-es" => "Error de unión de la tarea de entrada: {err:?}";
+                _ => "input task join error: {err:?}";
+            );
         });
     });
 
     config::save(None).unwrap_or_else(|err| {
-        send_error!("config save error: {}", err);
+        error_l10n!(
+            "zh-cn" => "配置保存错误: {err}";
+            "zh-tw" => "配置儲存錯誤: {err}";
+            "ja-jp" => "設定の保存エラー: {err}";
+            "fr-fr" => "Erreur d'enregistrement de la configuration : {err}";
+            "de-de" => "Fehler beim Speichern der Konfiguration: {err}";
+            "es-es" => "Error al guardar la configuración: {err}";
+            _ => "config save error: {err}";
+        );
     });
 
     term::quit();

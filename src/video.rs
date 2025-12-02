@@ -50,7 +50,15 @@ pub fn video_main() {
         DECODER_WAKEUP.notify_one();
 
         if frame.width() == 0 || frame.height() == 0 {
-            send_error!("Video frame has zero width or height, skipping");
+            error_l10n!(
+                "zh-cn" => "视频帧宽度或高度为零，跳过";
+                "zh-tw" => "視訊幀寬度或高度為零，跳過";
+                "ja-jp" => "ビデオフレームの幅または高さがゼロのため、スキップします";
+                "fr-fr" => "la largeur ou la hauteur de la trame vidéo est nulle, saut";
+                "de-de" => "Videoframe hat null Breite oder Höhe, überspringen";
+                "es-es" => "El fotograma de video tiene ancho o alto cero, se omite";
+                _       => "Video frame has zero width or height, skipping";
+            );
             continue;
         }
 
@@ -67,9 +75,25 @@ pub fn video_main() {
         let seeked = HINT_SEEKED.swap(false, Ordering::SeqCst);
         let played = played_time_or_zero();
         if !seeked && frametime + Duration::from_millis(100) < played {
-            send_debug!("Video frame too late: frame time {frametime:?}, played time {played:?}");
+            debug_l10n!(
+                "zh-cn" => "视频帧太晚: 帧时间 {frametime:?}, 播放时间 {played:?}";
+                "zh-tw" => "視訊幀太晚: 幀時間 {frametime:?}, 播放時間 {played:?}";
+                "ja-jp" => "ビデオフレームが遅すぎる: フレーム時間 {frametime:?}, 再生時間 {played:?}";
+                "fr-fr" => "Trame vidéo trop tard : temps de la trame {frametime:?}, temps de lecture {played:?}";
+                "de-de" => "Videoframe zu spät: Frame-Zeit {frametime:?}, Wiedergabe-Zeit {played:?}";
+                "es-es" => "Fotograma de video demasiado tarde: tiempo de fotograma {frametime:?}, tiempo de reproducción {played:?}";
+                _       => "Video frame too late: frame time {frametime:?}, played time {played:?}";
+            );
             increment_video_skipped_frames();
-            send_error!("Video frame too late, skipping");
+            error_l10n!(
+                "zh-cn" => "视频帧太晚，跳过";
+                "zh-tw" => "視訊幀太晚，跳過";
+                "ja-jp" => "ビデオフレームが遅すぎるため、スキップします";
+                "fr-fr" => "Trame vidéo trop tard, saut";
+                "de-de" => "Videoframe zu spät, überspringen";
+                "es-es" => "Fotograma de video demasiado tarde, se omite";
+                _       => "Video frame too late, skipping";
+            );
             continue;
         }
 
@@ -88,7 +112,15 @@ pub fn video_main() {
                     VIDEO_PIXELS.y() as u32,
                     Flags::BILINEAR,
                 ) else {
-                    send_error!("Could not create scaler for video frame");
+                    error_l10n!(
+                        "zh-cn" => "无法为视频帧创建缩放器";
+                        "zh-tw" => "無法為視訊幀建立縮放器";
+                        "ja-jp" => "ビデオフレームのスケーラーを作成できません";
+                        "fr-fr" => "Impossible de créer un scaler pour la trame vidéo";
+                        "de-de" => "Konnte keinen Skalierer für Videoframes erstellen";
+                        "es-es" => "No se pudo crear un escalador para el fotograma de video";
+                        _       => "Could not create scaler for video frame";
+                    );
                     break;
                 };
                 scaler = Some(sws);
@@ -102,7 +134,18 @@ pub fn video_main() {
             let scaler = scaler.as_mut().unwrap();
 
             let mut scaled = VideoFrame::empty();
-            scaler.run(&frame, &mut scaled).expect("scaler run failed");
+            if let Err(e) = scaler.run(&frame, &mut scaled) {
+                error_l10n!(
+                    "zh-cn" => "无法缩放视频帧: {e}";
+                    "zh-tw" => "無法縮放視訊幀: {e}";
+                    "ja-jp" => "ビデオフレームをスケーリングできません: {e}";
+                    "fr-fr" => "Impossible de mettre à l'échelle la trame vidéo : {e}";
+                    "de-de" => "Konnte Videoframe nicht skalieren: {e}";
+                    "es-es" => "No se pudo escalar el fotograma de video: {e}";
+                    _       => "Could not scale video frame: {e}";
+                );
+                break;
+            }
 
             // 使用 if 防止卡死
             if !avsync::is_paused() && frametime > played_time_or_zero() + Duration::from_millis(5)

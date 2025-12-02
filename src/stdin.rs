@@ -60,7 +60,7 @@ fn try_getc() -> Result<Option<u8>> {
                 STDIN_LEN = n as usize;
                 Ok(Some(STDIN_BUF[0]))
             } else {
-                send_error!("Failed to read from stdin, ret = {}", n);
+                error!("Failed to read from stdin, ret = {}", n);
                 Err(anyhow::anyhow!("failed to read from stdin"))
             }
         }
@@ -463,7 +463,7 @@ async fn input_escape_square_number(num: i64) -> Result<()> {
                 23 => 11,
                 24 => 12,
                 _ => {
-                    send_error!("Unknown escape sequence: ESC [ {} ~", num);
+                    error!("Unknown escape sequence: ESC [ {} ~", num);
                     return Ok(());
                 }
             }));
@@ -474,10 +474,26 @@ async fn input_escape_square_number(num: i64) -> Result<()> {
                 data.push(getc().await?);
             }
             let data = &data[..data.len() - 6];
-            send_warn!("Unhandled paste data: {data:?}");
+            warning_l10n!(
+                "zh-cn" => "未处理的粘贴数据：{data:?}";
+                "zh-tw" => "未處理的貼上資料：{data:?}";
+                "ja-jp" => "未処理の貼り付けデータ：{data:?}";
+                "fr-fr" => "Données collées non traitées : {data:?}";
+                "de-de" => "Unbehandelte Einfügedaten: {data:?}";
+                "es-es" => "Datos pegados no manejados: {data:?}";
+                _       => "Unhandled paste data: {data:?}";
+            );
         }
         _ => {
-            send_error!("Unknown escape sequence: ESC [ {} ~", num);
+            error_l10n!(
+                "zh-cn" => "未知的转义序列：ESC [ {num} ~";
+                "zh-tw" => "未知的轉義序列：ESC [ {num} ~";
+                "ja-jp" => "不明なエスケープシーケンス：ESC [ {num} ~";
+                "fr-fr" => "Séquence d'échappement inconnue : ESC [ {num} ~";
+                "de-de" => "Unbekannte Escape-Sequenz: ESC [ {num} ~";
+                "es-es" => "Secuencia de escape desconocida: ESC [ {num} ~";
+                _       => "Unknown escape sequence: ESC [ {num} ~";
+            );
         }
     }
     Ok(())
@@ -502,7 +518,7 @@ async fn input_escape_square_angle() -> Result<()> {
                 b'M' => break false,
                 b'm' => break true,
                 _ => {
-                    send_error!("Invalid mouse sequence: ESC < ...");
+                    error!("Invalid mouse sequence: ESC < ...");
                     return Ok(());
                 }
             }
@@ -510,7 +526,7 @@ async fn input_escape_square_angle() -> Result<()> {
         (s.split(';').map(String::from).collect::<Vec<_>>(), mouseup)
     };
     if params.len() != 3 {
-        send_error!("Invalid mouse sequence: ESC < ...");
+        error!("Invalid mouse sequence: ESC < ...");
         return Ok(());
     }
     let Ok(params) = params
@@ -518,7 +534,7 @@ async fn input_escape_square_angle() -> Result<()> {
         .map(|s| s.parse::<i32>())
         .collect::<Result<Vec<_>, _>>()
     else {
-        send_error!("Invalid mouse sequence: ESC < ...");
+        error!("Invalid mouse sequence: ESC < ...");
         return Ok(());
     };
     let pc = (params[0] & 0b10000) != 0;
@@ -538,10 +554,9 @@ async fn input_escape_square_angle() -> Result<()> {
         258 => MouseAction::Button10Down,
         259 => MouseAction::Button11Down,
         _ => {
-            send_error!(
+            error!(
                 "Unknown mouse action: (0b{:09b}), button up: {}",
-                params[0],
-                mouseup
+                params[0], mouseup
             );
             return Ok(());
         }
@@ -560,7 +575,7 @@ async fn input_escape_square_M() -> Result<()> {
     let b2 = getc().await? as i32 - 32;
     let b3 = getc().await? as i32 - 32;
     if b2 < 0 || b3 < 0 {
-        send_error!("Invalid mouse sequence: ESC [ M {} {} {}", b1, b2, b3);
+        error!("Invalid mouse sequence: ESC [ M {} {} {}", b1, b2, b3);
         return Ok(());
     }
     let pc = (b1 & 0b10000) != 0;
@@ -578,7 +593,7 @@ async fn input_escape_square_M() -> Result<()> {
         128 => MouseAction::Side1Down,
         129 => MouseAction::Side2Down,
         _ => {
-            send_error!("Unknown mouse action: (0b{:09b})", b1);
+            error!("Unknown mouse action: (0b{:09b})", b1);
             return Ok(());
         }
     };
@@ -625,13 +640,13 @@ async fn input_escape_square() -> Result<()> {
             if let Ok(num) = input_parsenum(c, b'~').await {
                 input_escape_square_number(num).await?;
             } else {
-                send_error!("Invalid escape sequence: ESC [ <number> ~ (number parsing failed)");
+                error!("Invalid escape sequence: ESC [ <number> ~ (number parsing failed)");
             }
         }
         b'<' => input_escape_square_angle().await?,
         b'M' => input_escape_square_M().await?,
         c => {
-            send_error!("Unknown escape sequence: ESC [ {} ({})", c as char, c);
+            error!("Unknown escape sequence: ESC [ {} ({})", c as char, c);
             return Ok(());
         }
     }
@@ -658,7 +673,15 @@ async fn input_escape() -> Result<()> {
         }
         b'[' => input_escape_square().await?,
         c => {
-            send_error!("Unknown escape sequence: ESC {} ({})", c as char, c);
+            error_l10n!(
+                "zh-cn" => "未知的转义序列：ESC {} ({})", (c as char), c;
+                "zh-tw" => "未知的轉義序列：ESC {} ({})", (c as char), c;
+                "ja-jp" => "不明なエスケープシーケンス：ESC {} ({})", (c as char), c;
+                "fr-fr" => "Séquence d'échappement inconnue : ESC {} ({})", (c as char), c;
+                "de-de" => "Unbekannte Escape-Sequenz: ESC {} ({})", (c as char), c;
+                "es-es" => "Secuencia de escape desconocida: ESC {} ({})", (c as char), c;
+                _ => "Unknown escape sequence: ESC {} ({})", (c as char), c;
+            );
         }
     }
     Ok(())
@@ -688,7 +711,15 @@ async fn input() -> Result<()> {
             call_keypress_callbacks(Key::Normal(c as char));
         }
         c => {
-            send_warn!("Unhandled key: {} ({})", c as char, c);
+            warning_l10n!(
+                "zh-cn" => "未处理的按键：{} ({})", (c as char), c;
+                "zh-tw" => "未處理的按鍵：{} ({})", (c as char), c;
+                "ja-jp" => "未処理のキー：{} ({})", (c as char), c;
+                "fr-fr" => "Touche non gérée : {} ({})", (c as char), c;
+                "de-de" => "Unbehandelter Schlüssel: {} ({})", (c as char), c;
+                "es-es" => "Tecla no manejada: {} ({})", (c as char), c;
+                _       => "Unhandled key: {} ({})", (c as char), c;
+            );
         }
     }
     Ok(())

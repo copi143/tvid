@@ -110,6 +110,7 @@ pub fn updatesize(xvideo: usize, yvideo: usize) {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+#[allow(unused)]
 pub struct RenderWrapper<'frame, 'cells> {
     pub frame: &'frame [Color],
     pub frame_width: usize,
@@ -139,6 +140,7 @@ pub struct RenderWrapper<'frame, 'cells> {
     pub term_font_height: f32,
 }
 
+#[allow(unused)]
 impl RenderWrapper<'_, '_> {
     pub fn pixel_at(&self, x: usize, y: usize) -> Color {
         self.frame[y * self.frame_pitch + x]
@@ -173,8 +175,17 @@ async fn render(frame: &[Color], pitch: usize) {
     render_frame(frame, pitch).await;
 
     let mut force_flush = FORCEFLUSH_NEXT.swap(false, Ordering::SeqCst);
-    if pending_frames() > 3 {
-        send_error!("Too many pending frames: {}", pending_frames());
+    let pf = pending_frames();
+    if pf > 3 {
+        error_l10n!(
+            "zh-cn" => "待处理帧过多: {pf}";
+            "zh-tw" => "待處理幀過多: {pf}";
+            "ja-jp" => "保留フレームが多すぎます: {pf}";
+            "fr-fr" => "Trop de trames en attente : {pf}";
+            "de-de" => "Zu viele ausstehende Frames: {pf}";
+            "es-es" => "Demasiados fotogramas pendientes: {pf}";
+            _ => "Too many pending frames: {pf}";
+        );
         force_flush = true;
     }
     print_diff(force_flush).await;
