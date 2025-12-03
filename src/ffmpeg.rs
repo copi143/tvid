@@ -233,6 +233,9 @@ pub fn decode_main(path: &str) -> Result<bool> {
         None
     };
 
+    let mut video_last_pts = None;
+    let mut audio_last_pts = None;
+
     let mut video_queue = VecDeque::new();
     let mut audio_queue = VecDeque::new();
 
@@ -241,6 +244,8 @@ pub fn decode_main(path: &str) -> Result<bool> {
     while !(TERM_QUIT.load(Ordering::SeqCst) || avsync::decode_ended()) {
         if let Some((abs, off)) = SEEK_REQUEST.lock().take() {
             if do_seek(&mut ictx, abs, off, &mut video_queue, &mut audio_queue) {
+                video_last_pts = None;
+                audio_last_pts = None;
                 continue;
             } else {
                 break;
@@ -257,6 +262,8 @@ pub fn decode_main(path: &str) -> Result<bool> {
 
         if let Some((abs, off)) = SEEK_REQUEST.lock().take() {
             if do_seek(&mut ictx, abs, off, &mut video_queue, &mut audio_queue) {
+                video_last_pts = None;
+                audio_last_pts = None;
                 continue;
             } else {
                 break;
@@ -325,8 +332,8 @@ pub fn decode_main(path: &str) -> Result<bool> {
                 break;
             }
 
-            decode_video(&mut video_decoder, &mut video_queue);
-            decode_audio(&mut audio_decoder, &mut audio_queue);
+            decode_video(&mut video_decoder, &mut video_queue, &mut video_last_pts);
+            decode_audio(&mut audio_decoder, &mut audio_queue, &mut audio_last_pts);
 
             let mut lock = DECODER_WAKEUP_MUTEX.lock();
             if *lock == false {
@@ -407,60 +414,100 @@ fn do_seek(
 fn decode_video(
     video_decoder: &mut Option<ffmpeg_next::decoder::Video>,
     video_queue: &mut VecDeque<ffmpeg_next::Packet>,
+    video_pts: &mut Option<i64>,
 ) {
-    while video_queue.len() > 0 && VIDEO_FRAME.lock().is_none() {
-        let Some(video_decoder) = video_decoder.as_mut() else {
-            panic!("video_queue is not empty, so video_decoder must exist");
-        };
-        let Some(packet) = video_queue.pop_front() else {
-            panic!("video_queue is not empty, so packet must exist");
-        };
-        if let Err(e) = video_decoder.send_packet(&packet) {
-            eprintln!("video send_packet err: {:?}", e);
-            return;
+    if VIDEO_FRAME.lock().is_some() {
+        return;
+    }
+
+    let Some(video_decoder) = video_decoder.as_mut() else {
+        return;
+    };
+
+    let mut frame = VideoFrame::empty();
+
+    if video_decoder.receive_frame(&mut frame).is_ok() {
+        if frame.pts().is_none() {
+            frame.set_pts(*video_pts);
         }
-        let pts = packet.pts();
-        drop(packet);
-        let mut frame = VideoFrame::empty();
-        while video_decoder.receive_frame(&mut frame).is_ok() {
-            if frame.pts().is_none() {
-                frame.set_pts(pts);
-            }
-            let mut lock = VIDEO_FRAME.lock();
-            assert!(lock.is_none(), "video frame queue should be empty");
-            lock.replace(std::mem::replace(&mut frame, VideoFrame::empty()));
-            VIDEO_FRAME_SIG.notify_one();
+        let mut lock = VIDEO_FRAME.lock();
+        assert!(lock.is_none(), "video frame queue should be empty");
+        lock.replace(frame);
+        VIDEO_FRAME_SIG.notify_one();
+        return;
+    }
+
+    let Some(packet) = video_queue.pop_front() else {
+        return;
+    };
+
+    *video_pts = packet.pts();
+
+    if let Err(e) = video_decoder.send_packet(&packet) {
+        eprintln!("video send_packet err: {:?}", e);
+        return;
+    }
+
+    drop(packet);
+
+    if video_decoder.receive_frame(&mut frame).is_ok() {
+        if frame.pts().is_none() {
+            frame.set_pts(*video_pts);
         }
+        let mut lock = VIDEO_FRAME.lock();
+        assert!(lock.is_none(), "video frame queue should be empty");
+        lock.replace(frame);
+        VIDEO_FRAME_SIG.notify_one();
     }
 }
 
 fn decode_audio(
     audio_decoder: &mut Option<ffmpeg_next::decoder::Audio>,
     audio_queue: &mut VecDeque<ffmpeg_next::Packet>,
+    audio_pts: &mut Option<i64>,
 ) {
-    while audio_queue.len() > 0 && AUDIO_FRAME.lock().is_none() {
-        let Some(audio_decoder) = audio_decoder.as_mut() else {
-            panic!("audio_queue is not empty, so audio_decoder must exist");
-        };
-        let Some(packet) = audio_queue.pop_front() else {
-            panic!("audio_queue is not empty, so packet must exist");
-        };
-        if let Err(e) = audio_decoder.send_packet(&packet) {
-            eprintln!("audio send_packet err: {:?}", e);
-            return;
+    if AUDIO_FRAME.lock().is_some() {
+        return;
+    }
+
+    let Some(audio_decoder) = audio_decoder.as_mut() else {
+        return;
+    };
+
+    let mut frame = AudioFrame::empty();
+
+    if audio_decoder.receive_frame(&mut frame).is_ok() {
+        if frame.pts().is_none() {
+            frame.set_pts(*audio_pts);
         }
-        let pts = packet.pts();
-        drop(packet);
-        let mut frame = AudioFrame::empty();
-        while audio_decoder.receive_frame(&mut frame).is_ok() {
-            if frame.pts().is_none() {
-                frame.set_pts(pts);
-            }
-            let mut lock = AUDIO_FRAME.lock();
-            assert!(lock.is_none(), "audio frame queue should be empty");
-            lock.replace(std::mem::replace(&mut frame, AudioFrame::empty()));
-            AUDIO_FRAME_SIG.notify_one();
+        let mut lock = AUDIO_FRAME.lock();
+        assert!(lock.is_none(), "audio frame queue should be empty");
+        lock.replace(frame);
+        AUDIO_FRAME_SIG.notify_one();
+        return;
+    }
+
+    let Some(packet) = audio_queue.pop_front() else {
+        return;
+    };
+
+    *audio_pts = packet.pts();
+
+    if let Err(e) = audio_decoder.send_packet(&packet) {
+        eprintln!("audio send_packet err: {:?}", e);
+        return;
+    }
+
+    drop(packet);
+
+    if audio_decoder.receive_frame(&mut frame).is_ok() {
+        if frame.pts().is_none() {
+            frame.set_pts(*audio_pts);
         }
+        let mut lock = AUDIO_FRAME.lock();
+        assert!(lock.is_none(), "audio frame queue should be empty");
+        lock.replace(frame);
+        AUDIO_FRAME_SIG.notify_one();
     }
 }
 
