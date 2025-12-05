@@ -9,12 +9,11 @@ use unicode_width::UnicodeWidthChar;
 use crate::avsync;
 use crate::logging::get_messages;
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
-use crate::render::{COLOR_MODE, RenderWrapper, TERM_PIXELS, TERM_SIZE};
+use crate::render::{CHROMA_KEY_COLOR, COLOR_MODE, RenderWrapper, TERM_PIXELS, TERM_SIZE};
 use crate::statistics::get_statistics;
 use crate::stdin::{self, Key, MouseAction};
 use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
-use crate::video::CHROMA_KEY_COLOR;
 use crate::{ffmpeg, term};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -458,7 +457,7 @@ fn render_help(wrap: &mut RenderWrapper) {
     );
     textbox(x + 2, y + 1, w - 4, h - 2, false);
     textbox_default_color(Some(TERM_DEFAULT_BG), None);
-    match crate::LOCALE.as_str() {
+    match locale!() {
         "zh-cn" => putlns_or_uflns!(wrap;
             "               帮助信息 (按 h 关闭)               ";
             "--------------------------------------------------";
@@ -607,7 +606,7 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
 
     let statistics = get_statistics();
 
-    match crate::LOCALE.as_str() {
+    match locale!() {
         "zh-cn" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
             "按 'q' 退出，'n' 跳到下一项，'l' 打开播放列表";
@@ -754,7 +753,7 @@ fn render_playlist(wrap: &mut RenderWrapper) {
     textbox_default_color(Some(TERM_DEFAULT_BG), None);
 
     let len = PLAYLIST.lock().len();
-    match crate::LOCALE.as_str() {
+    match locale!() {
         "zh-cn" => putln_or_ufln!(wrap, "播放列表 ({len} 项):"),
         "zh-tw" => putln_or_ufln!(wrap, "播放清單 ({len} 項):"),
         "ja-jp" => putln_or_ufln!(wrap, "プレイリスト ({len} アイテム):"),
@@ -876,7 +875,7 @@ fn render_file_select(wrap: &mut RenderWrapper) {
     let file_select_shown = file_select_shown.clamp(0.0, min(h - 5, list.len()) as f32);
     unsafe { FILE_SELECT_SHOWN = file_select_shown };
 
-    match crate::LOCALE.as_str() {
+    match locale!() {
         "zh-cn" => putlns_or_uflns!(wrap;
             "文件选择: {path}";
             "  > 使用方向键导航，空格选择，Q 取消。";
@@ -1127,7 +1126,7 @@ fn render_quit_confirmation(wrap: &mut RenderWrapper) {
     );
     textbox(x, y, w, h, false);
     textbox_default_color(Some(TERM_DEFAULT_BG), None);
-    match crate::LOCALE.as_str() {
+    match locale!() {
         "zh-cn" => putln_or_ufln!(wrap, "        确认退出？       "),
         "zh-tw" => putln_or_ufln!(wrap, "        確認離開？       "),
         "ja-jp" => putln_or_ufln!(wrap, "   終了を確認しますか？  "),
@@ -1157,7 +1156,7 @@ enum ChromaMode {
 
 impl Display for ChromaMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             "zh-cn" => match self {
                 ChromaMode::None => write!(f, "无"),
                 ChromaMode::Red => write!(f, "红色"),

@@ -174,6 +174,7 @@ macro_rules! fatal {
     };
 }
 
+#[cfg(feature = "i18n")]
 macro_rules! debug_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
         match crate::LOCALE.as_str() {
@@ -184,6 +185,17 @@ macro_rules! debug_l10n {
     };
 }
 
+#[cfg(not(feature = "i18n"))]
+macro_rules! debug_l10n {
+    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
+        debug_l10n!($($rest)+)
+    };
+    (_ => $($arg:tt),+ $(;)?) => {
+        debug!($($arg),+)
+    };
+}
+
+#[cfg(feature = "i18n")]
 macro_rules! info_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
         match crate::LOCALE.as_str() {
@@ -194,6 +206,17 @@ macro_rules! info_l10n {
     };
 }
 
+#[cfg(not(feature = "i18n"))]
+macro_rules! info_l10n {
+    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
+        info_l10n!($($rest)+)
+    };
+    (_ => $($arg:tt),+ $(;)?) => {
+        info!($($arg),+)
+    };
+}
+
+#[cfg(feature = "i18n")]
 macro_rules! warning_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
         match crate::LOCALE.as_str() {
@@ -204,6 +227,17 @@ macro_rules! warning_l10n {
     };
 }
 
+#[cfg(not(feature = "i18n"))]
+macro_rules! warning_l10n {
+    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
+        warning_l10n!($($rest)+)
+    };
+    (_ => $($arg:tt),+ $(;)?) => {
+        warning!($($arg),+)
+    };
+}
+
+#[cfg(feature = "i18n")]
 macro_rules! error_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
         match crate::LOCALE.as_str() {
@@ -214,6 +248,17 @@ macro_rules! error_l10n {
     };
 }
 
+#[cfg(not(feature = "i18n"))]
+macro_rules! error_l10n {
+    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
+        error_l10n!($($rest)+)
+    };
+    (_ => $($arg:tt),+ $(;)?) => {
+        error!($($arg),+)
+    };
+}
+
+#[cfg(feature = "i18n")]
 macro_rules! fatal_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
         match crate::LOCALE.as_str() {
@@ -221,5 +266,36 @@ macro_rules! fatal_l10n {
                 $lang => fatal!($($arg),+),
             )+
         }
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! fatal_l10n {
+    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
+        fatal_l10n!($($rest)+)
+    };
+    (_ => $($arg:tt),+ $(;)?) => {
+        fatal!($($arg),+)
+    };
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! eprintln_l10n {
+    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
+        match crate::LOCALE.as_str() {
+            $(
+                $lang => eprintln!($($arg),+),
+            )+
+        }
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! eprintln_l10n {
+    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
+        eprintln_l10n!($($rest)+)
+    };
+    (_ => $($arg:tt),+ $(;)?) => {
+        eprintln!($($arg),+)
     };
 }

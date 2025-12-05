@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use unicode_width::UnicodeWidthChar;
 
-use crate::audio::{AUDIO_VOLUME_STATISTICS, AUDIO_VOLUME_STATISTICS_LEN};
 use crate::playlist::PLAYLIST;
 use crate::stdout::{pend_print, pending_frames, remove_pending_frames};
 use crate::term::Winsize;
@@ -28,6 +27,9 @@ pub static VIDEO_PIXELS: XY = XY::new();
 /// 视频边缘填充大小 (字符)
 pub static VIDEO_PADDING: TBLR = TBLR::new();
 
+/// 更新终端和视频大小
+/// - 计算新的视频显示大小和填充
+/// - 如果大小有变化，重置渲染缓冲区
 pub fn updatesize(xvideo: usize, yvideo: usize) {
     if (xvideo == 0 && yvideo != 0) || (xvideo != 0 && yvideo == 0) {
         panic!("Invalid video size: {xvideo}x{yvideo}");
@@ -110,6 +112,7 @@ pub fn updatesize(xvideo: usize, yvideo: usize) {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+/// 渲染回调的包装结构
 #[allow(unused)]
 pub struct RenderWrapper<'frame, 'cells> {
     pub frame: &'frame [Color],
@@ -276,7 +279,7 @@ async fn print_diff_line(
     buf
 }
 
-async fn print_diff_async(
+async fn print_diff_inner(
     force_flush: bool,
     cells: Vec<&'static mut [Cell]>,
     lasts: Vec<&'static [Cell]>,
@@ -309,6 +312,7 @@ async fn print_diff_async(
     }
 }
 
+/// 打印帧差异部分
 async fn print_diff(force_flush: bool) {
     let (term_width, term_height) = TERM_SIZE.get();
     let (this_frame, last_frame) = &mut *FRAMES.lock().await;
@@ -337,7 +341,7 @@ async fn print_diff(force_flush: bool) {
     assert!(cells.len() == term_height, "cells length mismatch");
     assert!(lasts.len() == term_height, "lasts length mismatch");
 
-    print_diff_async(force_flush, cells, lasts).await;
+    print_diff_inner(force_flush, cells, lasts).await;
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -348,13 +352,13 @@ static VIDEO_FRAME_REQUEST: Condvar = Condvar::new();
 
 pub static VIDEO_SIZE_CACHE: XY = XY::new();
 
-pub fn send_frame(frame: VideoFrame) {
+pub fn api_send_frame(frame: VideoFrame) {
     let mut lock = VIDEO_FRAME.lock();
     lock.replace(frame);
     VIDEO_FRAME_COND.notify_one();
 }
 
-pub fn wait_frame_request_for(duration: Duration) -> bool {
+pub fn api_wait_frame_request_for(duration: Duration) -> bool {
     let mut lock = VIDEO_FRAME.lock();
     let result = VIDEO_FRAME_REQUEST.wait_for(&mut lock, duration);
     result.timed_out() == false
@@ -393,29 +397,31 @@ pub fn render_main() {
                 )
             };
             render(colors, frame.stride(0) / std::mem::size_of::<Color>())
-        } else if !avsync::has_video() {
-            let mut stat = AUDIO_VOLUME_STATISTICS.lock();
-            while stat.len() < AUDIO_VOLUME_STATISTICS_LEN {
-                stat.push_front(0.0);
-            }
-            let (w, h) = VIDEO_PIXELS.get();
-            for x in 0..w {
-                let max = (h as f32 * 0.8).clamp(0.0, h as f32).round() as usize;
-                empty_frame[(h - max) / 2 * w + x] = Color::new(64, 192, 128);
-                empty_frame[(h + max) / 2 * w + x] = Color::new(64, 192, 128);
-                let i0 = x as f32 / w as f32 * stat.len() as f32;
-                let i1 = (i0.floor() as usize).clamp(0, stat.len() - 1);
-                let i2 = (i0.ceil() as usize).clamp(0, stat.len() - 1);
-                let k = i0 - i0.floor();
-                let vol = stat[i1] * (1.0 - k) + stat[i2] * k;
-                let filled = (vol * h as f32 * 0.8).round().clamp(0.0, h as f32) as usize;
-                for y in (h - filled) / 2..(h + filled) / 2 {
-                    let idx = y * w + x;
-                    empty_frame[idx] = Color::new(255, 255, 255);
+        } else {
+            #[cfg(feature = "audio")]
+            if !avsync::has_video() {
+                use crate::audio::{AUDIO_VOLUME_STATISTICS, AUDIO_VOLUME_STATISTICS_LEN};
+                let mut stat = AUDIO_VOLUME_STATISTICS.lock();
+                while stat.len() < AUDIO_VOLUME_STATISTICS_LEN {
+                    stat.push_front(0.0);
+                }
+                let (w, h) = VIDEO_PIXELS.get();
+                for x in 0..w {
+                    let max = (h as f32 * 0.8).clamp(0.0, h as f32).round() as usize;
+                    empty_frame[(h - max) / 2 * w + x] = Color::new(64, 192, 128);
+                    empty_frame[(h + max) / 2 * w + x] = Color::new(64, 192, 128);
+                    let i0 = x as f32 / w as f32 * stat.len() as f32;
+                    let i1 = (i0.floor() as usize).clamp(0, stat.len() - 1);
+                    let i2 = (i0.ceil() as usize).clamp(0, stat.len() - 1);
+                    let k = i0 - i0.floor();
+                    let vol = stat[i1] * (1.0 - k) + stat[i2] * k;
+                    let filled = (vol * h as f32 * 0.8).round().clamp(0.0, h as f32) as usize;
+                    for y in (h - filled) / 2..(h + filled) / 2 {
+                        let idx = y * w + x;
+                        empty_frame[idx] = Color::new(255, 255, 255);
+                    }
                 }
             }
-            render(&empty_frame, VIDEO_PIXELS.x())
-        } else {
             render(&empty_frame, VIDEO_PIXELS.x())
         });
 
@@ -427,6 +433,54 @@ pub fn render_main() {
         let mut lock = VIDEO_FRAME.lock();
         if lock.is_none() {
             VIDEO_FRAME_COND.wait_for(&mut lock, remaining);
+        }
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+/// 绿幕背景色
+pub static CHROMA_KEY_COLOR: Mutex<Option<Color>> = Mutex::new(None);
+
+pub fn render_video(wrap: &mut RenderWrapper) {
+    if let Some(chroma_key) = *CHROMA_KEY_COLOR.lock() {
+        for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {
+            for cx in wrap.padding_left..(wrap.cells_width - wrap.padding_right) {
+                let fy = cy - wrap.padding_top;
+                let fx = cx - wrap.padding_left;
+                let fg = wrap.frame[fy * wrap.frame_pitch * 2 + fx + wrap.frame_pitch];
+                let bg = wrap.frame[fy * wrap.frame_pitch * 2 + fx];
+                let fs = fg.similar_to(&chroma_key, 0.1);
+                let bs = bg.similar_to(&chroma_key, 0.1);
+                wrap.cells[cy * wrap.cells_pitch + cx] = match (fs, bs) {
+                    (true, true) => Cell {
+                        c: Some(' '),
+                        fg: Color::transparent(),
+                        bg: Color::transparent(),
+                    },
+                    (true, false) => Cell {
+                        c: None,
+                        fg: bg,
+                        bg,
+                    },
+                    (false, true) => Cell {
+                        c: None,
+                        fg,
+                        bg: fg,
+                    },
+                    (false, false) => Cell { c: None, fg, bg },
+                };
+            }
+        }
+    } else {
+        for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {
+            for cx in wrap.padding_left..(wrap.cells_width - wrap.padding_right) {
+                let fy = cy - wrap.padding_top;
+                let fx = cx - wrap.padding_left;
+                let fg = wrap.frame[fy * wrap.frame_pitch * 2 + fx + wrap.frame_pitch];
+                let bg = wrap.frame[fy * wrap.frame_pitch * 2 + fx];
+                wrap.cells[cy * wrap.cells_pitch + cx] = Cell { c: None, fg, bg };
+            }
         }
     }
 }

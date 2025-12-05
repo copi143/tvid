@@ -181,6 +181,7 @@ pub fn gamma_correct(value: f32) -> f32 {
     }
 }
 
+/// 标准 srgb 2.2
 pub fn gamma_reverse(value: f32) -> f32 {
     if value <= 0.0 {
         0.0
@@ -223,6 +224,10 @@ impl ColorF32 {
             b: fg.b * t + bg.b * (1.0 - t),
             a: fg.a * t + bg.a * (1.0 - t),
         }
+    }
+
+    pub fn luminance(&self) -> f32 {
+        0.2126 * self.r + 0.7152 * self.g + 0.0722 * self.b
     }
 }
 
@@ -309,6 +314,10 @@ impl Color {
         Color::mix(a, b, 0.5)
     }
 
+    pub fn luminance(&self) -> u8 {
+        (gamma_correct(self.as_f32().luminance()) * 255.0) as u8
+    }
+
     pub fn as_f32(&self) -> ColorF32 {
         ColorF32::from(*self)
     }
@@ -363,88 +372,102 @@ impl Cell {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-const ANSI_COLORS: [Color; 16] = [
-    Color::new(0, 0, 0),
-    Color::new(205, 0, 0),
-    Color::new(0, 205, 0),
-    Color::new(205, 205, 0),
-    Color::new(0, 0, 238),
-    Color::new(205, 0, 205),
-    Color::new(0, 205, 205),
-    Color::new(229, 229, 229),
-    Color::new(127, 127, 127),
-    Color::new(255, 0, 0),
-    Color::new(0, 255, 0),
-    Color::new(255, 255, 0),
-    Color::new(92, 92, 255),
-    Color::new(255, 0, 255),
-    Color::new(0, 255, 255),
-    Color::new(255, 255, 255),
-];
-
-const fn palette256_scale(c: u8) -> u8 {
-    if c == 0 { 0 } else { c * 40 + 55 }
+pub fn some_if_eq<T: PartialEq>(a: T, b: T) -> Option<T> {
+    if a == b { Some(a) } else { None }
 }
 
-const fn palette256_reverse(c: u8) -> u8 {
-    if c < 35 { 0 } else { (c - 35) / 40 }
+pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
+    if a == b { None } else { Some(a) }
 }
 
-const fn palette256_try_reverse(c: u8) -> Option<u8> {
-    match c {
-        0 => Some(0),
-        95 => Some(1),
-        135 => Some(2),
-        175 => Some(3),
-        215 => Some(4),
-        255 => Some(5),
-        _ => None,
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+mod palette256 {
+    use crate::util::Color;
+
+    pub const ANSI_COLORS: [Color; 16] = [
+        Color::new(0, 0, 0),
+        Color::new(205, 0, 0),
+        Color::new(0, 205, 0),
+        Color::new(205, 205, 0),
+        Color::new(0, 0, 238),
+        Color::new(205, 0, 205),
+        Color::new(0, 205, 205),
+        Color::new(229, 229, 229),
+        Color::new(127, 127, 127),
+        Color::new(255, 0, 0),
+        Color::new(0, 255, 0),
+        Color::new(255, 255, 0),
+        Color::new(92, 92, 255),
+        Color::new(255, 0, 255),
+        Color::new(0, 255, 255),
+        Color::new(255, 255, 255),
+    ];
+
+    pub const fn scale(c: u8) -> u8 {
+        if c == 0 { 0 } else { c * 40 + 55 }
     }
-}
 
-const fn palette256_gray(c: u8) -> u8 {
-    c * 10 + 8
-}
+    pub const fn reverse(c: u8) -> u8 {
+        if c < 35 { 0 } else { (c - 35) / 40 }
+    }
 
-const fn palette256_gray_try_reverse(c: u8) -> Option<u8> {
-    if c >= 8 && c <= 238 && (c - 8) % 10 == 0 {
-        Some((c - 8) / 10)
-    } else {
-        None
+    pub const fn try_reverse(c: u8) -> Option<u8> {
+        match c {
+            0 => Some(0),
+            95 => Some(1),
+            135 => Some(2),
+            175 => Some(3),
+            215 => Some(4),
+            255 => Some(5),
+            _ => None,
+        }
+    }
+
+    pub const fn gray(c: u8) -> u8 {
+        c * 10 + 8
+    }
+
+    pub const fn gray_try_reverse(c: u8) -> Option<u8> {
+        if c >= 8 && c <= 238 && (c - 8) % 10 == 0 {
+            Some((c - 8) / 10)
+        } else {
+            None
+        }
     }
 }
 
 pub fn palette256_to_color(index: u8) -> Color {
     if index < 16 {
-        ANSI_COLORS[index as usize]
+        palette256::ANSI_COLORS[index as usize]
     } else if index < 232 {
-        let r = palette256_scale(index / 36);
-        let g = palette256_scale(index % 36 / 6);
-        let b = palette256_scale(index % 6);
+        let r = palette256::scale(index / 36);
+        let g = palette256::scale(index % 36 / 6);
+        let b = palette256::scale(index % 6);
         Color::new(r, g, b)
     } else {
-        let c = palette256_gray(index - 232);
+        let c = palette256::gray(index - 232);
         Color::new(c, c, c)
     }
 }
 
 pub fn palette256_from_color(c: Color) -> u8 {
-    let r = palette256_reverse(c.r);
-    let g = palette256_reverse(c.g);
-    let b = palette256_reverse(c.b);
+    let r = palette256::reverse(c.r);
+    let g = palette256::reverse(c.g);
+    let b = palette256::reverse(c.b);
     r * 36 + g * 6 + b + 16
 }
 
 pub fn try_palette256(c: Color) -> Option<u8> {
-    if let Some(ri) = palette256_try_reverse(c.r) {
-        if let Some(gi) = palette256_try_reverse(c.g) {
-            if let Some(bi) = palette256_try_reverse(c.b) {
+    if let Some(ri) = palette256::try_reverse(c.r) {
+        if let Some(gi) = palette256::try_reverse(c.g) {
+            if let Some(bi) = palette256::try_reverse(c.b) {
                 return Some(ri * 36 + gi * 6 + bi + 16);
             }
         }
     }
 
-    if let Some(i) = palette256_gray_try_reverse(c.g) {
+    if let Some(i) = palette256::gray_try_reverse(c.g) {
         if c.r == c.g && c.g == c.b {
             return Some(i + 232);
         }
@@ -465,45 +488,63 @@ pub enum ColorMode {
     Palette256Prefer,
     /// 仅使用 256 色模式
     Palette256Only,
+    /// 灰度模式
+    GrayScale,
+    /// 黑白模式
+    BlackWhite,
 }
 
 impl Display for ColorMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             "zh-cn" => match self {
                 ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
                 ColorMode::Palette256Prefer => write!(f, "256 色优先"),
                 ColorMode::Palette256Only => write!(f, "仅 256 色"),
+                ColorMode::GrayScale => write!(f, "灰度模式"),
+                ColorMode::BlackWhite => write!(f, "黑白模式"),
             },
             "zh-tw" => match self {
                 ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
                 ColorMode::Palette256Prefer => write!(f, "256 色優先"),
                 ColorMode::Palette256Only => write!(f, "僅 256 色"),
+                ColorMode::GrayScale => write!(f, "灰階模式"),
+                ColorMode::BlackWhite => write!(f, "黑白模式"),
             },
             "ja-jp" => match self {
                 ColorMode::TrueColorOnly => write!(f, "フルカラー"),
                 ColorMode::Palette256Prefer => write!(f, "256色優先"),
                 ColorMode::Palette256Only => write!(f, "256色のみ"),
+                ColorMode::GrayScale => write!(f, "グレースケール"),
+                ColorMode::BlackWhite => write!(f, "白黒モード"),
             },
             "fr-fr" => match self {
                 ColorMode::TrueColorOnly => write!(f, "Couleurs vraies"),
                 ColorMode::Palette256Prefer => write!(f, "Palette 256 couleurs prioritaire"),
                 ColorMode::Palette256Only => write!(f, "Palette 256 couleurs uniquement"),
+                ColorMode::GrayScale => write!(f, "Niveaux de gris"),
+                ColorMode::BlackWhite => write!(f, "Noir et blanc"),
             },
             "de-de" => match self {
                 ColorMode::TrueColorOnly => write!(f, "Truecolor-Modus"),
                 ColorMode::Palette256Prefer => write!(f, "256-Farben-Priorität"),
                 ColorMode::Palette256Only => write!(f, "Nur 256 Farben"),
+                ColorMode::GrayScale => write!(f, "Graustufenmodus"),
+                ColorMode::BlackWhite => write!(f, "Schwarz-Weiß-Modus"),
             },
             "es-es" => match self {
                 ColorMode::TrueColorOnly => write!(f, "Modo de color verdadero"),
                 ColorMode::Palette256Prefer => write!(f, "Prioridad de paleta de 256 colores"),
                 ColorMode::Palette256Only => write!(f, "Solo paleta de 256 colores"),
+                ColorMode::GrayScale => write!(f, "Modo de escala de grises"),
+                ColorMode::BlackWhite => write!(f, "Modo blanco y negro"),
             },
             _ => match self {
                 ColorMode::TrueColorOnly => write!(f, "True Color Mode"),
                 ColorMode::Palette256Prefer => write!(f, "256 Color Palette Prefer"),
                 ColorMode::Palette256Only => write!(f, "256 Color Palette Only"),
+                ColorMode::GrayScale => write!(f, "Gray Scale Mode"),
+                ColorMode::BlackWhite => write!(f, "Black and White Mode"),
             },
         }
     }
@@ -522,18 +563,14 @@ impl ColorMode {
         *self = match self {
             ColorMode::TrueColorOnly => ColorMode::Palette256Prefer,
             ColorMode::Palette256Prefer => ColorMode::Palette256Only,
-            ColorMode::Palette256Only => ColorMode::TrueColorOnly,
+            ColorMode::Palette256Only => ColorMode::GrayScale,
+            ColorMode::GrayScale => ColorMode::BlackWhite,
+            ColorMode::BlackWhite => ColorMode::TrueColorOnly,
         };
     }
 }
 
-pub fn some_if_eq<T: PartialEq>(a: T, b: T) -> Option<T> {
-    if a == b { Some(a) } else { None }
-}
-
-pub fn some_if_ne<T: PartialEq>(a: T, b: T) -> Option<T> {
-    if a == b { None } else { Some(a) }
-}
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 #[inline(always)]
 pub fn escape_set_color(
@@ -558,9 +595,11 @@ pub fn escape_set_color(
         bg = None;
     };
     match mode {
+        ColorMode::TrueColorOnly => escape_set_color_rgb(wr, fg, bg),
         ColorMode::Palette256Prefer => escape_set_color_256_prefer(wr, fg, bg),
         ColorMode::Palette256Only => escape_set_color_256(wr, fg, bg),
-        ColorMode::TrueColorOnly => escape_set_color_rgb(wr, fg, bg),
+        ColorMode::GrayScale => escape_set_color_gray_scale(wr, fg, bg),
+        ColorMode::BlackWhite => escape_set_color_black_white(wr, fg, bg),
     }
 }
 
@@ -570,20 +609,6 @@ pub fn escape_set_color_rgb(wr: &mut impl Write, fg: Option<Color>, bg: Option<C
         (Some(fg), Some(bg)) => write!(wr, "\x1b[38;2;{fg};48;2;{bg}m"),
         (Some(fg), None) => write!(wr, "\x1b[38;2;{}m", fg),
         (None, Some(bg)) => write!(wr, "\x1b[48;2;{}m", bg),
-        (None, None) => Ok(()),
-    }
-    .unwrap()
-}
-
-#[inline(always)]
-pub fn escape_set_color_256(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
-    match (fg, bg) {
-        (Some(fg), Some(bg)) => {
-            let (fgi, bgi) = (palette256_from_color(fg), palette256_from_color(bg));
-            write!(wr, "\x1b[38;5;{};48;5;{}m", fgi, bgi)
-        }
-        (Some(fg), None) => write!(wr, "\x1b[38;5;{}m", palette256_from_color(fg)),
-        (None, Some(bg)) => write!(wr, "\x1b[48;5;{}m", palette256_from_color(bg)),
         (None, None) => Ok(()),
     }
     .unwrap()
@@ -606,6 +631,62 @@ pub fn escape_set_color_256_prefer(wr: &mut impl Write, fg: Option<Color>, bg: O
             Some(bgi) => write!(wr, "\x1b[48;5;{bgi}m"),
             None => write!(wr, "\x1b[48;2;{bg}m"),
         },
+        (None, None) => Ok(()),
+    }
+    .unwrap()
+}
+
+#[inline(always)]
+pub fn escape_set_color_256(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
+    match (fg, bg) {
+        (Some(fg), Some(bg)) => {
+            let (fgi, bgi) = (palette256_from_color(fg), palette256_from_color(bg));
+            write!(wr, "\x1b[38;5;{};48;5;{}m", fgi, bgi)
+        }
+        (Some(fg), None) => write!(wr, "\x1b[38;5;{}m", palette256_from_color(fg)),
+        (None, Some(bg)) => write!(wr, "\x1b[48;5;{}m", palette256_from_color(bg)),
+        (None, None) => Ok(()),
+    }
+    .unwrap()
+}
+
+#[inline(always)]
+pub fn escape_set_color_gray_scale(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
+    match (fg, bg) {
+        (Some(fg), Some(bg)) => {
+            let c1 = fg.luminance();
+            let c2 = bg.luminance();
+            write!(wr, "\x1b[38;2;{c1};{c1};{c1};48;2;{c2};{c2};{c2}m")
+        }
+        (Some(fg), None) => {
+            let c = fg.luminance();
+            write!(wr, "\x1b[38;2;{c};{c};{c}m")
+        }
+        (None, Some(bg)) => {
+            let c = bg.luminance();
+            write!(wr, "\x1b[48;2;{c};{c};{c}m")
+        }
+        (None, None) => Ok(()),
+    }
+    .unwrap()
+}
+
+#[inline(always)]
+pub fn escape_set_color_black_white(wr: &mut impl Write, fg: Option<Color>, bg: Option<Color>) {
+    match (fg, bg) {
+        (Some(fg), Some(bg)) => {
+            let fgi = if fg.luminance() < 128 { 30 } else { 97 };
+            let bgi = if bg.luminance() < 128 { 40 } else { 107 };
+            write!(wr, "\x1b[{};{}m", fgi, bgi)
+        }
+        (Some(fg), None) => {
+            let fgi = if fg.luminance() < 128 { 30 } else { 97 };
+            write!(wr, "\x1b[{}m", fgi)
+        }
+        (None, Some(bg)) => {
+            let bgi = if bg.luminance() < 128 { 40 } else { 107 };
+            write!(wr, "\x1b[{}m", bgi)
+        }
         (None, None) => Ok(()),
     }
     .unwrap()

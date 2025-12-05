@@ -47,7 +47,7 @@ impl Config {
                 if v <= 200 {
                     self.volume = v;
                 } else {
-                    let msg = match crate::LOCALE.as_str() {
+                    let msg = match locale!() {
                         "zh-cn" => "音量必须在 0 到 200 之间".to_string(),
                         "zh-tw" => "音量必須在 0 到 200 之間".to_string(),
                         "ja-jp" => "音量は0〜200の間でなければなりません".to_string(),
@@ -64,7 +64,7 @@ impl Config {
                 self.looping = b;
             }
             _ => {
-                let tpl = match crate::LOCALE.as_str() {
+                let tpl = match locale!() {
                     "zh-cn" => "未知的配置项: {}",
                     "zh-tw" => "未知的設定項: {}",
                     "ja-jp" => "不明な設定キー: {}",

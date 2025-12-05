@@ -7,10 +7,9 @@ use std::time::Duration;
 
 use crate::avsync::{self, played_time_or_zero};
 use crate::ffmpeg::{DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, VIDEO_TIME_BASE};
-use crate::render::{self, RenderWrapper, VIDEO_PIXELS};
+use crate::render::{self, VIDEO_PIXELS};
 use crate::statistics::increment_video_skipped_frames;
 use crate::term::TERM_QUIT;
-use crate::util::{Cell, Color};
 
 pub static VIDEO_FRAMETIME: AtomicU64 = AtomicU64::new(1_000_000 / 30);
 
@@ -152,7 +151,7 @@ pub fn video_main() {
             {
                 let remaining = frametime - played_time_or_zero();
                 let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
-                if render::wait_frame_request_for(remaining.min(max)) {
+                if render::api_wait_frame_request_for(remaining.min(max)) {
                     if VIDEO_PIXELS.get() != (scaler_dst_width as usize, scaler_dst_height as usize)
                     {
                         continue;
@@ -160,7 +159,7 @@ pub fn video_main() {
                 }
             }
 
-            render::send_frame(scaled);
+            render::api_send_frame(scaled);
             avsync::hint_video_played_time(frametime);
 
             // 使用 if 防止卡死
@@ -168,14 +167,14 @@ pub fn video_main() {
             {
                 let remaining = frametime - played_time_or_zero();
                 let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
-                if render::wait_frame_request_for(remaining.min(max)) {
+                if render::api_wait_frame_request_for(remaining.min(max)) {
                     continue;
                 }
             }
 
             let mut wakeup_by_request = false;
             while avsync::is_paused() {
-                if render::wait_frame_request_for(Duration::from_millis(33)) {
+                if render::api_wait_frame_request_for(Duration::from_millis(33)) {
                     wakeup_by_request = true;
                     break;
                 }
@@ -193,50 +192,4 @@ pub fn video_main() {
     }
 
     render::VIDEO_SIZE_CACHE.set(0, 0);
-}
-
-/// 绿幕背景色
-pub static CHROMA_KEY_COLOR: Mutex<Option<Color>> = Mutex::new(None);
-
-pub fn render_frame(wrap: &mut RenderWrapper) {
-    if let Some(chroma_key) = *CHROMA_KEY_COLOR.lock() {
-        for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {
-            for cx in wrap.padding_left..(wrap.cells_width - wrap.padding_right) {
-                let fy = cy - wrap.padding_top;
-                let fx = cx - wrap.padding_left;
-                let fg = wrap.frame[fy * wrap.frame_pitch * 2 + fx + wrap.frame_pitch];
-                let bg = wrap.frame[fy * wrap.frame_pitch * 2 + fx];
-                let fs = fg.similar_to(&chroma_key, 0.1);
-                let bs = bg.similar_to(&chroma_key, 0.1);
-                wrap.cells[cy * wrap.cells_pitch + cx] = match (fs, bs) {
-                    (true, true) => Cell {
-                        c: Some(' '),
-                        fg: Color::transparent(),
-                        bg: Color::transparent(),
-                    },
-                    (true, false) => Cell {
-                        c: None,
-                        fg: bg,
-                        bg,
-                    },
-                    (false, true) => Cell {
-                        c: None,
-                        fg,
-                        bg: fg,
-                    },
-                    (false, false) => Cell { c: None, fg, bg },
-                };
-            }
-        }
-    } else {
-        for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {
-            for cx in wrap.padding_left..(wrap.cells_width - wrap.padding_right) {
-                let fy = cy - wrap.padding_top;
-                let fx = cx - wrap.padding_left;
-                let fg = wrap.frame[fy * wrap.frame_pitch * 2 + fx + wrap.frame_pitch];
-                let bg = wrap.frame[fy * wrap.frame_pitch * 2 + fx];
-                wrap.cells[cy * wrap.cells_pitch + cx] = Cell { c: None, fg, bg };
-            }
-        }
-    }
 }

@@ -11,11 +11,15 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::audio::{self, AUDIO_FRAME, AUDIO_FRAME_SIG, audio_main};
-use crate::avsync::played_time_or_zero;
+use crate::avsync;
 use crate::term::TERM_QUIT;
-use crate::video::{VIDEO_FRAME, VIDEO_FRAME_SIG, VIDEO_FRAMETIME, video_main};
-use crate::{avsync, subtitle, video};
+
+#[cfg(feature = "audio")]
+use crate::audio::{self, AUDIO_FRAME, AUDIO_FRAME_SIG, audio_main};
+#[cfg(feature = "subtitle")]
+use crate::subtitle;
+#[cfg(feature = "video")]
+use crate::video::{self, VIDEO_FRAME, VIDEO_FRAME_SIG, VIDEO_FRAMETIME, video_main};
 
 #[allow(static_mut_refs)]
 #[allow(unsafe_op_in_unsafe_fn)]
@@ -110,6 +114,7 @@ pub fn seek_request_absolute(sec: f64) {
     DECODER_WAKEUP.notify_one();
 }
 
+#[allow(unused_variables, unused_mut, unused_assignments)]
 pub fn decode_main(path: &str) -> Result<bool> {
     let Ok(mut ictx) = av::format::input(path) else {
         error_l10n!(
@@ -124,18 +129,28 @@ pub fn decode_main(path: &str) -> Result<bool> {
         return Ok(false);
     };
 
+    #[cfg(feature = "video")]
     let video_stream_index = ictx
         .streams()
         .best(av::media::Type::Video)
         .map_or(-1, |s| s.index() as isize);
+    #[cfg(feature = "audio")]
     let audio_stream_index = ictx
         .streams()
         .best(av::media::Type::Audio)
         .map_or(-1, |s| s.index() as isize);
+    #[cfg(feature = "subtitle")]
     let subtitle_stream_index = ictx
         .streams()
         .best(av::media::Type::Subtitle)
         .map_or(-1, |s| s.index() as isize);
+
+    #[cfg(not(feature = "video"))]
+    let video_stream_index = -1;
+    #[cfg(not(feature = "audio"))]
+    let audio_stream_index = -1;
+    #[cfg(not(feature = "subtitle"))]
+    let subtitle_stream_index = -1;
 
     if TERM_QUIT.load(Ordering::SeqCst) != false {
         return Ok(true);
@@ -160,7 +175,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
         (None, None, None)
     };
 
-    let (mut audio_decoder, audio_timebase, _audio_rate) = if audio_stream_index >= 0 {
+    let (mut audio_decoder, audio_timebase, audio_rate) = if audio_stream_index >= 0 {
         let Some(stream) = ictx.stream(audio_stream_index as usize) else {
             error!("audio stream index is valid, so stream must exist");
             fatal_l10n!(
@@ -179,7 +194,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
         (None, None, None)
     };
 
-    let (mut subtitle_decoder, _subtitle_timebase) = if subtitle_stream_index >= 0 {
+    let (mut subtitle_decoder, subtitle_timebase) = if subtitle_stream_index >= 0 {
         let stream = ictx
             .stream(subtitle_stream_index as usize)
             .context("subtitle stream")?;
@@ -192,6 +207,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
 
     if let (Some(video_timebase), Some(video_rate)) = (video_timebase, video_rate) {
         VIDEO_TIME_BASE.lock().replace(video_timebase);
+        #[cfg(feature = "video")]
         VIDEO_FRAMETIME.store(
             video_rate.1 as u64 * 1_000_000 / video_rate.0 as u64,
             Ordering::SeqCst,
@@ -222,19 +238,21 @@ pub fn decode_main(path: &str) -> Result<bool> {
 
     avsync::reset(duration, audio_decoder.is_some(), video_decoder.is_some());
 
+    #[cfg(feature = "video")]
     let video_main = if video_stream_index >= 0 {
         Some(std::thread::spawn(video_main))
     } else {
         None
     };
+    #[cfg(feature = "audio")]
     let audio_main = if audio_stream_index >= 0 {
         Some(std::thread::spawn(audio_main))
     } else {
         None
     };
 
-    let mut video_last_pts = None;
-    let mut audio_last_pts = None;
+    let mut video_last_pts: Option<i64> = None;
+    let mut audio_last_pts: Option<i64> = None;
 
     let mut video_queue = VecDeque::new();
     let mut audio_queue = VecDeque::new();
@@ -279,46 +297,12 @@ pub fn decode_main(path: &str) -> Result<bool> {
         } else if packet.stream() as isize == audio_stream_index {
             audio_queue.push_back(packet);
         } else if packet.stream() as isize == subtitle_stream_index {
-            let subtitle_decoder = subtitle_decoder.as_mut().unwrap();
-            let mut subtitle = Subtitle::new();
-            if subtitle_decoder.decode(&packet, &mut subtitle).is_ok() {
-                let timebase = packet.time_base();
-                let pts = Duration::new(
-                    subtitle.pts().unwrap_or(0) as u64 * timebase.0 as u64 / timebase.1 as u64,
-                    (subtitle.pts().unwrap_or(0) as u64 * timebase.0 as u64 % timebase.1 as u64
-                        * 1_000_000_000
-                        / timebase.1 as u64) as u32,
-                );
-                let start = pts + Duration::from_millis(subtitle.start() as u64);
-                let end = pts + Duration::from_millis(subtitle.end() as u64);
-                subtitle::push_nothing();
-                for rect in subtitle.rects() {
-                    match rect {
-                        av::subtitle::Rect::None(_) => {}
-                        av::subtitle::Rect::Bitmap(sub) => {
-                            let _x = sub.x();
-                            let _y = sub.y();
-                            let _width = sub.width();
-                            let _height = sub.height();
-                            warning_l10n!(
-                                "zh-cn" => "不支持位图字幕";
-                                "zh-tw" => "不支援位圖字幕";
-                                "ja-jp" => "ビットマップ字幕はサポートされていません";
-                                "fr-fr" => "les sous-titres bitmap ne sont pas pris en charge";
-                                "de-de" => "Bitmap-Untertitel werden nicht unterstützt";
-                                "es-es" => "los subtítulos de mapa de bits no son compatibles";
-                                _       => "bitmap subtitle not supported";
-                            );
-                        }
-                        av::subtitle::Rect::Text(sub) => {
-                            subtitle::push_text(start, end, sub.get());
-                        }
-                        av::subtitle::Rect::Ass(sub) => {
-                            subtitle::push_ass(start, end, sub.get());
-                        }
-                    }
-                }
-            }
+            #[cfg(feature = "subtitle")]
+            decode_subtitle(&mut subtitle_decoder, packet);
+            #[cfg(not(feature = "subtitle"))]
+            drop(packet);
+        } else {
+            drop(packet);
         }
 
         while (audio_stream_index < 0 || audio_queue.len() > 0)
@@ -332,7 +316,9 @@ pub fn decode_main(path: &str) -> Result<bool> {
                 break;
             }
 
+            #[cfg(feature = "video")]
             decode_video(&mut video_decoder, &mut video_queue, &mut video_last_pts);
+            #[cfg(feature = "audio")]
             decode_audio(&mut audio_decoder, &mut audio_queue, &mut audio_last_pts);
 
             let mut lock = DECODER_WAKEUP_MUTEX.lock();
@@ -346,6 +332,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
     notify_quit();
 
     // 等待所有线程结束
+    #[cfg(feature = "video")]
     if let Some(video_main) = video_main {
         video_main.join().unwrap_or_else(|err| {
             error_l10n!(
@@ -359,6 +346,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
             );
         });
     }
+    #[cfg(feature = "audio")]
     if let Some(audio_main) = audio_main {
         audio_main.join().unwrap_or_else(|err| {
             error_l10n!(
@@ -374,9 +362,12 @@ pub fn decode_main(path: &str) -> Result<bool> {
     }
 
     // 清除还没处理的音频和视频帧
+    #[cfg(feature = "video")]
     let _ = VIDEO_FRAME.lock().take();
+    #[cfg(feature = "audio")]
     let _ = AUDIO_FRAME.lock().take();
     // 清除字幕
+    #[cfg(feature = "subtitle")]
     subtitle::clear();
 
     Ok(true)
@@ -389,7 +380,7 @@ fn do_seek(
     video_queue: &mut VecDeque<ffmpeg_next::Packet>,
     audio_queue: &mut VecDeque<ffmpeg_next::Packet>,
 ) -> bool {
-    let now = || played_time_or_zero().as_secs_f64();
+    let now = || avsync::played_time_or_zero().as_secs_f64();
     let ts = (if abs { off } else { now() + off } * AV_TIME_BASE as f64) as i64;
     let ts = ts.max(0);
     let ret = unsafe { av_seek_frame(ictx.as_mut_ptr(), -1, ts, 0) };
@@ -398,19 +389,26 @@ fn do_seek(
     video_queue.clear();
     audio_queue.clear();
     // 清除字幕 (实际上不应该清除，但是我的处理逻辑有点问题，先这样吧)
+    #[cfg(feature = "subtitle")]
     subtitle::clear();
 
     // 清除还没处理的音频和视频帧
+    #[cfg(feature = "video")]
     let _ = VIDEO_FRAME.lock().take();
+    #[cfg(feature = "audio")]
     let _ = AUDIO_FRAME.lock().take();
 
-    audio::hint_seeked();
+    #[cfg(feature = "video")]
     video::hint_seeked();
+    #[cfg(feature = "audio")]
+    audio::hint_seeked();
+
     avsync::hint_seeked(Duration::from_secs_f64(ts as f64 / AV_TIME_BASE as f64));
 
     ret >= 0
 }
 
+#[cfg(feature = "video")]
 fn decode_video(
     video_decoder: &mut Option<ffmpeg_next::decoder::Video>,
     video_queue: &mut VecDeque<ffmpeg_next::Packet>,
@@ -461,6 +459,7 @@ fn decode_video(
     }
 }
 
+#[cfg(feature = "audio")]
 fn decode_audio(
     audio_decoder: &mut Option<ffmpeg_next::decoder::Audio>,
     audio_queue: &mut VecDeque<ffmpeg_next::Packet>,
@@ -511,6 +510,56 @@ fn decode_audio(
     }
 }
 
+#[cfg(feature = "subtitle")]
+fn decode_subtitle(
+    subtitle_decoder: &mut Option<ffmpeg_next::decoder::Subtitle>,
+    packet: ffmpeg_next::Packet,
+) {
+    let Some(subtitle_decoder) = subtitle_decoder.as_mut() else {
+        return;
+    };
+
+    let mut subtitle = Subtitle::new();
+    if subtitle_decoder.decode(&packet, &mut subtitle).is_ok() {
+        let timebase = packet.time_base();
+        let pts = Duration::new(
+            subtitle.pts().unwrap_or(0) as u64 * timebase.0 as u64 / timebase.1 as u64,
+            (subtitle.pts().unwrap_or(0) as u64 * timebase.0 as u64 % timebase.1 as u64
+                * 1_000_000_000
+                / timebase.1 as u64) as u32,
+        );
+        let start = pts + Duration::from_millis(subtitle.start() as u64);
+        let end = pts + Duration::from_millis(subtitle.end() as u64);
+        subtitle::push_nothing();
+        for rect in subtitle.rects() {
+            match rect {
+                av::subtitle::Rect::None(_) => {}
+                av::subtitle::Rect::Bitmap(sub) => {
+                    let _x = sub.x();
+                    let _y = sub.y();
+                    let _width = sub.width();
+                    let _height = sub.height();
+                    warning_l10n!(
+                        "zh-cn" => "不支持位图字幕";
+                        "zh-tw" => "不支援位圖字幕";
+                        "ja-jp" => "ビットマップ字幕はサポートされていません";
+                        "fr-fr" => "les sous-titres bitmap ne sont pas pris en charge";
+                        "de-de" => "Bitmap-Untertitel werden nicht unterstützt";
+                        "es-es" => "los subtítulos de mapa de bits no son compatibles";
+                        _       => "bitmap subtitle not supported";
+                    );
+                }
+                av::subtitle::Rect::Text(sub) => {
+                    subtitle::push_text(start, end, sub.get());
+                }
+                av::subtitle::Rect::Ass(sub) => {
+                    subtitle::push_ass(start, end, sub.get());
+                }
+            }
+        }
+    }
+}
+
 /// 通知所有解码相关的线程退出
 pub fn notify_quit() {
     // 标记 ffmpeg 处理结束，以便音频和视频线程可以退出
@@ -520,6 +569,8 @@ pub fn notify_quit() {
 
     // 唤醒所有等待的线程
     DECODER_WAKEUP.notify_one();
+    #[cfg(feature = "video")]
     VIDEO_FRAME_SIG.notify_one();
+    #[cfg(feature = "audio")]
     AUDIO_FRAME_SIG.notify_one();
 }

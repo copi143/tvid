@@ -18,13 +18,35 @@ use std::env;
 use std::sync::atomic::Ordering;
 use std::sync::{LazyLock, OnceLock};
 use std::time::Instant;
-use sys_locale::get_locale;
 use tokio::runtime::Runtime;
 
+use crate::escape::format_link;
 use crate::ffmpeg::seek_request_relative;
 use crate::render::{COLOR_MODE, FORCEFLUSH_NEXT};
 use crate::ui::QUIT_CONFIRMATION;
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
+
+macro_rules! usemod {
+    ($name:ident) => {
+        mod $name;
+        #[allow(unused)]
+        pub use $name::*;
+    };
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! locale {
+    () => {
+        crate::LOCALE.as_str()
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! locale {
+    () => {
+        "en-us"
+    };
+}
 
 #[allow(unused)]
 mod util;
@@ -35,20 +57,34 @@ mod logging;
 #[macro_use]
 mod ui;
 
-mod audio;
 mod avsync;
-mod config;
 mod ffmpeg;
-mod osc;
 mod playlist;
 mod render;
-mod sixel;
 mod statistics;
 mod stdin;
 mod stdout;
-mod subtitle;
 mod term;
+
+#[cfg(feature = "config")]
+mod config;
+
+#[cfg(feature = "audio")]
+mod audio;
+
+#[cfg(feature = "video")]
 mod video;
+
+#[cfg(feature = "subtitle")]
+mod subtitle;
+
+mod escape {
+    #[cfg(feature = "sixel")]
+    usemod!(sixel);
+    usemod!(osc8);
+    #[cfg(feature = "osc1337")]
+    usemod!(osc1337);
+}
 
 pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     let num_cores = std::thread::available_parallelism().unwrap().get();
@@ -60,8 +96,9 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .expect("Failed to create Tokio runtime")
 });
 
+#[cfg(feature = "i18n")]
 pub static LOCALE: LazyLock<String> = LazyLock::new(|| {
-    get_locale()
+    sys_locale::get_locale()
         .map(|l| l.to_lowercase())
         .unwrap_or("en-us".to_string())
 });
@@ -76,80 +113,92 @@ macro_rules! eprintlns {
 
 fn print_no_playlist(program_name: &str) {
     let divider = "-".repeat(term::get_winsize().map(|w| w.col as usize).unwrap_or(80));
-    match LOCALE.as_str() {
+    let version = env!("CARGO_PKG_VERSION");
+    let repo = format_link(env!("CARGO_PKG_REPOSITORY"), env!("CARGO_PKG_REPOSITORY"));
+    #[rustfmt::skip]
+    let license = env!("CARGO_PKG_LICENSE")
+        .replace("MIT", &format_link("MIT", "https://choosealicense.com/licenses/mit/"))
+        .replace("Apache-2.0", &format_link("Apache-2.0", "https://choosealicense.com/licenses/apache-2.0/"));
+    match locale!() {
         "zh-cn" => eprintlns!(
             "没有播放列表。";
             "用法: {program_name} <输入文件> [输入文件] ...";
             "{divider}";
             "tvid - 终端视频播放器";
-            "版本: {}", env!("CARGO_PKG_VERSION");
-            "仓库: {}", env!("CARGO_PKG_REPOSITORY");
-            "许可: {}", env!("CARGO_PKG_LICENSE");
+            "版本: {version}";
+            "仓库: {repo}";
+            "许可: {license}";
         ),
         "zh-tw" => eprintlns!(
             "沒有播放清單。";
             "用法: {program_name} <輸入檔案> [輸入檔案] ...";
             "{divider}";
             "tvid - 終端機視訊播放器";
-            "版本: {}", env!("CARGO_PKG_VERSION");
-            "儲存庫: {}", env!("CARGO_PKG_REPOSITORY");
-            "授權: {}", env!("CARGO_PKG_LICENSE");
+            "版本: {version}";
+            "儲存庫: {repo}";
+            "授權: {license}";
         ),
         "ja-jp" => eprintlns!(
             "プレイリストがありません。";
             "使用法: {program_name} <入力ファイル> [入力ファイル] ...";
             "{divider}";
             "tvid - ターミナルビデオプレーヤー";
-            "バージョン: {}", env!("CARGO_PKG_VERSION");
-            "リポジトリ: {}", env!("CARGO_PKG_REPOSITORY");
-            "ライセンス: {}", env!("CARGO_PKG_LICENSE");
+            "バージョン: {version}";
+            "リポジトリ: {repo}";
+            "ライセンス: {license}";
         ),
         "fr-fr" => eprintlns!(
             "Aucune liste de lecture.";
             "Utilisation: {program_name} <fichier d'entrée> [fichier d'entrée] ...";
             "{divider}";
             "tvid - Lecteur vidéo terminal";
-            "version: {}", env!("CARGO_PKG_VERSION");
-            "dépôt: {}", env!("CARGO_PKG_REPOSITORY");
-            "licence: {}", env!("CARGO_PKG_LICENSE");
+            "version: {version}";
+            "dépôt: {repo}";
+            "licence: {license}";
         ),
         "de-de" => eprintlns!(
             "Keine Wiedergabeliste.";
             "Verwendung: {program_name} <Eingabedatei> [Eingabedatei] ...";
             "{divider}";
             "tvid - Terminal Video Player";
-            "Version: {}", env!("CARGO_PKG_VERSION");
-            "Repository: {}", env!("CARGO_PKG_REPOSITORY");
-            "Lizenz: {}", env!("CARGO_PKG_LICENSE");
+            "Version: {version}";
+            "Repository: {repo}";
+            "Lizenz: {license}";
         ),
         "es-es" => eprintlns!(
             "No hay lista de reproducción.";
             "Uso: {program_name} <archivo de entrada> [archivo de entrada] ...";
             "{divider}";
             "tvid - Reproductor de video de terminal";
-            "versión: {}", env!("CARGO_PKG_VERSION");
-            "repositorio: {}", env!("CARGO_PKG_REPOSITORY");
-            "licencia: {}", env!("CARGO_PKG_LICENSE");
+            "versión: {version}";
+            "repositorio: {repo}";
+            "licencia: {license}";
         ),
         _ => eprintlns!(
             "No input files as playlist.";
             "Usage: {program_name} <input> [input] ...";
             "{divider}";
             "tvid - Terminal Video Player";
-            "version: {}", env!("CARGO_PKG_VERSION");
-            "repo: {}", env!("CARGO_PKG_REPOSITORY");
-            "license: {}", env!("CARGO_PKG_LICENSE");
+            "version: {version}";
+            "repo: {repo}";
+            "license: {license}";
         ),
     }
 }
 
 fn print_help(program_name: &str) {
-    match LOCALE.as_str() {
+    let version = env!("CARGO_PKG_VERSION");
+    let repo = format_link(env!("CARGO_PKG_REPOSITORY"), env!("CARGO_PKG_REPOSITORY"));
+    #[rustfmt::skip]
+    let license = env!("CARGO_PKG_LICENSE")
+        .replace("MIT", &format_link("MIT", "https://choosealicense.com/licenses/mit/"))
+        .replace("Apache-2.0", &format_link("Apache-2.0", "https://choosealicense.com/licenses/apache-2.0/"));
+    match locale!() {
         "zh-cn" => eprintlns!(
             "tvid - 终端视频播放器";
-            "版本: {}", env!("CARGO_PKG_VERSION");
-            "仓库: {}", env!("CARGO_PKG_REPOSITORY");
-            "许可: {}", env!("CARGO_PKG_LICENSE");
+            "版本: {version}";
+            "仓库: {repo}";
+            "许可: {license}";
             "";
             "用法: {program_name} <输入文件> [输入文件] ...";
             "";
@@ -163,9 +212,9 @@ fn print_help(program_name: &str) {
         ),
         "zh-tw" => eprintlns!(
             "tvid - 終端機視訊播放器";
-            "版本: {}", env!("CARGO_PKG_VERSION");
-            "儲存庫: {}", env!("CARGO_PKG_REPOSITORY");
-            "授權: {}", env!("CARGO_PKG_LICENSE");
+            "版本: {version}";
+            "儲存庫: {repo}";
+            "授權: {license}";
             "";
             "用法: {program_name} <輸入檔案> [輸入檔案] ...";
             "";
@@ -179,9 +228,9 @@ fn print_help(program_name: &str) {
         ),
         "ja-jp" => eprintlns!(
             "tvid - ターミナルビデオプレーヤー";
-            "バージョン: {}", env!("CARGO_PKG_VERSION");
-            "リポジトリ: {}", env!("CARGO_PKG_REPOSITORY");
-            "ライセンス: {}", env!("CARGO_PKG_LICENSE");
+            "バージョン: {version}";
+            "リポジトリ: {repo}";
+            "ライセンス: {license}";
             "";
             "使用法: {program_name} <入力ファイル> [入力ファイル] ...";
             "";
@@ -195,9 +244,9 @@ fn print_help(program_name: &str) {
         ),
         "fr-fr" => eprintlns!(
             "tvid - Lecteur vidéo terminal";
-            "version: {}", env!("CARGO_PKG_VERSION");
-            "dépôt: {}", env!("CARGO_PKG_REPOSITORY");
-            "licence: {}", env!("CARGO_PKG_LICENSE");
+            "version: {version}";
+            "dépôt: {repo}";
+            "licence: {license}";
             "";
             "Utilisation: {program_name} <fichier d'entrée> [fichier d'entrée] ...";
             "";
@@ -211,9 +260,9 @@ fn print_help(program_name: &str) {
         ),
         "de-de" => eprintlns!(
             "tvid - Terminal Video Player";
-            "Version: {}", env!("CARGO_PKG_VERSION");
-            "Repository: {}", env!("CARGO_PKG_REPOSITORY");
-            "Lizenz: {}", env!("CARGO_PKG_LICENSE");
+            "Version: {version}";
+            "Repository: {repo}";
+            "Lizenz: {license}";
             "";
             "Verwendung: {program_name} <Eingabedatei> [Eingabedatei] ...";
             "";
@@ -227,9 +276,9 @@ fn print_help(program_name: &str) {
         ),
         "es-es" => eprintlns!(
             "tvid - Reproductor de video de terminal";
-            "versión: {}", env!("CARGO_PKG_VERSION");
-            "repositorio: {}", env!("CARGO_PKG_REPOSITORY");
-            "licencia: {}", env!("CARGO_PKG_LICENSE");
+            "versión: {version}";
+            "repositorio: {repo}";
+            "licencia: {license}";
             "";
             "Uso: {program_name} <archivo de entrada> [archivo de entrada] ...";
             "";
@@ -243,9 +292,9 @@ fn print_help(program_name: &str) {
         ),
         _ => eprintlns!(
             "tvid - Terminal Video Player";
-            "version: {}", env!("CARGO_PKG_VERSION");
-            "repo: {}", env!("CARGO_PKG_REPOSITORY");
-            "license: {}", env!("CARGO_PKG_LICENSE");
+            "version: {version}";
+            "repo: {repo}";
+            "license: {license}";
             "";
             "Usage: {program_name} <input> [input] ...";
             "";
@@ -351,15 +400,15 @@ fn main() -> Result<()> {
     APP_START_TIME.set(Instant::now()).unwrap();
 
     let program_name = env::args().nth(0).unwrap_or_else(|| {
-        match LOCALE.as_str() {
-            "zh-cn" => eprintln!("666 这几把的 0 个参数，没救了属于是"),
-            "zh-tw" => eprintln!("媽的 0 個參數，什麼鳥東西"),
-            "ja-jp" => eprintln!("なんだこれ、引数0個とかありえないだろ"),
-            "fr-fr" => eprintln!("Qu'est-ce que c'est que ça, 0 arguments ?"),
-            "de-de" => eprintln!("Was zum Teufel ist das, 0 Argumente?"),
-            "es-es" => eprintln!("¿Qué diablos es esto, 0 argumentos?"),
-            _ => eprintln!("Got 0 args? What the fuck?"),
-        }
+        eprintln_l10n!(
+            "zh-cn" => "666 这几把的 0 个参数，没救了属于是";
+            "zh-tw" => "媽的 0 個參數，什麼鳥東西";
+            "ja-jp" => "なんだこれ、引数0個とかありえないだろ";
+            "fr-fr" => "Qu'est-ce que c'est que ça, 0 arguments ?";
+            "de-de" => "Was zum Teufel ist das, 0 Argumente?";
+            "es-es" => "¿Qué diablos es esto, 0 argumentos?";
+            _       => "Got 0 args? What the fuck?";
+        );
         std::process::exit(1);
     });
 
@@ -367,8 +416,11 @@ fn main() -> Result<()> {
     *SEEK_SMALL_STEP.lock() = cli.seek_small;
     *SEEK_LARGE_STEP.lock() = cli.seek_large;
 
-    config::create_if_not_exists(None)?;
-    config::load(None)?;
+    #[cfg(feature = "config")]
+    {
+        config::create_if_not_exists(None)?;
+        config::load(None)?;
+    }
 
     if cli.show_help {
         print_help(&program_name);
@@ -397,7 +449,8 @@ fn main() -> Result<()> {
 
     register_input_callbacks();
 
-    render::add_render_callback(video::render_frame);
+    render::add_render_callback(render::render_video);
+    #[cfg(feature = "subtitle")]
     render::add_render_callback(subtitle::render_subtitle);
     render::add_render_callback(ui::render_ui);
 
@@ -479,6 +532,7 @@ fn main() -> Result<()> {
         });
     });
 
+    #[cfg(feature = "config")]
     config::save(None).unwrap_or_else(|err| {
         error_l10n!(
             "zh-cn" => "配置保存错误: {err}";
