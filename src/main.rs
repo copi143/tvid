@@ -19,7 +19,6 @@ use tokio::runtime::Runtime;
 
 use crate::escape::format_link;
 use crate::ffmpeg::seek_request_relative;
-use crate::render::{COLOR_MODE, FORCEFLUSH_NEXT};
 use crate::ui::QUIT_CONFIRMATION;
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 
@@ -52,15 +51,23 @@ mod util;
 mod logging;
 
 #[macro_use]
+#[allow(unused_macros)]
 mod ui;
 
+#[allow(unused)]
 mod avsync;
+
 mod playlist;
 mod render;
 mod statistics;
 mod stdin;
 mod stdout;
 mod term;
+
+/// TODO
+#[allow(unused)]
+#[cfg(feature = "ssh")]
+mod ssh;
 
 #[cfg(feature = "config")]
 mod config;
@@ -77,6 +84,7 @@ mod video;
 #[cfg(feature = "subtitle")]
 mod subtitle;
 
+#[allow(unused)]
 mod escape {
     #[cfg(feature = "sixel")]
     usemod!(sixel);
@@ -366,9 +374,21 @@ fn register_input_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal('c'), |_| {
-        COLOR_MODE.lock().switch_next();
-        FORCEFLUSH_NEXT.store(true, Ordering::SeqCst);
+    stdin::register_keypress_callback(Key::Lower('c'), |_| {
+        let mut ctx = render::RENDER_CONTEXT.lock();
+        ctx.color_mode.switch_next();
+        let (fppc_x, fppc_y) = ctx.color_mode.fppc();
+        ctx.update_fppc(fppc_x, fppc_y);
+        ctx.force_flush_next();
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Upper('c'), |_| {
+        let mut ctx = render::RENDER_CONTEXT.lock();
+        ctx.color_mode.switch_prev();
+        let (fppc_x, fppc_y) = ctx.color_mode.fppc();
+        ctx.update_fppc(fppc_x, fppc_y);
+        ctx.force_flush_next();
         true
     });
 
@@ -443,6 +463,9 @@ fn main() -> Result<()> {
 
     term::init();
     term::setup_panic_handler(); // 一定要在初始化之后设置，且必须立刻设置
+
+    #[cfg(feature = "ssh")]
+    ssh::run()?;
 
     ffmpeg::init();
 

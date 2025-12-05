@@ -1,19 +1,18 @@
 use parking_lot::Mutex;
 use std::cmp::min;
-use std::fmt::Display;
 use std::fs::FileType;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use unicode_width::UnicodeWidthChar;
 
-use crate::avsync;
 use crate::logging::get_messages;
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
-use crate::render::{CHROMA_KEY_COLOR, COLOR_MODE, RenderWrapper, TERM_PIXELS, TERM_SIZE};
+use crate::render::ContextWrapper;
 use crate::statistics::get_statistics;
 use crate::stdin::{self, Key, MouseAction};
 use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
+use crate::{avsync, render};
 use crate::{ffmpeg, term};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -41,7 +40,7 @@ pub fn unifont_get(ch: char) -> &'static [u8; 32] {
 /// - `color`: 叠加层颜色
 /// - `opacity`: 叠加层透明度
 pub fn mask(
-    wrap: &mut RenderWrapper,
+    wrap: &mut ContextWrapper,
     x: isize,
     y: isize,
     w: usize,
@@ -109,7 +108,7 @@ pub fn mask(
 /// - `fg`, `bg`: 前景色和背景色
 /// - `autowrap`: 是否自动换行
 pub fn putat(
-    wrap: &mut RenderWrapper,
+    wrap: &mut ContextWrapper,
     text: &str,
     x: isize,
     y: isize,
@@ -230,7 +229,7 @@ pub fn textbox_default_color(fg: Option<Color>, bg: Option<Color>) {
     TEXTBOX_DEFAULT_COLOR.lock().clone_from(&(fg, bg));
 }
 
-pub fn put(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn put(wrap: &mut ContextWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     let (def_fg, def_bg) = *TEXTBOX_DEFAULT_COLOR.lock();
     let (fg, bg) = (fg.or(def_fg), bg.or(def_bg));
     let (x, y, w, h, i, j) = TEXTBOX.get();
@@ -247,7 +246,7 @@ macro_rules! put {
     };
 }
 
-pub fn putln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn putln(wrap: &mut ContextWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     let (def_fg, def_bg) = *TEXTBOX_DEFAULT_COLOR.lock();
     let (fg, bg) = (fg.or(def_fg), bg.or(def_bg));
     let (x, y, w, h, i, j) = TEXTBOX.get();
@@ -271,7 +270,7 @@ macro_rules! putlns {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-pub fn putufln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn putufln(wrap: &mut ContextWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     let mut data = [const { String::new() }; 4];
     for ch in text.chars() {
         let font = unifont_get(ch);
@@ -314,11 +313,11 @@ macro_rules! putuflns {
 
 const TERM_FONT_HEIGHT_THRESHOLD: f32 = 12.0;
 
-fn font_large_enough(wrap: &RenderWrapper) -> bool {
-    wrap.term_font_height > TERM_FONT_HEIGHT_THRESHOLD
+fn font_large_enough(wrap: &ContextWrapper) -> bool {
+    wrap.font_height > TERM_FONT_HEIGHT_THRESHOLD
 }
 
-pub fn putln_or_ufln(wrap: &mut RenderWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+pub fn putln_or_ufln(wrap: &mut ContextWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     if font_large_enough(wrap) {
         putln(wrap, text, fg, bg);
     } else {
@@ -351,7 +350,7 @@ macro_rules! putlns_or_uflns {
 /// 是否已经开始渲染第一帧，防止事件在此之前触发
 static FIRST_RENDERED: AtomicBool = AtomicBool::new(false);
 
-pub fn render_ui(wrap: &mut RenderWrapper) {
+pub fn render_ui(wrap: &mut ContextWrapper) {
     FIRST_RENDERED.store(true, Ordering::SeqCst);
     if wrap.cells_width < 4 || wrap.cells_height < 4 {
         return; // 防炸
@@ -370,21 +369,20 @@ pub static SHOW_PROGRESSBAR: AtomicBool = AtomicBool::new(true);
 /// 按像素计的进度条高度
 static mut PROGRESSBAR_HEIGHT: f32 = 16.0;
 
-fn calc_bar_size() -> (usize, usize) {
-    let term_font_height = TERM_PIXELS.y() as f32 / TERM_SIZE.y() as f32;
-    let bar_w = TERM_SIZE.x() as f64 * avsync::playback_progress() + 0.5;
-    let bar_h = unsafe { PROGRESSBAR_HEIGHT } / term_font_height * 2.0;
-    let bar_w = (bar_w as usize).clamp(0, TERM_SIZE.x());
-    let bar_h = (bar_h as usize).clamp(1, TERM_SIZE.y() * 2);
+fn calc_bar_size(cells_width: usize, cells_height: usize, font_height: f32) -> (usize, usize) {
+    let bar_w = cells_width as f64 * avsync::playback_progress() + 0.5;
+    let bar_h = unsafe { PROGRESSBAR_HEIGHT } / font_height * 2.0;
+    let bar_w = (bar_w as usize).clamp(0, cells_width);
+    let bar_h = (bar_h as usize).clamp(1, cells_height * 2);
     (bar_w, bar_h)
 }
 
-fn render_progressbar(wrap: &mut RenderWrapper) {
+fn render_progressbar(wrap: &mut ContextWrapper) {
     if !SHOW_PROGRESSBAR.load(Ordering::SeqCst) {
         return;
     }
 
-    let (bar_w, bar_h) = calc_bar_size();
+    let (bar_w, bar_h) = calc_bar_size(wrap.cells_width, wrap.cells_height, wrap.font_height);
 
     for y in wrap.cells_height * 2 - bar_h..wrap.cells_height * 2 {
         for x in 0..bar_w {
@@ -404,13 +402,15 @@ fn register_input_callbacks_progressbar() {
         if !FIRST_RENDERED.load(Ordering::SeqCst) {
             return false;
         }
+        let ctx = render::RENDER_CONTEXT.lock();
 
-        let term_h = TERM_SIZE.y();
-        let bar_h = calc_bar_size().1.div_ceil(2);
+        let term_h = ctx.cells_height;
+        let (_, bar_h) = calc_bar_size(ctx.cells_width, ctx.cells_height, ctx.font_height);
+        let bar_h = bar_h.div_ceil(2);
 
         if unsafe { DRAGGING_PROGRESSBAR } {
             if m.left {
-                let p = m.pos.0 as f64 / TERM_SIZE.x() as f64;
+                let p = m.pos.0 as f64 / ctx.cells_width as f64;
                 ffmpeg::seek_request_absolute(p * avsync::total_duration().as_secs_f64());
             } else {
                 unsafe { DRAGGING_PROGRESSBAR = false };
@@ -421,7 +421,7 @@ fn register_input_callbacks_progressbar() {
                 return false;
             }
             unsafe { DRAGGING_PROGRESSBAR = true };
-            let p = m.pos.0 as f64 / TERM_SIZE.x() as f64;
+            let p = m.pos.0 as f64 / ctx.cells_width as f64;
             ffmpeg::seek_request_absolute(p * avsync::total_duration().as_secs_f64());
             true
         } else {
@@ -432,7 +432,7 @@ fn register_input_callbacks_progressbar() {
 
 pub static SHOW_HELP: AtomicBool = AtomicBool::new(false);
 
-fn render_help(wrap: &mut RenderWrapper) {
+fn render_help(wrap: &mut ContextWrapper) {
     if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
@@ -547,7 +547,7 @@ fn render_help(wrap: &mut RenderWrapper) {
 
 pub static SHOW_OVERLAY_TEXT: AtomicBool = AtomicBool::new(true);
 
-fn render_overlay_text(wrap: &mut RenderWrapper) {
+fn render_overlay_text(wrap: &mut ContextWrapper) {
     if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
@@ -617,8 +617,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "渲染时间: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
             "输出时间: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
             "视频跳过帧数: {}", statistics.video_skipped_frames;
-            "颜色模式: {}", *COLOR_MODE.lock();
-            "绿幕模式: {}", *CHROMA_MODE.lock();
+            "颜色模式: {}", wrap.color_mode;
+            "绿幕模式: {}", wrap.chroma_mode;
         ),
         "zh-tw" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -630,8 +630,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "渲染時間: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
             "輸出時間: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
             "視頻跳過幀數: {}", statistics.video_skipped_frames;
-            "顏色模式: {}", *COLOR_MODE.lock();
-            "綠幕模式: {}", *CHROMA_MODE.lock();
+            "顏色模式: {}", wrap.color_mode;
+            "綠幕模式: {}", wrap.chroma_mode;
         ),
         "ja-jp" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -643,8 +643,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "レンダリング時間: {:.2?} (直近 60 回の平均)", statistics.render_time.avg();
             "出力時間: {:.2?} (直近 60 回の平均)", statistics.output_time.avg();
             "ビデオスキップフレーム数: {}", statistics.video_skipped_frames;
-            "カラーモード: {}", *COLOR_MODE.lock();
-            "クロマモード: {}", *CHROMA_MODE.lock();
+            "カラーモード: {}", wrap.color_mode;
+            "クロマモード: {}", wrap.chroma_mode;
         ),
         "fr-fr" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -656,8 +656,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Temps de rendu: {:.2?} (moyenne des 60 dernières)", statistics.render_time.avg();
             "Temps de sortie: {:.2?} (moyenne des 60 dernières)", statistics.output_time.avg();
             "Images vidéo sautées: {}", statistics.video_skipped_frames;
-            "Mode couleur: {}", *COLOR_MODE.lock();
-            "Mode chroma: {}", *CHROMA_MODE.lock();
+            "Mode couleur: {}", wrap.color_mode;
+            "Mode chroma: {}", wrap.chroma_mode;
         ),
         "de-de" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -669,8 +669,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Render-Zeit: {:.2?} (Durchschnitt der letzten 60)", statistics.render_time.avg();
             "Ausgabezeit: {:.2?} (Durchschnitt der letzten 60)", statistics.output_time.avg();
             "Übersprungene Videoframes: {}", statistics.video_skipped_frames;
-            "Farbmodus: {}", *COLOR_MODE.lock();
-            "Chroma-Modus: {}", *CHROMA_MODE.lock();
+            "Farbmodus: {}", wrap.color_mode;
+            "Chroma-Modus: {}", wrap.chroma_mode;
         ),
         "es-es" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -682,8 +682,8 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Tiempo de renderizado: {:.2?} (promedio de los últimos 60)", statistics.render_time.avg();
             "Tiempo de salida: {:.2?} (promedio de los últimos 60)", statistics.output_time.avg();
             "Fotogramas de video omitidos: {}", statistics.video_skipped_frames;
-            "Modo de color: {}", *COLOR_MODE.lock();
-            "Modo de croma: {}", *CHROMA_MODE.lock();
+            "Modo de color: {}", wrap.color_mode;
+            "Modo de croma: {}", wrap.chroma_mode;
         ),
         _ => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -695,13 +695,13 @@ fn render_overlay_text(wrap: &mut RenderWrapper) {
             "Render Time: {:.2?} (avg over last 60)", statistics.render_time.avg();
             "Output Time: {:.2?} (avg over last 60)", statistics.output_time.avg();
             "Video Skipped Frames: {}", statistics.video_skipped_frames;
-            "Color Mode: {}", *COLOR_MODE.lock();
-            "Chroma Mode: {}", *CHROMA_MODE.lock();
+            "Color Mode: {}", wrap.color_mode;
+            "Chroma Mode: {}", wrap.chroma_mode;
         ),
     }
 }
 
-fn render_playlist(wrap: &mut RenderWrapper) {
+fn render_playlist(wrap: &mut ContextWrapper) {
     if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
@@ -715,9 +715,9 @@ fn render_playlist(wrap: &mut RenderWrapper) {
     static mut PLAYLIST_POS: f32 = 0.0;
     let mut playlist_pos = unsafe { PLAYLIST_POS };
     if SHOW_PLAYLIST.load(Ordering::SeqCst) {
-        playlist_pos += wrap.delta_time.as_secs_f32() * 3000.0 / wrap.term_font_width;
+        playlist_pos += wrap.delta_time.as_secs_f32() * 3000.0 / wrap.font_width;
     } else {
-        playlist_pos -= wrap.delta_time.as_secs_f32() * 3000.0 / wrap.term_font_width;
+        playlist_pos -= wrap.delta_time.as_secs_f32() * 3000.0 / wrap.font_width;
     }
     let playlist_pos = playlist_pos.clamp(0.0, playlist_width as f32);
     unsafe { PLAYLIST_POS = playlist_pos };
@@ -781,7 +781,7 @@ fn render_playlist(wrap: &mut RenderWrapper) {
     }
 }
 
-fn render_messages(wrap: &mut RenderWrapper) {
+fn render_messages(wrap: &mut ContextWrapper) {
     if wrap.cells_width < 8 || wrap.cells_height < 8 {
         return; // 防炸
     }
@@ -820,7 +820,7 @@ pub static FILE_SELECT_PATH: Mutex<String> = Mutex::new(String::new());
 pub static FILE_SELECT_LIST: Mutex<Vec<(FileType, String)>> = Mutex::new(Vec::new());
 pub static FILE_SELECT_INDEX: Mutex<usize> = Mutex::new(0);
 
-fn render_file_select(wrap: &mut RenderWrapper) {
+fn render_file_select(wrap: &mut ContextWrapper) {
     static mut FILE_SELECT_SHOWN: f32 = 0.0;
     static mut FILE_SELECT_ALPHA: f32 = 0.0;
 
@@ -1101,7 +1101,7 @@ fn register_file_select_keypress_callbacks() {
 
 pub static QUIT_CONFIRMATION: AtomicBool = AtomicBool::new(false);
 
-fn render_quit_confirmation(wrap: &mut RenderWrapper) {
+fn render_quit_confirmation(wrap: &mut ContextWrapper) {
     if !QUIT_CONFIRMATION.load(Ordering::SeqCst) {
         return;
     }
@@ -1141,137 +1141,6 @@ fn render_quit_confirmation(wrap: &mut RenderWrapper) {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-#[derive(Debug)]
-enum ChromaMode {
-    None,
-    Red,
-    Green,
-    Blue,
-    Yellow,
-    Magenta,
-    Cyan,
-    White,
-    Black,
-}
-
-impl Display for ChromaMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match locale!() {
-            "zh-cn" => match self {
-                ChromaMode::None => write!(f, "无"),
-                ChromaMode::Red => write!(f, "红色"),
-                ChromaMode::Green => write!(f, "绿色"),
-                ChromaMode::Blue => write!(f, "蓝色"),
-                ChromaMode::Yellow => write!(f, "黄色"),
-                ChromaMode::Magenta => write!(f, "品红色"),
-                ChromaMode::Cyan => write!(f, "青色"),
-                ChromaMode::White => write!(f, "白色"),
-                ChromaMode::Black => write!(f, "黑色"),
-            },
-            "zh-tw" => match self {
-                ChromaMode::None => write!(f, "無"),
-                ChromaMode::Red => write!(f, "紅色"),
-                ChromaMode::Green => write!(f, "綠色"),
-                ChromaMode::Blue => write!(f, "藍色"),
-                ChromaMode::Yellow => write!(f, "黃色"),
-                ChromaMode::Magenta => write!(f, "品紅色"),
-                ChromaMode::Cyan => write!(f, "青色"),
-                ChromaMode::White => write!(f, "白色"),
-                ChromaMode::Black => write!(f, "黑色"),
-            },
-            "ja-jp" => match self {
-                ChromaMode::None => write!(f, "なし"),
-                ChromaMode::Red => write!(f, "赤"),
-                ChromaMode::Green => write!(f, "緑"),
-                ChromaMode::Blue => write!(f, "青"),
-                ChromaMode::Yellow => write!(f, "黄"),
-                ChromaMode::Magenta => write!(f, "マゼンタ"),
-                ChromaMode::Cyan => write!(f, "シアン"),
-                ChromaMode::White => write!(f, "白"),
-                ChromaMode::Black => write!(f, "黒"),
-            },
-            "fr-fr" => match self {
-                ChromaMode::None => write!(f, "Aucun"),
-                ChromaMode::Red => write!(f, "Rouge"),
-                ChromaMode::Green => write!(f, "Vert"),
-                ChromaMode::Blue => write!(f, "Bleu"),
-                ChromaMode::Yellow => write!(f, "Jaune"),
-                ChromaMode::Magenta => write!(f, "Magenta"),
-                ChromaMode::Cyan => write!(f, "Cyan"),
-                ChromaMode::White => write!(f, "Blanc"),
-                ChromaMode::Black => write!(f, "Noir"),
-            },
-            "de-de" => match self {
-                ChromaMode::None => write!(f, "Keine"),
-                ChromaMode::Red => write!(f, "Rot"),
-                ChromaMode::Green => write!(f, "Grün"),
-                ChromaMode::Blue => write!(f, "Blau"),
-                ChromaMode::Yellow => write!(f, "Gelb"),
-                ChromaMode::Magenta => write!(f, "Magenta"),
-                ChromaMode::Cyan => write!(f, "Cyan"),
-                ChromaMode::White => write!(f, "Weiß"),
-                ChromaMode::Black => write!(f, "Schwarz"),
-            },
-            "es-es" => match self {
-                ChromaMode::None => write!(f, "Ninguno"),
-                ChromaMode::Red => write!(f, "Rojo"),
-                ChromaMode::Green => write!(f, "Verde"),
-                ChromaMode::Blue => write!(f, "Azul"),
-                ChromaMode::Yellow => write!(f, "Amarillo"),
-                ChromaMode::Magenta => write!(f, "Magenta"),
-                ChromaMode::Cyan => write!(f, "Cian"),
-                ChromaMode::White => write!(f, "Blanco"),
-                ChromaMode::Black => write!(f, "Negro"),
-            },
-            _ => match self {
-                ChromaMode::None => write!(f, "None"),
-                ChromaMode::Red => write!(f, "Red"),
-                ChromaMode::Green => write!(f, "Green"),
-                ChromaMode::Blue => write!(f, "Blue"),
-                ChromaMode::Yellow => write!(f, "Yellow"),
-                ChromaMode::Magenta => write!(f, "Magenta"),
-                ChromaMode::Cyan => write!(f, "Cyan"),
-                ChromaMode::White => write!(f, "White"),
-                ChromaMode::Black => write!(f, "Black"),
-            },
-        }
-    }
-}
-
-impl ChromaMode {
-    pub const fn next(&self) -> ChromaMode {
-        match self {
-            ChromaMode::None => ChromaMode::Red,
-            ChromaMode::Red => ChromaMode::Green,
-            ChromaMode::Green => ChromaMode::Blue,
-            ChromaMode::Blue => ChromaMode::Yellow,
-            ChromaMode::Yellow => ChromaMode::Magenta,
-            ChromaMode::Magenta => ChromaMode::Cyan,
-            ChromaMode::Cyan => ChromaMode::White,
-            ChromaMode::White => ChromaMode::Black,
-            ChromaMode::Black => ChromaMode::None,
-        }
-    }
-
-    pub const fn color(&self) -> Option<Color> {
-        match self {
-            ChromaMode::None => None,
-            ChromaMode::Red => Some(Color::new(255, 0, 0)),
-            ChromaMode::Green => Some(Color::new(0, 255, 0)),
-            ChromaMode::Blue => Some(Color::new(0, 0, 255)),
-            ChromaMode::Yellow => Some(Color::new(255, 255, 0)),
-            ChromaMode::Magenta => Some(Color::new(255, 0, 255)),
-            ChromaMode::Cyan => Some(Color::new(0, 255, 255)),
-            ChromaMode::White => Some(Color::new(255, 255, 255)),
-            ChromaMode::Black => Some(Color::new(0, 0, 0)),
-        }
-    }
-}
-
-static CHROMA_MODE: Mutex<ChromaMode> = Mutex::new(ChromaMode::None);
-
-// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
-
 pub fn register_input_callbacks() {
     register_input_callbacks_progressbar();
 
@@ -1296,10 +1165,15 @@ pub fn register_input_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal('x'), |_| {
-        let mut chroma_mode = CHROMA_MODE.lock();
-        *chroma_mode = chroma_mode.next();
-        *CHROMA_KEY_COLOR.lock() = chroma_mode.color();
+    stdin::register_keypress_callback(Key::Lower('x'), |_| {
+        let mut ctx = render::RENDER_CONTEXT.lock();
+        ctx.chroma_mode.switch_next();
+        true
+    });
+
+    stdin::register_keypress_callback(Key::Upper('x'), |_| {
+        let mut ctx = render::RENDER_CONTEXT.lock();
+        ctx.chroma_mode.switch_prev();
         true
     });
 

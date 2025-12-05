@@ -1,16 +1,18 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use jpeg_encoder::{ColorType, Encoder as JpegEncoder};
+use std::io::Write;
 
 use crate::util::Color;
 
 pub fn format_image(
+    wr: &mut impl Write,
     data: &[Color],
     width: usize,
     height: usize,
     pitch: usize,
     term_width: usize,
     term_height: usize,
-) -> String {
+) {
     let mut vec = Vec::new();
     let data = if pitch == width {
         data
@@ -27,16 +29,16 @@ pub fn format_image(
     };
 
     let mut buffer = Vec::new();
-    let encoder = JpegEncoder::new(&mut buffer, 95);
+    let encoder = JpegEncoder::new(&mut buffer, 90);
     let Ok(_) = encoder.encode(data, width as u16, height as u16, ColorType::Rgba) else {
-        return String::new();
+        return;
     };
 
-    format!(
-        "\x1b[H\x1b]1337;File=inline=1;width={};height={};size={}:{}\x1b\\",
-        term_width,
-        term_height,
+    write!(
+        wr,
+        "\x1b]1337;File=inline=1;width={term_width};height={term_height};size={}:{}\x1b\\",
         buffer.len(),
-        BASE64.encode(&buffer)
+        BASE64.encode(&buffer),
     )
+    .unwrap();
 }

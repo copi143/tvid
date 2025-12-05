@@ -8,16 +8,16 @@ use std::path::Path;
 use crate::playlist::PLAYLIST;
 
 #[cfg(windows)]
-const DEFAULT_CONFIG_DIR: &str = "%LocalAppData%\\tvid";
+const CONFIG_DIR: &str = "%LocalAppData%\\tvid";
 #[cfg(unix)]
-const DEFAULT_CONFIG_DIR: &str = "~/.config/tvid";
+const CONFIG_DIR: &str = "~/.config/tvid";
 
-const DEFAULT_CONFIG_FILE: &str = "tvid.toml";
-const DEFAULT_PLAYLIST_FILE: &str = "playlist.txt";
-const DEFAULT_PLAYLIST_SUBDIR: &str = "playlists";
+const CONFIG_FILE: &str = "tvid.toml";
+const PLAYLIST_FILE: &str = "playlist.txt";
+const PLAYLIST_SUBDIR: &str = "playlists";
 
-const DEFAULT_CONFIG_FILE_DATA: &[u8] = include_bytes!("tvid.toml");
-const DEFAULT_PLAYLIST_FILE_DATA: &[u8] = include_bytes!("playlist.txt");
+const DEFAULT_CONFIG_DATA: &[u8] = include_bytes!("tvid.toml");
+const DEFAULT_PLAYLIST_DATA: &[u8] = include_bytes!("playlist.txt");
 
 pub static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 
@@ -85,7 +85,7 @@ impl Config {
         let src = if let Some(s) = src_opt.take() {
             s
         } else {
-            String::from_utf8(DEFAULT_CONFIG_FILE_DATA.to_vec())?
+            String::from_utf8(DEFAULT_CONFIG_DATA.to_vec())?
         };
 
         let mut doc: toml_edit::DocumentMut = src.parse()?;
@@ -131,12 +131,12 @@ fn load_playlist(mut file: File) -> Result<()> {
 }
 
 pub fn load(dir: Option<&str>) -> Result<()> {
-    let dir = shellexpand::tilde(dir.unwrap_or(DEFAULT_CONFIG_DIR)).to_string();
+    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
 
-    let path = Path::new(&dir).join(DEFAULT_CONFIG_FILE);
+    let path = Path::new(&dir).join(CONFIG_FILE);
     load_config(File::open(path)?)?;
 
-    let path = Path::new(&dir).join(DEFAULT_PLAYLIST_FILE);
+    let path = Path::new(&dir).join(PLAYLIST_FILE);
     load_playlist(File::open(path)?)?;
 
     Ok(())
@@ -148,7 +148,7 @@ fn save_config(mut file: File) -> Result<()> {
 }
 
 fn save_playlist(mut file: File) -> Result<()> {
-    file.write_all(DEFAULT_PLAYLIST_FILE_DATA)?;
+    file.write_all(DEFAULT_PLAYLIST_DATA)?;
     for item in PLAYLIST.lock().get_items() {
         writeln!(file, "{}", item)?;
     }
@@ -156,40 +156,78 @@ fn save_playlist(mut file: File) -> Result<()> {
 }
 
 pub fn save(dir: Option<&str>) -> Result<()> {
-    let dir = shellexpand::tilde(dir.unwrap_or(DEFAULT_CONFIG_DIR)).to_string();
+    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
 
-    let path = Path::new(&dir).join(DEFAULT_CONFIG_FILE);
+    let path = Path::new(&dir).join(CONFIG_FILE);
     save_config(File::create(path)?)?;
 
-    let path = Path::new(&dir).join(DEFAULT_PLAYLIST_FILE);
+    let path = Path::new(&dir).join(PLAYLIST_FILE);
     save_playlist(File::create(path)?)?;
 
     Ok(())
 }
 
 pub fn create_if_not_exists(dir: Option<&str>) -> Result<()> {
-    let dir = shellexpand::tilde(dir.unwrap_or(DEFAULT_CONFIG_DIR)).to_string();
+    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
     let dir = Path::new(&dir);
     if !dir.exists() {
         std::fs::create_dir_all(dir)?;
     }
 
-    let playlist_dir = dir.join(DEFAULT_PLAYLIST_SUBDIR);
+    let playlist_dir = dir.join(PLAYLIST_SUBDIR);
     if !playlist_dir.exists() {
         std::fs::create_dir_all(playlist_dir)?;
     }
 
-    let path = dir.join(DEFAULT_CONFIG_FILE);
+    let path = dir.join(CONFIG_FILE);
     if !path.exists() {
         let mut file = File::create(path)?;
-        file.write_all(DEFAULT_CONFIG_FILE_DATA)?;
+        file.write_all(DEFAULT_CONFIG_DATA)?;
     }
 
-    let path = dir.join(DEFAULT_PLAYLIST_FILE);
+    let path = dir.join(PLAYLIST_FILE);
     if !path.exists() {
         let mut file = File::create(path)?;
-        file.write_all(DEFAULT_PLAYLIST_FILE_DATA)?;
+        file.write_all(DEFAULT_PLAYLIST_DATA)?;
     }
 
     Ok(())
+}
+
+#[cfg(feature = "ssh")]
+pub fn load_or_create_hostkeys(dir: Option<&str>) -> Result<Vec<russh::keys::PrivateKey>> {
+    use anyhow::bail;
+    use russh::keys::signature::rand_core::OsRng;
+    use russh::keys::ssh_key::private::{Ed25519Keypair, RsaKeypair};
+
+    const SSH_HOSTKEY_RSA_FILE: &str = "hostkey_rsa";
+    const SSH_HOSTKEY_ED25519_FILE: &str = "hostkey_ed25519";
+
+    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
+    let dir = Path::new(&dir);
+
+    let keypath_rsa = dir.join(SSH_HOSTKEY_RSA_FILE);
+    let keypath_ed25519 = dir.join(SSH_HOSTKEY_ED25519_FILE);
+
+    let hostkey_rsa = if let Ok(k) = russh::keys::load_secret_key(&keypath_rsa, None) {
+        k
+    } else if let Ok(mut f) = std::fs::File::create(&keypath_rsa) {
+        let kp = RsaKeypair::random(&mut OsRng, 2048)?.into();
+        russh::keys::encode_pkcs8_pem(&kp, &mut f)?;
+        kp
+    } else {
+        bail!("failed to load or create host key at {keypath_rsa:?}");
+    };
+
+    let hostkey_ed25519 = if let Ok(k) = russh::keys::load_secret_key(&keypath_ed25519, None) {
+        k
+    } else if let Ok(mut f) = std::fs::File::create(&keypath_ed25519) {
+        let kp = Ed25519Keypair::random(&mut OsRng).into();
+        russh::keys::encode_pkcs8_pem(&kp, &mut f)?;
+        kp
+    } else {
+        bail!("failed to load or create host key at {keypath_ed25519:?}");
+    };
+
+    Ok(vec![hostkey_rsa, hostkey_ed25519])
 }

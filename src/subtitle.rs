@@ -3,7 +3,7 @@ use std::{collections::VecDeque, time::Duration};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::avsync::played_time_or_zero;
-use crate::render::RenderWrapper;
+use crate::render::ContextWrapper;
 use crate::util::{Cell, Color, best_contrast_color};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -188,7 +188,7 @@ pub fn get_subtitles(time: Duration) -> Vec<AssDialogue> {
     result
 }
 
-pub fn render_subtitle(wrap: &mut RenderWrapper) {
+pub fn render_subtitle(wrap: &mut ContextWrapper) {
     if let Some(played_time) = wrap.played_time {
         let subtitles = get_subtitles(played_time);
         let mut y = wrap.cells_height - 1 - wrap.padding_bottom;

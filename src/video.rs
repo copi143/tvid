@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::avsync::{self, played_time_or_zero};
 use crate::ffmpeg::{DECODER_WAKEUP, DECODER_WAKEUP_MUTEX, VIDEO_TIME_BASE};
-use crate::render::{self, VIDEO_PIXELS};
+use crate::render;
 use crate::statistics::increment_video_skipped_frames;
 use crate::term::TERM_QUIT;
 
@@ -96,19 +96,23 @@ pub fn video_main() {
             continue;
         }
 
-        render::VIDEO_SIZE_CACHE.set(frame.width() as usize, frame.height() as usize);
+        {
+            let mut ctx = render::RENDER_CONTEXT.lock();
+            ctx.update_size(Some(frame.width() as usize), Some(frame.height() as usize));
+        }
 
         loop {
+            let ctx = render::RENDER_CONTEXT.lock();
             let ss = frame.width() != scaler_src_width || frame.height() != scaler_src_height;
-            let ts = VIDEO_PIXELS.get() != (scaler_dst_width as usize, scaler_dst_height as usize);
+            let ts = ctx.frame_width != scaler_dst_width || ctx.frame_height != scaler_dst_height;
             if ss || ts || Some(frame.format()) != scaler_format {
                 let Ok(sws) = Scaler::get(
                     frame.format(),
                     frame.width(),
                     frame.height(),
                     av::format::Pixel::RGBA,
-                    VIDEO_PIXELS.x() as u32,
-                    VIDEO_PIXELS.y() as u32,
+                    ctx.frame_width as u32,
+                    ctx.frame_height as u32,
                     Flags::BILINEAR,
                 ) else {
                     error_l10n!(
@@ -126,9 +130,10 @@ pub fn video_main() {
                 scaler_format = Some(frame.format());
                 scaler_src_width = frame.width();
                 scaler_src_height = frame.height();
-                scaler_dst_width = VIDEO_PIXELS.x() as u32;
-                scaler_dst_height = VIDEO_PIXELS.y() as u32;
+                scaler_dst_width = ctx.frame_width;
+                scaler_dst_height = ctx.frame_height;
             }
+            drop(ctx);
 
             let scaler = scaler.as_mut().unwrap();
 
@@ -152,7 +157,8 @@ pub fn video_main() {
                 let remaining = frametime - played_time_or_zero();
                 let max = Duration::from_micros(VIDEO_FRAMETIME.load(Ordering::SeqCst) * 2);
                 if render::api_wait_frame_request_for(remaining.min(max)) {
-                    if VIDEO_PIXELS.get() != (scaler_dst_width as usize, scaler_dst_height as usize)
+                    let ctx = render::RENDER_CONTEXT.lock();
+                    if ctx.frame_width != scaler_dst_width || ctx.frame_height != scaler_dst_height
                     {
                         continue;
                     }
@@ -179,7 +185,8 @@ pub fn video_main() {
                     break;
                 }
                 if TERM_QUIT.load(Ordering::SeqCst) {
-                    render::VIDEO_SIZE_CACHE.set(0, 0);
+                    let mut ctx = render::RENDER_CONTEXT.lock();
+                    ctx.update_size(Some(0), Some(0));
                     return;
                 }
             }
@@ -191,5 +198,6 @@ pub fn video_main() {
         }
     }
 
-    render::VIDEO_SIZE_CACHE.set(0, 0);
+    let mut ctx = render::RENDER_CONTEXT.lock();
+    ctx.update_size(Some(0), Some(0));
 }

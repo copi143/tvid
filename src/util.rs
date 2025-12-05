@@ -1,94 +1,13 @@
 use parking_lot::Mutex;
 use std::fmt::{Debug, Display};
 use std::io::Write;
-use std::ops::Mul;
+use std::ops::{Add, Div, Mul};
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
 use crate::APP_START_TIME;
 use crate::avsync::played_time_or_none;
-
-pub struct XY {
-    x: AtomicUsize,
-    y: AtomicUsize,
-}
-
-impl XY {
-    pub const fn new() -> Self {
-        XY {
-            x: AtomicUsize::new(0),
-            y: AtomicUsize::new(0),
-        }
-    }
-
-    pub fn set(&self, x: usize, y: usize) {
-        self.x.store(x, Ordering::SeqCst);
-        self.y.store(y, Ordering::SeqCst);
-    }
-
-    pub fn get(&self) -> (usize, usize) {
-        (self.x.load(Ordering::SeqCst), self.y.load(Ordering::SeqCst))
-    }
-
-    pub fn x(&self) -> usize {
-        self.x.load(Ordering::SeqCst)
-    }
-
-    pub fn y(&self) -> usize {
-        self.y.load(Ordering::SeqCst)
-    }
-}
-
-pub struct TBLR {
-    top: AtomicUsize,
-    bottom: AtomicUsize,
-    left: AtomicUsize,
-    right: AtomicUsize,
-}
-
-impl TBLR {
-    pub const fn new() -> Self {
-        TBLR {
-            top: AtomicUsize::new(0),
-            bottom: AtomicUsize::new(0),
-            left: AtomicUsize::new(0),
-            right: AtomicUsize::new(0),
-        }
-    }
-
-    pub fn set(&self, top: usize, bottom: usize, left: usize, right: usize) {
-        self.top.store(top, Ordering::SeqCst);
-        self.bottom.store(bottom, Ordering::SeqCst);
-        self.left.store(left, Ordering::SeqCst);
-        self.right.store(right, Ordering::SeqCst);
-    }
-
-    pub fn get(&self) -> (usize, usize, usize, usize) {
-        (
-            self.top.load(Ordering::SeqCst),
-            self.bottom.load(Ordering::SeqCst),
-            self.left.load(Ordering::SeqCst),
-            self.right.load(Ordering::SeqCst),
-        )
-    }
-
-    pub fn top(&self) -> usize {
-        self.top.load(Ordering::SeqCst)
-    }
-
-    pub fn bottom(&self) -> usize {
-        self.bottom.load(Ordering::SeqCst)
-    }
-
-    pub fn left(&self) -> usize {
-        self.left.load(Ordering::SeqCst)
-    }
-
-    pub fn right(&self) -> usize {
-        self.right.load(Ordering::SeqCst)
-    }
-}
 
 pub struct TextBoxInfo {
     pub x: AtomicIsize,
@@ -203,6 +122,19 @@ pub struct ColorF32 {
     pub a: f32,
 }
 
+impl Add for ColorF32 {
+    type Output = ColorF32;
+
+    fn add(self, rhs: ColorF32) -> Self::Output {
+        ColorF32 {
+            r: self.r + rhs.r,
+            g: self.g + rhs.g,
+            b: self.b + rhs.b,
+            a: self.a + rhs.a,
+        }
+    }
+}
+
 impl Mul<f32> for ColorF32 {
     type Output = ColorF32;
 
@@ -211,12 +143,34 @@ impl Mul<f32> for ColorF32 {
             r: self.r * rhs,
             g: self.g * rhs,
             b: self.b * rhs,
-            a: self.a,
+            a: self.a * rhs,
+        }
+    }
+}
+
+impl Div<f32> for ColorF32 {
+    type Output = ColorF32;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        ColorF32 {
+            r: self.r / rhs,
+            g: self.g / rhs,
+            b: self.b / rhs,
+            a: self.a / rhs,
         }
     }
 }
 
 impl ColorF32 {
+    pub fn zero() -> Self {
+        ColorF32 {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.0,
+        }
+    }
+
     pub fn mix(fg: ColorF32, bg: ColorF32, t: f32) -> Self {
         ColorF32 {
             r: fg.r * t + bg.r * (1.0 - t),
@@ -352,18 +306,34 @@ pub struct Cell {
     /// - `None` 表示什么都没有
     /// - `Some('\0')` 表示占位符，这之前应当有一个宽度大于 1 的字符
     pub c: Option<char>,
+    pub braille: char,
     pub fg: Color,
     pub bg: Color,
 }
 
 impl Cell {
+    pub const fn none(fg: Color, bg: Color) -> Self {
+        Cell {
+            c: None,
+            braille: ' ',
+            fg,
+            bg,
+        }
+    }
+
     pub const fn new(c: char, fg: Color, bg: Color) -> Self {
-        Cell { c: Some(c), fg, bg }
+        Cell {
+            c: Some(c),
+            braille: ' ',
+            fg,
+            bg,
+        }
     }
 
     pub const fn transparent() -> Self {
         Cell {
             c: Some(' '),
+            braille: ' ',
             fg: Color::transparent(),
             bg: Color::transparent(),
         }
@@ -429,7 +399,7 @@ mod palette256 {
     }
 
     pub const fn gray_try_reverse(c: u8) -> Option<u8> {
-        if c >= 8 && c <= 238 && (c - 8) % 10 == 0 {
+        if c >= 8 && c <= 238 && (c - 8).is_multiple_of(10) {
             Some((c - 8) / 10)
         } else {
             None
@@ -481,6 +451,9 @@ pub fn try_palette256(c: Color) -> Option<u8> {
 /// 颜色模式
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ColorMode {
+    /// 直接显示图像
+    #[cfg(feature = "osc1337")]
+    OSC1337,
     /// 真彩色模式，仅使用 24 位真彩色
     #[default]
     TrueColorOnly,
@@ -492,59 +465,91 @@ pub enum ColorMode {
     GrayScale,
     /// 黑白模式
     BlackWhite,
+    /// ASCII 艺术模式
+    AsciiArt,
+    /// Unicode 盲文模式
+    Braille,
 }
 
 impl Display for ColorMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match locale!() {
             "zh-cn" => match self {
+                #[cfg(feature = "osc1337")]
+                ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
                 ColorMode::Palette256Prefer => write!(f, "256 色优先"),
                 ColorMode::Palette256Only => write!(f, "仅 256 色"),
                 ColorMode::GrayScale => write!(f, "灰度模式"),
                 ColorMode::BlackWhite => write!(f, "黑白模式"),
+                ColorMode::AsciiArt => write!(f, "ASCII 艺术模式"),
+                ColorMode::Braille => write!(f, "Unicode 盲文模式"),
             },
             "zh-tw" => match self {
+                #[cfg(feature = "osc1337")]
+                ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
                 ColorMode::Palette256Prefer => write!(f, "256 色優先"),
                 ColorMode::Palette256Only => write!(f, "僅 256 色"),
                 ColorMode::GrayScale => write!(f, "灰階模式"),
                 ColorMode::BlackWhite => write!(f, "黑白模式"),
+                ColorMode::AsciiArt => write!(f, "ASCII 藝術模式"),
+                ColorMode::Braille => write!(f, "Unicode 盲文模式"),
             },
             "ja-jp" => match self {
+                #[cfg(feature = "osc1337")]
+                ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "フルカラー"),
                 ColorMode::Palette256Prefer => write!(f, "256色優先"),
                 ColorMode::Palette256Only => write!(f, "256色のみ"),
                 ColorMode::GrayScale => write!(f, "グレースケール"),
                 ColorMode::BlackWhite => write!(f, "白黒モード"),
+                ColorMode::AsciiArt => write!(f, "ASCII アートモード"),
+                ColorMode::Braille => write!(f, "Unicode 点字モード"),
             },
             "fr-fr" => match self {
+                #[cfg(feature = "osc1337")]
+                ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "Couleurs vraies"),
                 ColorMode::Palette256Prefer => write!(f, "Palette 256 couleurs prioritaire"),
                 ColorMode::Palette256Only => write!(f, "Palette 256 couleurs uniquement"),
                 ColorMode::GrayScale => write!(f, "Niveaux de gris"),
                 ColorMode::BlackWhite => write!(f, "Noir et blanc"),
+                ColorMode::AsciiArt => write!(f, "Mode art ASCII"),
+                ColorMode::Braille => write!(f, "Mode braille Unicode"),
             },
             "de-de" => match self {
+                #[cfg(feature = "osc1337")]
+                ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "Truecolor-Modus"),
                 ColorMode::Palette256Prefer => write!(f, "256-Farben-Priorität"),
                 ColorMode::Palette256Only => write!(f, "Nur 256 Farben"),
                 ColorMode::GrayScale => write!(f, "Graustufenmodus"),
                 ColorMode::BlackWhite => write!(f, "Schwarz-Weiß-Modus"),
+                ColorMode::AsciiArt => write!(f, "ASCII-Kunstmodus"),
+                ColorMode::Braille => write!(f, "Unicode-Braille-Modus"),
             },
             "es-es" => match self {
+                #[cfg(feature = "osc1337")]
+                ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "Modo de color verdadero"),
                 ColorMode::Palette256Prefer => write!(f, "Prioridad de paleta de 256 colores"),
                 ColorMode::Palette256Only => write!(f, "Solo paleta de 256 colores"),
                 ColorMode::GrayScale => write!(f, "Modo de escala de grises"),
                 ColorMode::BlackWhite => write!(f, "Modo blanco y negro"),
+                ColorMode::AsciiArt => write!(f, "Modo arte ASCII"),
+                ColorMode::Braille => write!(f, "Modo braille Unicode"),
             },
             _ => match self {
+                #[cfg(feature = "osc1337")]
+                ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "True Color Mode"),
                 ColorMode::Palette256Prefer => write!(f, "256 Color Palette Prefer"),
                 ColorMode::Palette256Only => write!(f, "256 Color Palette Only"),
                 ColorMode::GrayScale => write!(f, "Gray Scale Mode"),
                 ColorMode::BlackWhite => write!(f, "Black and White Mode"),
+                ColorMode::AsciiArt => write!(f, "ASCII Art Mode"),
+                ColorMode::Braille => write!(f, "Unicode Braille Mode"),
             },
         }
     }
@@ -561,12 +566,202 @@ impl ColorMode {
 
     pub const fn switch_next(&mut self) {
         *self = match self {
+            #[cfg(feature = "osc1337")]
+            ColorMode::OSC1337 => ColorMode::TrueColorOnly,
             ColorMode::TrueColorOnly => ColorMode::Palette256Prefer,
             ColorMode::Palette256Prefer => ColorMode::Palette256Only,
             ColorMode::Palette256Only => ColorMode::GrayScale,
             ColorMode::GrayScale => ColorMode::BlackWhite,
-            ColorMode::BlackWhite => ColorMode::TrueColorOnly,
+            ColorMode::BlackWhite => ColorMode::AsciiArt,
+            ColorMode::AsciiArt => ColorMode::Braille,
+            #[cfg(feature = "osc1337")]
+            ColorMode::Braille => ColorMode::OSC1337,
+            #[cfg(not(feature = "osc1337"))]
+            ColorMode::Braille => ColorMode::TrueColorOnly,
         };
+    }
+
+    pub const fn switch_prev(&mut self) {
+        *self = match self {
+            #[cfg(feature = "osc1337")]
+            ColorMode::OSC1337 => ColorMode::Braille,
+            #[cfg(feature = "osc1337")]
+            ColorMode::TrueColorOnly => ColorMode::OSC1337,
+            #[cfg(not(feature = "osc1337"))]
+            ColorMode::TrueColorOnly => ColorMode::Braille,
+            ColorMode::Palette256Prefer => ColorMode::TrueColorOnly,
+            ColorMode::Palette256Only => ColorMode::Palette256Prefer,
+            ColorMode::GrayScale => ColorMode::Palette256Only,
+            ColorMode::BlackWhite => ColorMode::GrayScale,
+            ColorMode::AsciiArt => ColorMode::BlackWhite,
+            ColorMode::Braille => ColorMode::AsciiArt,
+        };
+    }
+
+    pub const fn fppc(&self) -> (usize, usize) {
+        match self {
+            #[cfg(feature = "osc1337")]
+            ColorMode::OSC1337 => (0, 0),
+            ColorMode::TrueColorOnly => (1, 2),
+            ColorMode::Palette256Prefer => (1, 2),
+            ColorMode::Palette256Only => (1, 2),
+            ColorMode::GrayScale => (1, 2),
+            ColorMode::BlackWhite => (1, 2),
+            ColorMode::AsciiArt => (1, 1),
+            ColorMode::Braille => (2, 4),
+        }
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ChromaMode {
+    #[default]
+    None,
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Magenta,
+    Cyan,
+    White,
+    Black,
+}
+
+impl Display for ChromaMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match locale!() {
+            "zh-cn" => match self {
+                ChromaMode::None => write!(f, "无"),
+                ChromaMode::Red => write!(f, "红色"),
+                ChromaMode::Green => write!(f, "绿色"),
+                ChromaMode::Blue => write!(f, "蓝色"),
+                ChromaMode::Yellow => write!(f, "黄色"),
+                ChromaMode::Magenta => write!(f, "品红色"),
+                ChromaMode::Cyan => write!(f, "青色"),
+                ChromaMode::White => write!(f, "白色"),
+                ChromaMode::Black => write!(f, "黑色"),
+            },
+            "zh-tw" => match self {
+                ChromaMode::None => write!(f, "無"),
+                ChromaMode::Red => write!(f, "紅色"),
+                ChromaMode::Green => write!(f, "綠色"),
+                ChromaMode::Blue => write!(f, "藍色"),
+                ChromaMode::Yellow => write!(f, "黃色"),
+                ChromaMode::Magenta => write!(f, "品紅色"),
+                ChromaMode::Cyan => write!(f, "青色"),
+                ChromaMode::White => write!(f, "白色"),
+                ChromaMode::Black => write!(f, "黑色"),
+            },
+            "ja-jp" => match self {
+                ChromaMode::None => write!(f, "なし"),
+                ChromaMode::Red => write!(f, "赤"),
+                ChromaMode::Green => write!(f, "緑"),
+                ChromaMode::Blue => write!(f, "青"),
+                ChromaMode::Yellow => write!(f, "黄"),
+                ChromaMode::Magenta => write!(f, "マゼンタ"),
+                ChromaMode::Cyan => write!(f, "シアン"),
+                ChromaMode::White => write!(f, "白"),
+                ChromaMode::Black => write!(f, "黒"),
+            },
+            "fr-fr" => match self {
+                ChromaMode::None => write!(f, "Aucun"),
+                ChromaMode::Red => write!(f, "Rouge"),
+                ChromaMode::Green => write!(f, "Vert"),
+                ChromaMode::Blue => write!(f, "Bleu"),
+                ChromaMode::Yellow => write!(f, "Jaune"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cyan"),
+                ChromaMode::White => write!(f, "Blanc"),
+                ChromaMode::Black => write!(f, "Noir"),
+            },
+            "de-de" => match self {
+                ChromaMode::None => write!(f, "Keine"),
+                ChromaMode::Red => write!(f, "Rot"),
+                ChromaMode::Green => write!(f, "Grün"),
+                ChromaMode::Blue => write!(f, "Blau"),
+                ChromaMode::Yellow => write!(f, "Gelb"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cyan"),
+                ChromaMode::White => write!(f, "Weiß"),
+                ChromaMode::Black => write!(f, "Schwarz"),
+            },
+            "es-es" => match self {
+                ChromaMode::None => write!(f, "Ninguno"),
+                ChromaMode::Red => write!(f, "Rojo"),
+                ChromaMode::Green => write!(f, "Verde"),
+                ChromaMode::Blue => write!(f, "Azul"),
+                ChromaMode::Yellow => write!(f, "Amarillo"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cian"),
+                ChromaMode::White => write!(f, "Blanco"),
+                ChromaMode::Black => write!(f, "Negro"),
+            },
+            _ => match self {
+                ChromaMode::None => write!(f, "None"),
+                ChromaMode::Red => write!(f, "Red"),
+                ChromaMode::Green => write!(f, "Green"),
+                ChromaMode::Blue => write!(f, "Blue"),
+                ChromaMode::Yellow => write!(f, "Yellow"),
+                ChromaMode::Magenta => write!(f, "Magenta"),
+                ChromaMode::Cyan => write!(f, "Cyan"),
+                ChromaMode::White => write!(f, "White"),
+                ChromaMode::Black => write!(f, "Black"),
+            },
+        }
+    }
+}
+
+impl ChromaMode {
+    pub const fn new() -> Self {
+        ChromaMode::None
+    }
+
+    pub const fn default() -> Self {
+        ChromaMode::None
+    }
+
+    pub const fn switch_next(&mut self) {
+        *self = match self {
+            ChromaMode::None => ChromaMode::Red,
+            ChromaMode::Red => ChromaMode::Green,
+            ChromaMode::Green => ChromaMode::Blue,
+            ChromaMode::Blue => ChromaMode::Yellow,
+            ChromaMode::Yellow => ChromaMode::Magenta,
+            ChromaMode::Magenta => ChromaMode::Cyan,
+            ChromaMode::Cyan => ChromaMode::White,
+            ChromaMode::White => ChromaMode::Black,
+            ChromaMode::Black => ChromaMode::None,
+        };
+    }
+
+    pub const fn switch_prev(&mut self) {
+        *self = match self {
+            ChromaMode::None => ChromaMode::Black,
+            ChromaMode::Red => ChromaMode::None,
+            ChromaMode::Green => ChromaMode::Red,
+            ChromaMode::Blue => ChromaMode::Green,
+            ChromaMode::Yellow => ChromaMode::Blue,
+            ChromaMode::Magenta => ChromaMode::Yellow,
+            ChromaMode::Cyan => ChromaMode::Magenta,
+            ChromaMode::White => ChromaMode::Cyan,
+            ChromaMode::Black => ChromaMode::White,
+        }
+    }
+
+    pub const fn color(&self) -> Option<Color> {
+        match self {
+            ChromaMode::None => None,
+            ChromaMode::Red => Some(Color::new(255, 0, 0)),
+            ChromaMode::Green => Some(Color::new(0, 255, 0)),
+            ChromaMode::Blue => Some(Color::new(0, 0, 255)),
+            ChromaMode::Yellow => Some(Color::new(255, 255, 0)),
+            ChromaMode::Magenta => Some(Color::new(255, 0, 255)),
+            ChromaMode::Cyan => Some(Color::new(0, 255, 255)),
+            ChromaMode::White => Some(Color::new(255, 255, 255)),
+            ChromaMode::Black => Some(Color::new(0, 0, 0)),
+        }
     }
 }
 
@@ -595,11 +790,15 @@ pub fn escape_set_color(
         bg = None;
     };
     match mode {
+        #[cfg(feature = "osc1337")]
+        ColorMode::OSC1337 => escape_set_color_rgb(wr, fg, bg),
         ColorMode::TrueColorOnly => escape_set_color_rgb(wr, fg, bg),
         ColorMode::Palette256Prefer => escape_set_color_256_prefer(wr, fg, bg),
         ColorMode::Palette256Only => escape_set_color_256(wr, fg, bg),
         ColorMode::GrayScale => escape_set_color_gray_scale(wr, fg, bg),
         ColorMode::BlackWhite => escape_set_color_black_white(wr, fg, bg),
+        ColorMode::AsciiArt => escape_set_color_rgb(wr, fg, bg),
+        ColorMode::Braille => escape_set_color_rgb(wr, fg, bg),
     }
 }
 
