@@ -1,14 +1,11 @@
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::bool_comparison)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::manual_range_contains)]
-#![allow(clippy::iter_nth_zero)]
-#![allow(clippy::len_zero)]
-#![allow(clippy::new_without_default)]
-#![allow(clippy::len_without_is_empty)]
-#![allow(clippy::partialeq_to_none)]
-#![allow(clippy::should_implement_trait)]
-#![allow(clippy::option_map_unit_fn)]
+#![expect(clippy::collapsible_if)]
+#![expect(clippy::bool_comparison)]
+#![expect(clippy::too_many_arguments)]
+#![expect(clippy::manual_range_contains)]
+#![expect(clippy::iter_nth_zero)]
+#![expect(clippy::len_zero)]
+#![expect(clippy::partialeq_to_none)]
+#![expect(clippy::option_map_unit_fn)]
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -58,7 +55,6 @@ mod logging;
 mod ui;
 
 mod avsync;
-mod ffmpeg;
 mod playlist;
 mod render;
 mod statistics;
@@ -68,6 +64,9 @@ mod term;
 
 #[cfg(feature = "config")]
 mod config;
+
+#[cfg(feature = "ffmpeg")]
+mod ffmpeg;
 
 #[cfg(feature = "audio")]
 mod audio;
