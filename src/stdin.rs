@@ -118,13 +118,22 @@ pub enum Key {
     Tab,
     Enter,
     Escape,
+
+    FileSeparator,
+    GroupSeparator,
+    RecordSeparator,
+    UnitSeparator,
+
+    ShiftTab,
 }
 
 impl Key {
     pub fn to_u16(self) -> u16 {
         match self {
-            Key::Normal(c) => match c as u16 {
-                0..128 => c as u16,
+            Key::Normal(c) => match c as u8 {
+                b'a'..=b'z' => c as u16,
+                b'A'..=b'Z' => c as u16 - b'A' as u16 + b'a' as u16,
+                1..128 => c as u16,
                 _ => panic!("Invalid normal key: {}", c),
             },
             Key::Lower(c) => match c {
@@ -185,6 +194,13 @@ impl Key {
                     Key::Tab => 11,
                     Key::Enter => 12,
                     Key::Escape => 13,
+
+                    Key::FileSeparator => 14,
+                    Key::GroupSeparator => 15,
+                    Key::RecordSeparator => 16,
+                    Key::UnitSeparator => 17,
+
+                    Key::ShiftTab => 18,
                 }
             }
         }
@@ -241,6 +257,38 @@ pub fn register_keypress_callback(k: Key, f: impl Fn(Key) -> bool + Send + Sync 
 
 pub fn call_keypress_callbacks(c: Key) {
     KEYPRESS_CALLBACKS[usize::from(c)].call(c);
+}
+
+pub type PasteCallback = Box<dyn Fn(&str) -> bool + Send + Sync>;
+
+static PASTE_CALLBACKS: Mutex<Vec<PasteCallback>> = Mutex::new(Vec::new());
+
+pub fn register_paste_callback(f: impl Fn(&str) -> bool + Send + Sync + 'static) {
+    PASTE_CALLBACKS.lock().push(Box::new(f));
+}
+
+pub fn call_paste_callbacks(data: &str) {
+    for f in PASTE_CALLBACKS.lock().iter().rev() {
+        if f(data) {
+            break;
+        }
+    }
+}
+
+pub type InputCallback = Box<dyn Fn(&str) -> bool + Send + Sync>;
+
+static INPUT_CALLBACKS: Mutex<Vec<InputCallback>> = Mutex::new(Vec::new());
+
+pub fn register_input_callback(f: impl Fn(&str) -> bool + Send + Sync + 'static) {
+    INPUT_CALLBACKS.lock().push(Box::new(f));
+}
+
+pub fn call_input_callbacks(data: &str) {
+    for f in INPUT_CALLBACKS.lock().iter().rev() {
+        if f(data) {
+            break;
+        }
+    }
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -388,39 +436,18 @@ impl Mouse {
 
 pub type MouseCallback = Box<dyn Fn(Mouse) -> bool + Send + Sync>;
 
-pub struct MouseCallbacks {
-    cb: Mutex<Vec<MouseCallback>>,
-}
-
-impl MouseCallbacks {
-    pub const fn new() -> Self {
-        MouseCallbacks {
-            cb: Mutex::new(Vec::new()),
-        }
-    }
-
-    pub fn push(&self, f: MouseCallback) {
-        self.cb.lock().push(f);
-    }
-
-    pub fn call(&self, m: Mouse) -> bool {
-        for f in self.cb.lock().iter().rev() {
-            if f(m) {
-                return true;
-            }
-        }
-        false
-    }
-}
-
-static MOUSE_CALLBACKS: MouseCallbacks = MouseCallbacks::new();
+static MOUSE_CALLBACKS: Mutex<Vec<MouseCallback>> = Mutex::new(Vec::new());
 
 pub fn register_mouse_callback(f: impl Fn(Mouse) -> bool + Send + Sync + 'static) {
-    MOUSE_CALLBACKS.push(Box::new(f));
+    MOUSE_CALLBACKS.lock().push(Box::new(f));
 }
 
 pub fn call_mouse_callbacks(m: Mouse) {
-    MOUSE_CALLBACKS.call(m);
+    for f in MOUSE_CALLBACKS.lock().iter().rev() {
+        if f(m) {
+            break;
+        }
+    }
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -474,15 +501,19 @@ async fn input_escape_square_number(num: i64) -> Result<()> {
                 data.push(getc().await?);
             }
             let data = &data[..data.len() - 6];
-            warning_l10n!(
-                "zh-cn" => "未处理的粘贴数据：{data:?}";
-                "zh-tw" => "未處理的貼上資料：{data:?}";
-                "ja-jp" => "未処理の貼り付けデータ：{data:?}";
-                "fr-fr" => "Données collées non traitées : {data:?}";
-                "de-de" => "Unbehandelte Einfügedaten: {data:?}";
-                "es-es" => "Datos pegados no manejados: {data:?}";
-                _       => "Unhandled paste data: {data:?}";
-            );
+            if let Ok(s) = std::str::from_utf8(data) {
+                call_paste_callbacks(s);
+            } else {
+                error_l10n!(
+                    "zh-cn" => "无效的粘贴数据（非 UTF-8 编码）";
+                    "zh-tw" => "無效的貼上資料（非 UTF-8 編碼）";
+                    "ja-jp" => "無効なペーストデータ（UTF-8 エンコードではありません）";
+                    "fr-fr" => "Données collées invalides (non encodées en UTF-8)";
+                    "de-de" => "Ungültige Einfügedaten (nicht UTF-8-codiert)";
+                    "es-es" => "Datos pegados no válidos (no codificados en UTF-8)";
+                    _       => "Invalid paste data (not UTF-8 encoded)";
+                );
+            }
         }
         _ => {
             error_l10n!(
@@ -636,6 +667,7 @@ async fn input_escape_square() -> Result<()> {
         b'D' => call_keypress_callbacks(Key::Left),
         b'H' => call_keypress_callbacks(Key::Home),
         b'F' => call_keypress_callbacks(Key::End),
+        b'Z' => call_keypress_callbacks(Key::ShiftTab),
         c if b'0' <= c && c <= b'9' => {
             if let Ok(num) = input_parsenum(c, b'~').await {
                 input_escape_square_number(num).await?;
@@ -688,39 +720,51 @@ async fn input_escape() -> Result<()> {
 }
 
 async fn input() -> Result<()> {
-    match getc().await? {
+    let c = getc().await?;
+    match c {
+        0 => warning_l10n!(
+            "zh-cn" => "未处理的按键：NUL";
+            "zh-tw" => "未處理的按鍵：NUL";
+            "ja-jp" => "未処理のキー：NUL";
+            "fr-fr" => "Touche non gérée : NUL";
+            "de-de" => "Unbehandelter Schlüssel: NUL";
+            "es-es" => "Tecla no manejada: NUL";
+            _       => "Unhandled key: NUL";
+        ),
         0x1b => input_escape().await?,
         b' ' => call_keypress_callbacks(Key::Normal(' ')),
         0x7f => call_keypress_callbacks(Key::Backspace),
         b'\n' | b'\r' => {
             call_keypress_callbacks(Key::Normal('\n'));
         }
-        c if c >= b'a' && c <= b'z' => {
+        b'a'..=b'z' => {
             call_keypress_callbacks(Key::Lower(c as char));
             call_keypress_callbacks(Key::Normal(c as char));
         }
-        c if c >= b'A' && c <= b'Z' => {
+        b'A'..=b'Z' => {
             call_keypress_callbacks(Key::Upper(c as char));
             call_keypress_callbacks(Key::Normal(c as char));
         }
-        c if c >= 1 && c <= 26 => {
+        1..=26 => {
             let c = (c - 1 + b'a') as char;
             call_keypress_callbacks(Key::Ctrl(c));
         }
-        c if c >= 33 && c <= 126 => {
+        0x1c => call_keypress_callbacks(Key::FileSeparator),
+        0x1d => call_keypress_callbacks(Key::GroupSeparator),
+        0x1e => call_keypress_callbacks(Key::RecordSeparator),
+        0x1f => call_keypress_callbacks(Key::UnitSeparator),
+        33..=126 => {
             call_keypress_callbacks(Key::Normal(c as char));
         }
-        c => {
-            warning_l10n!(
-                "zh-cn" => "未处理的按键：{} ({})", (c as char), c;
-                "zh-tw" => "未處理的按鍵：{} ({})", (c as char), c;
-                "ja-jp" => "未処理のキー：{} ({})", (c as char), c;
-                "fr-fr" => "Touche non gérée : {} ({})", (c as char), c;
-                "de-de" => "Unbehandelter Schlüssel: {} ({})", (c as char), c;
-                "es-es" => "Tecla no manejada: {} ({})", (c as char), c;
-                _       => "Unhandled key: {} ({})", (c as char), c;
-            );
-        }
+        128.. => warning_l10n!(
+            "zh-cn" => "未处理的按键：{} ({})", (c as char), c;
+            "zh-tw" => "未處理的按鍵：{} ({})", (c as char), c;
+            "ja-jp" => "未処理のキー：{} ({})", (c as char), c;
+            "fr-fr" => "Touche non gérée : {} ({})", (c as char), c;
+            "de-de" => "Unbehandelter Schlüssel: {} ({})", (c as char), c;
+            "es-es" => "Tecla no manejada: {} ({})", (c as char), c;
+            _       => "Unhandled key: {} ({})", (c as char), c;
+        ),
     }
     Ok(())
 }
