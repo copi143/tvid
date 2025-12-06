@@ -441,7 +441,7 @@ fn render_help(wrap: &mut ContextWrapper) {
         return;
     }
 
-    let w = if font_large_enough(wrap) { 29 } else { 204 };
+    let w = if font_large_enough(wrap) { 54 } else { 204 };
     let h = if font_large_enough(wrap) { 12 } else { 42 };
     let x = (wrap.cells_width as isize - w as isize) / 2;
     let y = (wrap.cells_height as isize - h as isize) / 2;
