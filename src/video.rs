@@ -83,7 +83,7 @@ pub fn video_main() {
                 "es-es" => "Fotograma de video demasiado tarde: tiempo de fotograma {frametime:?}, tiempo de reproducción {played:?}";
                 _       => "Video frame too late: frame time {frametime:?}, played time {played:?}";
             );
-            increment_video_skipped_frames();
+            increment_video_skipped_frames(0, 1);
             error_l10n!(
                 "zh-cn" => "视频帧太晚，跳过";
                 "zh-tw" => "視訊幀太晚，跳過";

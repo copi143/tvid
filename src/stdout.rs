@@ -39,6 +39,18 @@ pub fn print(bytes: &[u8]) -> Option<usize> {
     }
 }
 
+pub fn print_all(bytes: &[u8]) -> bool {
+    let mut pos = 0;
+    while pos < bytes.len() {
+        if let Some(n) = print(&bytes[pos..]) {
+            pos += n;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
 static STDOUT_BUF: Mutex<VecDeque<Vec<u8>>> = Mutex::new(VecDeque::new());
 static STDOUT_SIG: Notify = Notify::const_new();
 
@@ -61,22 +73,26 @@ pub async fn output_main() {
         };
 
         if buf.len() == 0 {
-            set_output_time(Duration::ZERO);
+            set_output_time(0, Duration::ZERO);
             continue;
         }
 
         let instant = Instant::now();
-        let mut err = false;
-        let mut pos = 0;
-        while !err && pos < buf.len() {
-            if let Some(n) = print(&buf[pos..]) {
-                pos += n;
-            } else {
-                err = true;
-            }
-        }
-        set_output_time(instant.elapsed());
-        if err {
+        let succ = print_all(&buf);
+        set_output_time(0, instant.elapsed());
+
+        // let terms = crate::ssh::TERMINALS
+        //     .lock()
+        //     .values()
+        //     .cloned()
+        //     .collect::<Vec<_>>();
+        // for term in terms {
+        //     if term.stdout(&buf).await.is_err() {
+        //         term.close().await.ok();
+        //     }
+        // }
+
+        if !succ {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }

@@ -7,8 +7,6 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use unicode_width::UnicodeWidthChar;
 
-#[cfg(feature = "osc1337")]
-use crate::escape;
 use crate::playlist::PLAYLIST;
 use crate::stdout::{pend_print, pending_frames, remove_pending_frames};
 use crate::term::{self, TERM_QUIT, Winsize};
@@ -400,6 +398,7 @@ pub fn add_render_callback(callback: fn(&mut ContextWrapper<'_, '_>)) {
     RENDER_CALLBACKS.lock().push(callback);
 }
 
+/// 主渲染目标（当前本地终端）
 pub static RENDER_CONTEXT: Mutex<RenderContext> = Mutex::new(RenderContext::new());
 
 fn render(frame: &[Color], width: usize, height: usize, pitch: usize) -> bool {
@@ -447,7 +446,7 @@ async fn render_frame(wrap: &mut ContextWrapper<'_, '_>) {
     for callback in RENDER_CALLBACKS.lock().iter() {
         callback(wrap);
     }
-    statistics::set_render_time(instant.elapsed());
+    statistics::set_render_time(0, instant.elapsed());
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -541,7 +540,7 @@ async fn print_diff_inner(
             wrap.padding_left + 1,
         )
         .unwrap();
-        escape::format_image(
+        crate::escape::format_image(
             &mut buf,
             wrap.frame,
             wrap.frame_width,
@@ -560,7 +559,7 @@ async fn print_diff_inner(
         buf.extend_from_slice(&line);
     }
 
-    statistics::set_escape_string_encode_time(instant.elapsed());
+    statistics::set_escape_string_encode_time(0, instant.elapsed());
     if wrap.force_flush_next {
         remove_pending_frames();
         assert!(buf.len() > 0, "force flush but buffer is empty");

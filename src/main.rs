@@ -93,6 +93,8 @@ mod escape {
     usemod!(osc1337);
 }
 
+// const TVID_SVG_BASE64: &str = include_str!("tvid.svg.base64");
+
 pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     let num_cores = std::thread::available_parallelism().unwrap().get();
     let workers = num_cores.max(4); // 防止 I/O 卡顿
@@ -126,6 +128,10 @@ fn print_no_playlist(program_name: &str) {
     let license = env!("CARGO_PKG_LICENSE")
         .replace("MIT", &format_link("MIT", "https://choosealicense.com/licenses/mit/"))
         .replace("Apache-2.0", &format_link("Apache-2.0", "https://choosealicense.com/licenses/apache-2.0/"));
+    // eprintln!(
+    //     "\x1b]1337;File=inline=1;width=16;height=8;size={}:{TVID_SVG_BASE64}\x1b\\",
+    //     TVID_SVG_BASE64.len()
+    // );
     match locale!() {
         "zh-cn" => eprintlns!(
             "没有播放列表。";
@@ -352,29 +358,31 @@ static SEEK_SMALL_STEP: Mutex<f64> = Mutex::new(5.0);
 static SEEK_LARGE_STEP: Mutex<f64> = Mutex::new(30.0);
 
 fn register_input_callbacks() {
-    stdin::register_keypress_callback(Key::Normal(' '), |_| {
+    stdin::register_keypress_callback(Key::Normal(' '), |_, _| {
         avsync::switch_pause_state();
         true
     });
-    stdin::register_keypress_callback(Key::Normal('q'), |_| {
-        QUIT_CONFIRMATION.store(true, Ordering::SeqCst);
+    stdin::register_keypress_callback(Key::Normal('q'), |id, _| {
+        if id == 0 {
+            QUIT_CONFIRMATION.store(true, Ordering::SeqCst);
+        }
         true
     });
-    stdin::register_keypress_callback(Key::Normal('n'), |_| {
+    stdin::register_keypress_callback(Key::Normal('n'), |_, _| {
         ffmpeg::notify_quit();
         true
     });
-    stdin::register_keypress_callback(Key::Normal('l'), |_| {
+    stdin::register_keypress_callback(Key::Normal('l'), |_, _| {
         playlist::toggle_show_playlist();
         true
     });
-    stdin::register_keypress_callback(Key::Normal('m'), |_| true);
-    stdin::register_keypress_callback(Key::Normal('f'), |_| {
+    stdin::register_keypress_callback(Key::Normal('m'), |_, _| true);
+    stdin::register_keypress_callback(Key::Normal('f'), |_, _| {
         ui::FILE_SELECT.fetch_xor(true, Ordering::SeqCst);
         true
     });
 
-    stdin::register_keypress_callback(Key::Lower('c'), |_| {
+    stdin::register_keypress_callback(Key::Lower('c'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
         ctx.color_mode.switch_next();
         let (fppc_x, fppc_y) = ctx.color_mode.fppc();
@@ -383,7 +391,7 @@ fn register_input_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Upper('c'), |_| {
+    stdin::register_keypress_callback(Key::Upper('c'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
         ctx.color_mode.switch_prev();
         let (fppc_x, fppc_y) = ctx.color_mode.fppc();
@@ -392,19 +400,19 @@ fn register_input_callbacks() {
         true
     });
 
-    stdin::register_keypress_callback(Key::Up, |_| {
+    stdin::register_keypress_callback(Key::Up, |_, _| {
         seek_request_relative(-*SEEK_LARGE_STEP.lock());
         true
     });
-    stdin::register_keypress_callback(Key::Down, |_| {
+    stdin::register_keypress_callback(Key::Down, |_, _| {
         seek_request_relative(*SEEK_LARGE_STEP.lock());
         true
     });
-    stdin::register_keypress_callback(Key::Left, |_| {
+    stdin::register_keypress_callback(Key::Left, |_, _| {
         seek_request_relative(-*SEEK_SMALL_STEP.lock());
         true
     });
-    stdin::register_keypress_callback(Key::Right, |_| {
+    stdin::register_keypress_callback(Key::Right, |_, _| {
         seek_request_relative(*SEEK_SMALL_STEP.lock());
         true
     });

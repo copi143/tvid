@@ -1,7 +1,8 @@
-use parking_lot::{Mutex, MutexGuard};
-use std::collections::VecDeque;
+use parking_lot::Mutex;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Debug;
 use std::ops::{Add, Div};
+use std::sync::Arc;
 use std::time::Duration;
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -98,27 +99,28 @@ impl Statistics {
     }
 }
 
-pub static STATISTICS: Mutex<Statistics> = Mutex::new(Statistics::new());
+static STATISTICS: Mutex<BTreeMap<i32, Arc<Mutex<Statistics>>>> = Mutex::new(BTreeMap::new());
 
-pub fn get_statistics() -> MutexGuard<'static, Statistics> {
-    STATISTICS.lock()
-}
-
-pub fn set_render_time(duration: Duration) {
-    STATISTICS.lock().render_time.push_back(duration);
-}
-
-pub fn set_escape_string_encode_time(duration: Duration) {
+pub fn get(id: i32) -> Arc<Mutex<Statistics>> {
     STATISTICS
         .lock()
-        .escape_string_encode_time
-        .push_back(duration);
+        .entry(id)
+        .or_insert_with(|| Arc::new(Mutex::new(Statistics::new())))
+        .clone()
 }
 
-pub fn set_output_time(duration: Duration) {
-    STATISTICS.lock().output_time.push_back(duration);
+pub fn set_render_time(id: i32, duration: Duration) {
+    get(id).lock().render_time.push_back(duration);
 }
 
-pub fn increment_video_skipped_frames() {
-    STATISTICS.lock().video_skipped_frames += 1;
+pub fn set_escape_string_encode_time(id: i32, duration: Duration) {
+    get(id).lock().escape_string_encode_time.push_back(duration);
+}
+
+pub fn set_output_time(id: i32, duration: Duration) {
+    get(id).lock().output_time.push_back(duration);
+}
+
+pub fn increment_video_skipped_frames(id: i32, num: usize) {
+    get(id).lock().video_skipped_frames += num;
 }

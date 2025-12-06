@@ -8,7 +8,7 @@ use unicode_width::UnicodeWidthChar;
 use crate::logging::get_messages;
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
 use crate::render::ContextWrapper;
-use crate::statistics::get_statistics;
+use crate::statistics;
 use crate::stdin::{self, Key, MouseAction};
 use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
@@ -398,7 +398,7 @@ fn render_progressbar(wrap: &mut ContextWrapper) {
 
 fn register_input_callbacks_progressbar() {
     static mut DRAGGING_PROGRESSBAR: bool = false;
-    stdin::register_mouse_callback(|m| {
+    stdin::register_mouse_callback(|_, m| {
         if !FIRST_RENDERED.load(Ordering::SeqCst) {
             return false;
         }
@@ -604,7 +604,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
     // 这边关闭 autowrap，防止 unifont 渲染出问题
     textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, false);
 
-    let statistics = get_statistics();
+    let statistics = statistics::get(0);
+    let statistics = statistics.lock();
 
     match locale!() {
         "zh-cn" => putlns_or_uflns!(wrap;
@@ -959,7 +960,7 @@ fn render_file_select(wrap: &mut ContextWrapper) {
 }
 
 fn register_file_select_keypress_callbacks() {
-    stdin::register_keypress_callback(Key::Normal('q'), |_| {
+    stdin::register_keypress_callback(Key::Normal('q'), |_, _| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
         }
@@ -967,7 +968,7 @@ fn register_file_select_keypress_callbacks() {
         true
     });
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
         }
@@ -1005,7 +1006,7 @@ fn register_file_select_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal(' '), cb);
     stdin::register_keypress_callback(Key::Enter, cb);
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
         }
@@ -1017,7 +1018,7 @@ fn register_file_select_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('w'), cb);
     stdin::register_keypress_callback(Key::Up, cb);
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
         }
@@ -1029,7 +1030,7 @@ fn register_file_select_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('s'), cb);
     stdin::register_keypress_callback(Key::Down, cb);
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
         }
@@ -1062,7 +1063,7 @@ fn register_file_select_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('a'), cb);
     stdin::register_keypress_callback(Key::Left, cb);
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !FILE_SELECT.load(Ordering::SeqCst) {
             return false;
         }
@@ -1144,45 +1145,49 @@ fn render_quit_confirmation(wrap: &mut ContextWrapper) {
 pub fn register_input_callbacks() {
     register_input_callbacks_progressbar();
 
-    stdin::register_keypress_callback(Key::Normal('h'), |_| {
+    stdin::register_keypress_callback(Key::Normal('h'), |_, _| {
         SHOW_HELP.store(!SHOW_HELP.load(Ordering::SeqCst), Ordering::SeqCst);
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal('q'), |_| {
+    stdin::register_keypress_callback(Key::Normal('q'), |id, _| {
         if !QUIT_CONFIRMATION.load(Ordering::SeqCst) {
             return false;
         }
-        term::request_quit();
+        if id == 0 {
+            term::request_quit();
+        }
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal('c'), |_| {
+    stdin::register_keypress_callback(Key::Normal('c'), |id, _| {
         if !QUIT_CONFIRMATION.load(Ordering::SeqCst) {
             return false;
         }
-        QUIT_CONFIRMATION.store(false, Ordering::SeqCst);
+        if id == 0 {
+            QUIT_CONFIRMATION.store(false, Ordering::SeqCst);
+        }
         true
     });
 
-    stdin::register_keypress_callback(Key::Lower('x'), |_| {
+    stdin::register_keypress_callback(Key::Lower('x'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
         ctx.chroma_mode.switch_next();
         true
     });
 
-    stdin::register_keypress_callback(Key::Upper('x'), |_| {
+    stdin::register_keypress_callback(Key::Upper('x'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
         ctx.chroma_mode.switch_prev();
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal('o'), |_| {
+    stdin::register_keypress_callback(Key::Normal('o'), |_, _| {
         SHOW_OVERLAY_TEXT.fetch_xor(true, Ordering::SeqCst);
         true
     });
 
-    stdin::register_keypress_callback(Key::Normal('t'), |_| {
+    stdin::register_keypress_callback(Key::Normal('t'), |_, _| {
         debug_l10n!(
             "zh-cn" => "这是一条测试调试信息。";
             "zh-tw" => "這是一條測試調試信息。";

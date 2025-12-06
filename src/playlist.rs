@@ -129,7 +129,7 @@ pub fn toggle_show_playlist() {
 }
 
 pub fn register_keypress_callbacks() {
-    stdin::register_keypress_callback(Key::Normal('q'), |_| {
+    stdin::register_keypress_callback(Key::Normal('q'), |_, _| {
         if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
             return false;
         }
@@ -137,7 +137,7 @@ pub fn register_keypress_callbacks() {
         true
     });
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
             return false;
         }
@@ -152,7 +152,7 @@ pub fn register_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal(' '), cb);
     stdin::register_keypress_callback(Key::Enter, cb);
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
             return false;
         }
@@ -168,7 +168,7 @@ pub fn register_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('w'), cb);
     stdin::register_keypress_callback(Key::Up, cb);
 
-    let cb = |_| {
+    let cb = |_, _| {
         if !SHOW_PLAYLIST.load(Ordering::SeqCst) {
             return false;
         }
@@ -184,8 +184,9 @@ pub fn register_keypress_callbacks() {
     stdin::register_keypress_callback(Key::Normal('s'), cb);
     stdin::register_keypress_callback(Key::Down, cb);
 
-    stdin::register_keypress_callback(Key::Normal('a'), |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
-    stdin::register_keypress_callback(Key::Left, |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
-    stdin::register_keypress_callback(Key::Normal('d'), |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
-    stdin::register_keypress_callback(Key::Right, |_| SHOW_PLAYLIST.load(Ordering::SeqCst));
+    let cb = |_, _| SHOW_PLAYLIST.load(Ordering::SeqCst);
+    stdin::register_keypress_callback(Key::Normal('a'), cb);
+    stdin::register_keypress_callback(Key::Left, cb);
+    stdin::register_keypress_callback(Key::Normal('d'), cb);
+    stdin::register_keypress_callback(Key::Right, cb);
 }

@@ -67,28 +67,52 @@ fn try_getc() -> Result<Option<u8>> {
     }
 }
 
-async fn getc_timeout(timeout: Duration) -> Result<Option<u8>> {
-    let start = std::time::Instant::now();
-    while start.elapsed() < timeout && STDIN_QUIT.load(Ordering::SeqCst) == false {
-        match try_getc()? {
-            Some(c) => return Ok(Some(c)),
-            None => tokio::time::sleep(Duration::from_millis(1)).await,
-        }
-    }
-    if STDIN_QUIT.load(Ordering::SeqCst) {
-        return Err(anyhow::anyhow!("stdin quit"));
-    }
-    Ok(None)
+pub type GetcInner = Box<dyn FnMut() -> Result<Option<u8>> + Send + Sync>;
+
+struct Getc {
+    id: i32,
+    inner: GetcInner,
 }
 
-async fn getc() -> Result<u8> {
-    while STDIN_QUIT.load(Ordering::SeqCst) == false {
-        match try_getc()? {
-            Some(c) => return Ok(c),
-            None => tokio::time::sleep(Duration::from_millis(10)).await,
+impl Getc {
+    fn main() -> Self {
+        Self {
+            id: 0,
+            inner: Box::new(try_getc),
         }
     }
-    Err(anyhow::anyhow!("stdin quit"))
+
+    fn new(id: i32, inner: GetcInner) -> Self {
+        Self { id, inner }
+    }
+
+    fn tryget(&mut self) -> Result<Option<u8>> {
+        (self.inner)()
+    }
+
+    async fn timeout(&mut self, timeout: Duration) -> Result<Option<u8>> {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout && STDIN_QUIT.load(Ordering::SeqCst) == false {
+            match self.tryget()? {
+                Some(c) => return Ok(Some(c)),
+                None => tokio::time::sleep(Duration::from_millis(1)).await,
+            }
+        }
+        if STDIN_QUIT.load(Ordering::SeqCst) {
+            return Err(anyhow::anyhow!("stdin quit"));
+        }
+        Ok(None)
+    }
+
+    async fn wait(&mut self) -> Result<u8> {
+        while STDIN_QUIT.load(Ordering::SeqCst) == false {
+            match self.tryget()? {
+                Some(c) => return Ok(c),
+                None => tokio::time::sleep(Duration::from_millis(10)).await,
+            }
+        }
+        Err(anyhow::anyhow!("stdin quit"))
+    }
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -222,7 +246,11 @@ impl From<Key> for usize {
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 // @ 键盘回调 @
 
-pub type KeypressCallback = Box<dyn Fn(Key) -> bool + Send + Sync>;
+/// 键盘回调函数类型
+/// - `<- i32` 终端 ID
+/// - `<- Key` 按键值
+/// - `-> bool` 是否处理该按键事件，若返回 true 则停止后续回调调用
+pub type KeypressCallback = Box<dyn Fn(i32, Key) -> bool + Send + Sync>;
 
 pub struct KeypressCallbacks {
     cb: Mutex<Vec<KeypressCallback>>,
@@ -239,9 +267,9 @@ impl KeypressCallbacks {
         self.cb.lock().push(f);
     }
 
-    pub fn call(&self, k: Key) -> bool {
+    pub fn call(&self, id: i32, k: Key) -> bool {
         for f in self.cb.lock().iter().rev() {
-            if f(k) {
+            if f(id, k) {
                 return true;
             }
         }
@@ -251,41 +279,49 @@ impl KeypressCallbacks {
 
 static KEYPRESS_CALLBACKS: [KeypressCallbacks; 512] = [const { KeypressCallbacks::new() }; 512];
 
-pub fn register_keypress_callback(k: Key, f: impl Fn(Key) -> bool + Send + Sync + 'static) {
+pub fn register_keypress_callback(k: Key, f: impl Fn(i32, Key) -> bool + Send + Sync + 'static) {
     KEYPRESS_CALLBACKS[usize::from(k)].push(Box::new(f));
 }
 
-pub fn call_keypress_callbacks(c: Key) {
-    KEYPRESS_CALLBACKS[usize::from(c)].call(c);
+pub fn call_keypress_callbacks(id: i32, c: Key) {
+    KEYPRESS_CALLBACKS[usize::from(c)].call(id, c);
 }
 
-pub type PasteCallback = Box<dyn Fn(&str) -> bool + Send + Sync>;
+/// 粘贴回调函数类型
+/// - `<- i32` 终端 ID
+/// - `<- &str` 粘贴的文本内容
+/// - `-> bool` 是否处理该粘贴事件，若返回 true 则停止后续回调调用
+pub type PasteCallback = Box<dyn Fn(i32, &str) -> bool + Send + Sync>;
 
 static PASTE_CALLBACKS: Mutex<Vec<PasteCallback>> = Mutex::new(Vec::new());
 
-pub fn register_paste_callback(f: impl Fn(&str) -> bool + Send + Sync + 'static) {
+pub fn register_paste_callback(f: impl Fn(i32, &str) -> bool + Send + Sync + 'static) {
     PASTE_CALLBACKS.lock().push(Box::new(f));
 }
 
-pub fn call_paste_callbacks(data: &str) {
+pub fn call_paste_callbacks(id: i32, data: &str) {
     for f in PASTE_CALLBACKS.lock().iter().rev() {
-        if f(data) {
+        if f(id, data) {
             break;
         }
     }
 }
 
-pub type InputCallback = Box<dyn Fn(&str) -> bool + Send + Sync>;
+/// 输入回调函数类型
+/// - `<- i32` 终端 ID
+/// - `<- &str` 输入的文本内容
+/// - `-> bool` 是否处理该输入事件，若返回 true 则停止后续回调调用
+pub type InputCallback = Box<dyn Fn(i32, &str) -> bool + Send + Sync>;
 
 static INPUT_CALLBACKS: Mutex<Vec<InputCallback>> = Mutex::new(Vec::new());
 
-pub fn register_input_callback(f: impl Fn(&str) -> bool + Send + Sync + 'static) {
+pub fn register_input_callback(f: impl Fn(i32, &str) -> bool + Send + Sync + 'static) {
     INPUT_CALLBACKS.lock().push(Box::new(f));
 }
 
-pub fn call_input_callbacks(data: &str) {
+pub fn call_input_callbacks(id: i32, data: &str) {
     for f in INPUT_CALLBACKS.lock().iter().rev() {
-        if f(data) {
+        if f(id, data) {
             break;
         }
     }
@@ -434,17 +470,21 @@ impl Mouse {
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 // @ 鼠标回调 @
 
-pub type MouseCallback = Box<dyn Fn(Mouse) -> bool + Send + Sync>;
+/// 鼠标回调函数类型
+/// - `<- i32` 终端 ID
+/// - `<- Mouse` 鼠标事件
+/// - `-> bool` 是否处理该鼠标事件，若返回 true 则停止
+pub type MouseCallback = Box<dyn Fn(i32, Mouse) -> bool + Send + Sync>;
 
 static MOUSE_CALLBACKS: Mutex<Vec<MouseCallback>> = Mutex::new(Vec::new());
 
-pub fn register_mouse_callback(f: impl Fn(Mouse) -> bool + Send + Sync + 'static) {
+pub fn register_mouse_callback(f: impl Fn(i32, Mouse) -> bool + Send + Sync + 'static) {
     MOUSE_CALLBACKS.lock().push(Box::new(f));
 }
 
-pub fn call_mouse_callbacks(m: Mouse) {
+pub fn call_mouse_callbacks(id: i32, m: Mouse) {
     for f in MOUSE_CALLBACKS.lock().iter().rev() {
-        if f(m) {
+        if f(id, m) {
             break;
         }
     }
@@ -453,56 +493,59 @@ pub fn call_mouse_callbacks(m: Mouse) {
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 // @ 输入处理 @
 
-async fn input_parsenum(mut c: u8, end: u8) -> Result<i64> {
+async fn input_parsenum(getc: &mut Getc, mut c: u8, end: u8) -> Result<i64> {
     let mut num = 0i64;
     while c != end {
         if c < b'0' || c > b'9' {
             return Err(anyhow::anyhow!("Invalid number: {}", c as char));
         }
         num = num * 10 + (c - b'0') as i64;
-        c = getc().await?;
+        c = getc.wait().await?;
     }
     Ok(num)
 }
 
-async fn input_escape_square_number(num: i64) -> Result<()> {
+async fn input_escape_square_number(getc: &mut Getc, num: i64) -> Result<()> {
     match num {
-        1 => call_keypress_callbacks(Key::Home),
-        2 => call_keypress_callbacks(Key::Insert),
-        3 => call_keypress_callbacks(Key::Delete),
-        4 => call_keypress_callbacks(Key::End),
-        5 => call_keypress_callbacks(Key::PageUp),
-        6 => call_keypress_callbacks(Key::PageDown),
-        7 => call_keypress_callbacks(Key::Home),
-        8 => call_keypress_callbacks(Key::End),
+        1 => call_keypress_callbacks(getc.id, Key::Home),
+        2 => call_keypress_callbacks(getc.id, Key::Insert),
+        3 => call_keypress_callbacks(getc.id, Key::Delete),
+        4 => call_keypress_callbacks(getc.id, Key::End),
+        5 => call_keypress_callbacks(getc.id, Key::PageUp),
+        6 => call_keypress_callbacks(getc.id, Key::PageDown),
+        7 => call_keypress_callbacks(getc.id, Key::Home),
+        8 => call_keypress_callbacks(getc.id, Key::End),
         11..=24 => {
-            call_keypress_callbacks(Key::Fn(match num {
-                11 => 1,
-                12 => 2,
-                13 => 3,
-                14 => 4,
-                15 => 5,
-                17 => 6,
-                18 => 7,
-                19 => 8,
-                20 => 9,
-                21 => 10,
-                23 => 11,
-                24 => 12,
-                _ => {
-                    error!("Unknown escape sequence: ESC [ {} ~", num);
-                    return Ok(());
-                }
-            }));
+            call_keypress_callbacks(
+                getc.id,
+                Key::Fn(match num {
+                    11 => 1,
+                    12 => 2,
+                    13 => 3,
+                    14 => 4,
+                    15 => 5,
+                    17 => 6,
+                    18 => 7,
+                    19 => 8,
+                    20 => 9,
+                    21 => 10,
+                    23 => 11,
+                    24 => 12,
+                    _ => {
+                        error!("Unknown escape sequence: ESC [ {} ~", num);
+                        return Ok(());
+                    }
+                }),
+            );
         }
         200 => {
             let mut data = Vec::new();
             while !data.ends_with(b"\x1b[201~") {
-                data.push(getc().await?);
+                data.push(getc.wait().await?);
             }
             let data = &data[..data.len() - 6];
             if let Ok(s) = std::str::from_utf8(data) {
-                call_paste_callbacks(s);
+                call_paste_callbacks(getc.id, s);
             } else {
                 error_l10n!(
                     "zh-cn" => "无效的粘贴数据（非 UTF-8 编码）";
@@ -540,11 +583,11 @@ async fn input_escape_square_number(num: i64) -> Result<()> {
 /// - `a`: alt 键是否按下
 /// - `s`: shift 键是否按下
 /// - `bb`: 按钮编号
-async fn input_escape_square_angle() -> Result<()> {
+async fn input_escape_square_angle(getc: &mut Getc) -> Result<()> {
     let (params, mouseup) = {
         let mut s = String::new();
         let mouseup = loop {
-            match getc().await? {
+            match getc.wait().await? {
                 c if (b'0' <= c && c <= b'9') || c == b';' => s.push(c as char),
                 b'M' => break false,
                 b'm' => break true,
@@ -596,15 +639,15 @@ async fn input_escape_square_angle() -> Result<()> {
     static mut MOUSE_STATE: Mouse = Mouse::new();
     #[allow(static_mut_refs)]
     let state = unsafe { MOUSE_STATE.update((params[1] - 1, params[2] - 1), action, (pc, pa, ps)) };
-    call_mouse_callbacks(state);
+    call_mouse_callbacks(getc.id, state);
     Ok(())
 }
 
 #[allow(non_snake_case)]
-async fn input_escape_square_M() -> Result<()> {
-    let b1 = getc().await? as i32;
-    let b2 = getc().await? as i32 - 32;
-    let b3 = getc().await? as i32 - 32;
+async fn input_escape_square_M(getc: &mut Getc) -> Result<()> {
+    let b1 = getc.wait().await? as i32;
+    let b2 = getc.wait().await? as i32 - 32;
+    let b3 = getc.wait().await? as i32 - 32;
     if b2 < 0 || b3 < 0 {
         error!("Invalid mouse sequence: ESC [ M {} {} {}", b1, b2, b3);
         return Ok(());
@@ -633,50 +676,50 @@ async fn input_escape_square_M() -> Result<()> {
     unsafe {
         if mouseup && MOUSE_STATE.left {
             let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::LeftUp, (pc, pa, ps));
-            call_mouse_callbacks(state)
+            call_mouse_callbacks(getc.id, state)
         }
         if mouseup && MOUSE_STATE.middle {
             let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::MiddleUp, (pc, pa, ps));
-            call_mouse_callbacks(state)
+            call_mouse_callbacks(getc.id, state)
         }
         if mouseup && MOUSE_STATE.right {
             let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::RightUp, (pc, pa, ps));
-            call_mouse_callbacks(state)
+            call_mouse_callbacks(getc.id, state)
         }
         if mouseup && MOUSE_STATE.side1 {
             let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::Side1Up, (pc, pa, ps));
-            call_mouse_callbacks(state)
+            call_mouse_callbacks(getc.id, state)
         }
         if mouseup && MOUSE_STATE.side2 {
             let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::Side2Up, (pc, pa, ps));
-            call_mouse_callbacks(state)
+            call_mouse_callbacks(getc.id, state)
         }
         if !mouseup {
             let state = MOUSE_STATE.update((b2 - 1, b3 - 1), action, (pc, pa, ps));
-            call_mouse_callbacks(state);
+            call_mouse_callbacks(getc.id, state);
         }
     }
     Ok(())
 }
 
-async fn input_escape_square() -> Result<()> {
-    match getc().await? {
-        b'A' => call_keypress_callbacks(Key::Up),
-        b'B' => call_keypress_callbacks(Key::Down),
-        b'C' => call_keypress_callbacks(Key::Right),
-        b'D' => call_keypress_callbacks(Key::Left),
-        b'H' => call_keypress_callbacks(Key::Home),
-        b'F' => call_keypress_callbacks(Key::End),
-        b'Z' => call_keypress_callbacks(Key::ShiftTab),
+async fn input_escape_square(getc: &mut Getc) -> Result<()> {
+    match getc.wait().await? {
+        b'A' => call_keypress_callbacks(getc.id, Key::Up),
+        b'B' => call_keypress_callbacks(getc.id, Key::Down),
+        b'C' => call_keypress_callbacks(getc.id, Key::Right),
+        b'D' => call_keypress_callbacks(getc.id, Key::Left),
+        b'H' => call_keypress_callbacks(getc.id, Key::Home),
+        b'F' => call_keypress_callbacks(getc.id, Key::End),
+        b'Z' => call_keypress_callbacks(getc.id, Key::ShiftTab),
         c if b'0' <= c && c <= b'9' => {
-            if let Ok(num) = input_parsenum(c, b'~').await {
-                input_escape_square_number(num).await?;
+            if let Ok(num) = input_parsenum(getc, c, b'~').await {
+                input_escape_square_number(getc, num).await?;
             } else {
                 error!("Invalid escape sequence: ESC [ <number> ~ (number parsing failed)");
             }
         }
-        b'<' => input_escape_square_angle().await?,
-        b'M' => input_escape_square_M().await?,
+        b'<' => input_escape_square_angle(getc).await?,
+        b'M' => input_escape_square_M(getc).await?,
         c => {
             error!("Unknown escape sequence: ESC [ {} ({})", c as char, c);
             return Ok(());
@@ -685,25 +728,25 @@ async fn input_escape_square() -> Result<()> {
     Ok(())
 }
 
-async fn input_escape() -> Result<()> {
-    let Some(c) = getc_timeout(Duration::from_millis(20)).await? else {
-        call_keypress_callbacks(Key::Escape);
+async fn input_escape(getc: &mut Getc) -> Result<()> {
+    let Some(c) = getc.timeout(Duration::from_millis(20)).await? else {
+        call_keypress_callbacks(getc.id, Key::Escape);
         return Ok(());
     };
     match c {
         c if 1 <= c && c <= 26 => {
             let c = (c - 1 + b'a') as char;
-            call_keypress_callbacks(Key::CtrlAlt(c));
+            call_keypress_callbacks(getc.id, Key::CtrlAlt(c));
         }
         c if b'a' <= c && c <= b'z' => {
             let c = c as char;
-            call_keypress_callbacks(Key::Alt(c));
+            call_keypress_callbacks(getc.id, Key::Alt(c));
         }
         c if b'A' <= c && c <= b'Z' => {
             let c = (c as char).to_ascii_lowercase();
-            call_keypress_callbacks(Key::AltShift(c));
+            call_keypress_callbacks(getc.id, Key::AltShift(c));
         }
-        b'[' => input_escape_square().await?,
+        b'[' => input_escape_square(getc).await?,
         c => {
             error_l10n!(
                 "zh-cn" => "未知的转义序列：ESC {} ({})", (c as char), c;
@@ -719,8 +762,8 @@ async fn input_escape() -> Result<()> {
     Ok(())
 }
 
-async fn input() -> Result<()> {
-    let c = getc().await?;
+async fn input(getc: &mut Getc) -> Result<()> {
+    let c = getc.wait().await?;
     match c {
         0 => warning_l10n!(
             "zh-cn" => "未处理的按键：NUL";
@@ -731,30 +774,30 @@ async fn input() -> Result<()> {
             "es-es" => "Tecla no manejada: NUL";
             _       => "Unhandled key: NUL";
         ),
-        0x1b => input_escape().await?,
-        b' ' => call_keypress_callbacks(Key::Normal(' ')),
-        0x7f => call_keypress_callbacks(Key::Backspace),
+        0x1b => input_escape(getc).await?,
+        b' ' => call_keypress_callbacks(getc.id, Key::Normal(' ')),
+        0x7f => call_keypress_callbacks(getc.id, Key::Backspace),
         b'\n' | b'\r' => {
-            call_keypress_callbacks(Key::Normal('\n'));
+            call_keypress_callbacks(getc.id, Key::Normal('\n'));
         }
         b'a'..=b'z' => {
-            call_keypress_callbacks(Key::Lower(c as char));
-            call_keypress_callbacks(Key::Normal(c as char));
+            call_keypress_callbacks(getc.id, Key::Lower(c as char));
+            call_keypress_callbacks(getc.id, Key::Normal(c as char));
         }
         b'A'..=b'Z' => {
-            call_keypress_callbacks(Key::Upper(c as char));
-            call_keypress_callbacks(Key::Normal(c as char));
+            call_keypress_callbacks(getc.id, Key::Upper(c as char));
+            call_keypress_callbacks(getc.id, Key::Normal(c as char));
         }
         1..=26 => {
             let c = (c - 1 + b'a') as char;
-            call_keypress_callbacks(Key::Ctrl(c));
+            call_keypress_callbacks(getc.id, Key::Ctrl(c));
         }
-        0x1c => call_keypress_callbacks(Key::FileSeparator),
-        0x1d => call_keypress_callbacks(Key::GroupSeparator),
-        0x1e => call_keypress_callbacks(Key::RecordSeparator),
-        0x1f => call_keypress_callbacks(Key::UnitSeparator),
+        0x1c => call_keypress_callbacks(getc.id, Key::FileSeparator),
+        0x1d => call_keypress_callbacks(getc.id, Key::GroupSeparator),
+        0x1e => call_keypress_callbacks(getc.id, Key::RecordSeparator),
+        0x1f => call_keypress_callbacks(getc.id, Key::UnitSeparator),
         33..=126 => {
-            call_keypress_callbacks(Key::Normal(c as char));
+            call_keypress_callbacks(getc.id, Key::Normal(c as char));
         }
         128.. => warning_l10n!(
             "zh-cn" => "未处理的按键：{} ({})", (c as char), c;
@@ -769,9 +812,21 @@ async fn input() -> Result<()> {
     Ok(())
 }
 
+/// 主输入处理循环（处理本地终端输入）
 pub async fn input_main() {
+    let mut getc = Getc::main();
     while TERM_QUIT.load(Ordering::SeqCst) == false {
-        if input().await.is_err() {
+        if input(&mut getc).await.is_err() {
+            break;
+        }
+    }
+}
+
+/// 输入处理任务（通过回调获取输入）
+pub async fn input_task(id: i32, getc: GetcInner) {
+    let mut getc = Getc::new(id, getc);
+    while TERM_QUIT.load(Ordering::SeqCst) == false {
+        if input(&mut getc).await.is_err() {
             break;
         }
     }

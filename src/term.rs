@@ -1,7 +1,7 @@
 use parking_lot::Mutex;
 use std::panic;
 use std::process::exit;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::ffmpeg;
 use crate::logging::print_messages;
@@ -11,6 +11,15 @@ use crate::util::*;
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+static NEXT_TERM_ID: AtomicI32 = AtomicI32::new(1);
+
+pub fn next_term_id() -> i32 {
+    NEXT_TERM_ID.fetch_add(1, Ordering::SeqCst)
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+#[derive(Debug, Clone, Copy)]
 pub struct Winsize {
     pub row: u16,
     pub col: u16,
@@ -102,9 +111,9 @@ pub static TERM_QUIT: AtomicBool = AtomicBool::new(false);
 /// - 1006: 启用 SGR 扩展的鼠标模式
 /// - 1003: 启用所有鼠标移动事件
 /// - 2004: 启用[括号粘贴](https://en.wikipedia.org/wiki/Bracketed-paste)模式
-const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
+pub const TERM_INIT_SEQ: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1006h\x1b[?1003h\x1b[?2004h";
 /// 关闭初始化时开启的特性，见 [`TERM_INIT_SEQ`]
-const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
+pub const TERM_EXIT_SEQ: &[u8] = b"\x1b[?2004l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[?1049l";
 
 pub extern "C" fn request_quit() {
     TERM_QUIT.store(true, Ordering::SeqCst);
