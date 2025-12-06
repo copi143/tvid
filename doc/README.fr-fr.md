@@ -58,13 +58,13 @@
    target/release/tvid <entrée1> [entrée2] [...]
    ```
 
-Chaque entrée devient un élément de la playlist en mémoire.
-
 ## Utilisation
 
 ```sh
 tvid <entrée1> [entrée2] [...]
 ```
+
+Chaque entrée devient un élément de la playlist en mémoire.
 
 ### Fichiers de configuration & playlist
 

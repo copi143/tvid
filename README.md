@@ -68,13 +68,13 @@ cargo install tvid
    target/release/tvid <input1> [input2] [...]
    ```
 
-Each input becomes an item in the in‑memory playlist.
-
 ## Usage
 
 ```sh
 tvid <input1> [input2] [...]
 ```
+
+Each input becomes an item in the in‑memory playlist.
 
 ### Configuration & Playlist Files
 

@@ -58,13 +58,13 @@
    target/release/tvid <entrada1> [entrada2] [...]
    ```
 
-Cada entrada se convierte en un elemento de la lista de reproducción en memoria.
-
 ## Uso
 
 ```sh
 tvid <entrada1> [entrada2] [...]
 ```
+
+Cada entrada se convierte en un elemento de la lista de reproducción en memoria.
 
 ### Archivos de configuración y lista de reproducción
 

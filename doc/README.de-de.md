@@ -58,13 +58,13 @@
    target/release/tvid <eingabe1> [eingabe2] [...]
    ```
 
-Jede Eingabe wird zu einem Eintrag in der In-Memory-Playlist.
-
 ## Verwendung
 
 ```sh
 tvid <eingabe1> [eingabe2] [...]
 ```
+
+Jede Eingabe wird zu einem Eintrag in der In-Memory-Playlist.
 
 ### Konfigurations- & Playlist-Dateien
 
