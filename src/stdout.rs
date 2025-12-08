@@ -5,17 +5,29 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 
-use crate::statistics::set_output_time;
+use crate::statistics;
 use crate::term::TERM_QUIT;
 
+/// 尝试打印字节到标准输出，返回实际打印的字节数
 #[cfg(unix)]
+#[must_use]
 pub fn print(bytes: &[u8]) -> Option<usize> {
-    use libc::STDOUT_FILENO;
+    use libc::{EAGAIN, EWOULDBLOCK, STDOUT_FILENO};
     let res = unsafe { libc::write(STDOUT_FILENO, bytes.as_ptr() as *const c_void, bytes.len()) };
-    if res < 0 { None } else { Some(res as usize) }
+    if res >= 0 {
+        Some(res as usize)
+    } else {
+        #[allow(unreachable_patterns)]
+        match unsafe { *libc::__errno_location() } {
+            EAGAIN | EWOULDBLOCK => Some(0),
+            _ => None,
+        }
+    }
 }
 
+/// 尝试打印字节到标准输出，返回实际打印的字节数
 #[cfg(windows)]
+#[must_use]
 pub fn print(bytes: &[u8]) -> Option<usize> {
     use winapi::shared::minwindef::DWORD;
     use winapi::um::consoleapi::WriteConsoleA;
@@ -39,10 +51,30 @@ pub fn print(bytes: &[u8]) -> Option<usize> {
     }
 }
 
-pub fn print_all(bytes: &[u8]) -> bool {
+/// 尝试完整打印字节到标准输出，返回是否成功
+pub fn print_all_sync(bytes: &[u8]) -> bool {
     let mut pos = 0;
     while pos < bytes.len() {
         if let Some(n) = print(&bytes[pos..]) {
+            if n == 0 {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            pos += n;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+/// 尝试完整打印字节到标准输出，返回是否成功
+pub async fn print_all(bytes: &[u8]) -> bool {
+    let mut pos = 0;
+    while pos < bytes.len() {
+        if let Some(n) = print(&bytes[pos..]) {
+            if n == 0 {
+                tokio::task::yield_now().await;
+            }
             pos += n;
         } else {
             return false;
@@ -73,13 +105,13 @@ pub async fn output_main() {
         };
 
         if buf.len() == 0 {
-            set_output_time(0, Duration::ZERO);
+            statistics::set_output_time(0, Duration::ZERO);
             continue;
         }
 
         let instant = Instant::now();
-        let succ = print_all(&buf);
-        set_output_time(0, instant.elapsed());
+        let succ = print_all(&buf).await;
+        statistics::set_output_time(0, instant.elapsed());
 
         // let terms = crate::ssh::TERMINALS
         //     .lock()

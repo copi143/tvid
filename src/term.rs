@@ -5,9 +5,8 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::ffmpeg;
 use crate::logging::print_messages;
-use crate::stdin;
-use crate::stdout;
 use crate::util::*;
+use crate::{stdin, stdout};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
@@ -128,11 +127,11 @@ static ORIG_TERMIOS: Mutex<Option<libc::termios>> = Mutex::new(None);
 /// 在初始化终端之前不能启动 stdin 和 stdout 线程
 #[cfg(unix)]
 pub fn init() {
-    use libc::STDIN_FILENO;
+    use libc::{STDIN_FILENO, STDOUT_FILENO};
 
     unsafe { libc::signal(libc::SIGINT, request_quit as usize) };
 
-    stdout::print(TERM_INIT_SEQ);
+    stdout::print_all_sync(TERM_INIT_SEQ);
 
     unsafe { libc::setlocale(libc::LC_CTYPE, c"en_US.UTF-8".as_ptr() as *const _) };
 
@@ -145,6 +144,13 @@ pub fn init() {
         termios.c_cc[libc::VTIME] = 1;
         unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
     }
+
+    let flags = unsafe { libc::fcntl(STDOUT_FILENO, libc::F_GETFL, 0) };
+    unsafe { libc::fcntl(STDOUT_FILENO, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+
+    unsafe { libc::tcflush(STDIN_FILENO, libc::TCIFLUSH) };
+
+    setup_panic_handler();
 }
 
 /// 在初始化终端之前不能启动 stdin 和 stdout 线程
@@ -198,14 +204,21 @@ pub fn init() {
 /// 在退出前必须终止 stdin 和 stdout 线程
 #[cfg(unix)]
 pub fn quit() -> ! {
-    use libc::STDIN_FILENO;
+    use libc::{STDIN_FILENO, STDOUT_FILENO};
+
+    let flags = unsafe { libc::fcntl(STDOUT_FILENO, libc::F_GETFL, 0) };
+    unsafe { libc::fcntl(STDOUT_FILENO, libc::F_SETFL, flags & !libc::O_NONBLOCK) };
 
     if let Some(termios) = ORIG_TERMIOS.lock().take() {
         unsafe { libc::tcsetattr(STDIN_FILENO, libc::TCSANOW, &termios) };
     }
-    stdout::print(TERM_EXIT_SEQ);
+
+    stdout::print_all_sync(TERM_EXIT_SEQ);
+
     print_messages().ok();
+
     unsafe { libc::tcflush(STDIN_FILENO, libc::TCIFLUSH) };
+
     exit(0);
 }
 
@@ -217,7 +230,7 @@ pub fn quit() -> ! {
     exit(0);
 }
 
-pub fn setup_panic_handler() {
+fn setup_panic_handler() {
     panic::set_hook(Box::new(|info| {
         let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
             *s

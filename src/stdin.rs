@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use parking_lot::Mutex;
+use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -9,14 +10,27 @@ use crate::term::TERM_QUIT;
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 // @ 读取输入 @
 
+/// 尝试从标准输入读取字节到缓冲区，返回实际读取的字节数
 #[cfg(unix)]
-pub fn scan(bytes: &mut [u8]) -> isize {
-    use libc::STDIN_FILENO;
-    unsafe { libc::read(STDIN_FILENO, bytes.as_mut_ptr() as *mut c_void, bytes.len()) }
+#[must_use]
+pub fn scan(bytes: &mut [u8]) -> Option<usize> {
+    use libc::{EAGAIN, EWOULDBLOCK, STDIN_FILENO};
+    let res = unsafe { libc::read(STDIN_FILENO, bytes.as_mut_ptr() as *mut c_void, bytes.len()) };
+    if res >= 0 {
+        Some(res as usize)
+    } else {
+        #[allow(unreachable_patterns)]
+        match unsafe { *libc::__errno_location() } {
+            EAGAIN | EWOULDBLOCK => Some(0),
+            _ => None,
+        }
+    }
 }
 
+/// 尝试从标准输入读取字节到缓冲区，返回实际读取的字节数
 #[cfg(windows)]
-pub fn scan(bytes: &mut [u8]) -> isize {
+#[must_use]
+pub fn scan(bytes: &mut [u8]) -> Option<usize> {
     use winapi::shared::minwindef::DWORD;
     use winapi::um::consoleapi::ReadConsoleA;
     use winapi::um::processenv::GetStdHandle;
@@ -31,38 +45,42 @@ pub fn scan(bytes: &mut [u8]) -> isize {
             &mut read,
             std::ptr::null_mut(),
         );
-        if res == 0 { -1 } else { read as isize }
+        if res == 0 { None } else { Some(read as usize) }
     }
 }
 
 static STDIN_QUIT: AtomicBool = AtomicBool::new(false);
 
-#[allow(static_mut_refs)]
 fn try_getc() -> Result<Option<u8>> {
-    static mut STDIN_BUF: [u8; 4096] = [0; 4096];
-    static mut STDIN_POS: usize = 0;
-    static mut STDIN_LEN: usize = 0;
-    unsafe {
-        if STDIN_POS < STDIN_LEN {
-            let c = *STDIN_BUF.get_unchecked(STDIN_POS);
-            STDIN_POS += 1;
-            Ok(Some(c))
+    struct Stdin {
+        buf: [u8; 4096],
+        pos: usize,
+        len: usize,
+    }
+    static STDIN: Mutex<Stdin> = Mutex::new(Stdin {
+        buf: [0; 4096],
+        pos: 0,
+        len: 0,
+    });
+    let mut lock = STDIN.lock();
+    if lock.pos < lock.len {
+        let &c = unsafe { lock.buf.get_unchecked(lock.pos) };
+        lock.pos += 1;
+        Ok(Some(c))
+    } else {
+        let Some(n) = scan(&mut lock.buf) else {
+            error!("Failed to read from stdin");
+            bail!("failed to read from stdin");
+        };
+        if STDIN_QUIT.load(Ordering::SeqCst) {
+            return Err(anyhow::anyhow!("stdin quit"));
+        }
+        if n > 0 {
+            lock.pos = 1;
+            lock.len = n;
+            Ok(Some(lock.buf[0]))
         } else {
-            let n = scan(&mut STDIN_BUF);
-            if STDIN_QUIT.load(Ordering::SeqCst) {
-                return Err(anyhow::anyhow!("stdin quit"));
-            }
-            if n == 0 {
-                return Ok(None);
-            }
-            if n > 0 {
-                STDIN_POS = 1;
-                STDIN_LEN = n as usize;
-                Ok(Some(STDIN_BUF[0]))
-            } else {
-                error!("Failed to read from stdin, ret = {}", n);
-                Err(anyhow::anyhow!("failed to read from stdin"))
-            }
+            Ok(None)
         }
     }
 }
@@ -636,9 +654,12 @@ async fn input_escape_square_angle(getc: &mut Getc) -> Result<()> {
         }
     };
     let action = action.to(mouseup);
-    static mut MOUSE_STATE: Mouse = Mouse::new();
-    #[allow(static_mut_refs)]
-    let state = unsafe { MOUSE_STATE.update((params[1] - 1, params[2] - 1), action, (pc, pa, ps)) };
+    let state = {
+        static MOUSE_STATE: Mutex<BTreeMap<i32, Mouse>> = Mutex::new(BTreeMap::new());
+        let mut state = MOUSE_STATE.lock();
+        let state = state.entry(getc.id).or_insert_with(Mouse::new);
+        state.update((params[1] - 1, params[2] - 1), action, (pc, pa, ps))
+    };
     call_mouse_callbacks(getc.id, state);
     Ok(())
 }
@@ -671,34 +692,32 @@ async fn input_escape_square_M(getc: &mut Getc) -> Result<()> {
             return Ok(());
         }
     };
-    static mut MOUSE_STATE: Mouse = Mouse::new();
-    #[allow(static_mut_refs)]
-    unsafe {
-        if mouseup && MOUSE_STATE.left {
-            let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::LeftUp, (pc, pa, ps));
-            call_mouse_callbacks(getc.id, state)
+    let mut args = Vec::new();
+    {
+        static MOUSE_STATE: Mutex<BTreeMap<i32, Mouse>> = Mutex::new(BTreeMap::new());
+        let mut state = MOUSE_STATE.lock();
+        let state = state.entry(getc.id).or_insert_with(Mouse::new);
+        if mouseup && state.left {
+            args.push(state.update((b2 - 1, b3 - 1), MouseAction::LeftUp, (pc, pa, ps)));
         }
-        if mouseup && MOUSE_STATE.middle {
-            let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::MiddleUp, (pc, pa, ps));
-            call_mouse_callbacks(getc.id, state)
+        if mouseup && state.middle {
+            args.push(state.update((b2 - 1, b3 - 1), MouseAction::MiddleUp, (pc, pa, ps)));
         }
-        if mouseup && MOUSE_STATE.right {
-            let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::RightUp, (pc, pa, ps));
-            call_mouse_callbacks(getc.id, state)
+        if mouseup && state.right {
+            args.push(state.update((b2 - 1, b3 - 1), MouseAction::RightUp, (pc, pa, ps)));
         }
-        if mouseup && MOUSE_STATE.side1 {
-            let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::Side1Up, (pc, pa, ps));
-            call_mouse_callbacks(getc.id, state)
+        if mouseup && state.side1 {
+            args.push(state.update((b2 - 1, b3 - 1), MouseAction::Side1Up, (pc, pa, ps)));
         }
-        if mouseup && MOUSE_STATE.side2 {
-            let state = MOUSE_STATE.update((b2 - 1, b3 - 1), MouseAction::Side2Up, (pc, pa, ps));
-            call_mouse_callbacks(getc.id, state)
+        if mouseup && state.side2 {
+            args.push(state.update((b2 - 1, b3 - 1), MouseAction::Side2Up, (pc, pa, ps)));
         }
         if !mouseup {
-            let state = MOUSE_STATE.update((b2 - 1, b3 - 1), action, (pc, pa, ps));
-            call_mouse_callbacks(getc.id, state);
+            args.push(state.update((b2 - 1, b3 - 1), action, (pc, pa, ps)));
         }
     }
+    args.iter()
+        .for_each(|&state| call_mouse_callbacks(getc.id, state));
     Ok(())
 }
 

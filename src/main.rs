@@ -6,6 +6,7 @@
 #![expect(clippy::len_zero)]
 #![expect(clippy::partialeq_to_none)]
 #![expect(clippy::option_map_unit_fn)]
+#![deny(unused_must_use)]
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -25,7 +26,6 @@ use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 macro_rules! usemod {
     ($name:ident) => {
         mod $name;
-        #[allow(unused)]
         pub use $name::*;
     };
 }
@@ -45,6 +45,7 @@ macro_rules! locale {
 }
 
 #[allow(unused)]
+#[deny(unused_must_use)]
 mod util;
 
 #[macro_use]
@@ -55,6 +56,7 @@ mod logging;
 mod ui;
 
 #[allow(unused)]
+#[deny(unused_must_use)]
 mod avsync;
 
 mod playlist;
@@ -65,7 +67,6 @@ mod stdout;
 mod term;
 
 /// TODO
-#[allow(unused)]
 #[cfg(feature = "ssh")]
 mod ssh;
 
@@ -85,6 +86,7 @@ mod video;
 mod subtitle;
 
 #[allow(unused)]
+#[deny(unused_must_use)]
 mod escape {
     #[cfg(feature = "sixel")]
     usemod!(sixel);
@@ -470,7 +472,6 @@ fn main() -> Result<()> {
     av::init().context("av init failed")?;
 
     term::init();
-    term::setup_panic_handler(); // 一定要在初始化之后设置，且必须立刻设置
 
     #[cfg(feature = "ssh")]
     ssh::run()?;

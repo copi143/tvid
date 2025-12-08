@@ -33,6 +33,8 @@ unsafe extern "C" fn ffmpeg_log_callback(
     if arg2 > ffmpeg_sys_next::AV_LOG_WARNING {
         return;
     }
+    static LOCK: Mutex<()> = Mutex::new(());
+    let guard = LOCK.lock();
     static mut PRINT_PREFIX: core::ffi::c_int = 0;
     static mut BUF: [u8; 1024] = [0u8; 1024];
     ffmpeg_sys_next::av_log_format_line(
@@ -77,6 +79,7 @@ unsafe extern "C" fn ffmpeg_log_callback(
             _       => "FFmpeg log: <invalid UTF-8>";
         );
     }
+    drop(guard);
 }
 
 /// 初始化 FFmpeg 日志回调
