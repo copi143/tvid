@@ -129,13 +129,12 @@ static ORIG_TERMIOS: Mutex<Option<libc::termios>> = Mutex::new(None);
 #[cfg(unix)]
 pub fn init() {
     use libc::STDIN_FILENO;
-    use std::ffi::c_char;
 
     unsafe { libc::signal(libc::SIGINT, request_quit as usize) };
 
     stdout::print(TERM_INIT_SEQ);
 
-    unsafe { libc::setlocale(libc::LC_CTYPE, "en_US.UTF-8".as_ptr() as *const c_char) };
+    unsafe { libc::setlocale(libc::LC_CTYPE, c"en_US.UTF-8".as_ptr() as *const _) };
 
     let mut termios = std::mem::MaybeUninit::uninit();
     if unsafe { libc::tcgetattr(STDIN_FILENO, termios.as_mut_ptr()) } == 0 {
