@@ -1,10 +1,11 @@
 use parking_lot::Mutex;
 use std::{collections::VecDeque, time::Duration};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 use crate::avsync::played_time_or_zero;
 use crate::render::ContextWrapper;
 use crate::util::{Cell, Color, best_contrast_color};
+use std::num::ParseIntError;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AssDialogue {
@@ -188,15 +189,121 @@ pub fn get_subtitles(time: Duration) -> Vec<AssDialogue> {
     result
 }
 
+// 解析 ASS override 标签中的颜色，支持类似 "\c&HBBGGRR&" 或 "\1c&HBBGGRR&" 的写法。
+// 返回每个字符以及该字符（如果有）应该使用的前景色。
+fn parse_ass_color_tags(text: &str) -> Vec<(char, Option<Color>)> {
+    let mut out: Vec<(char, Option<Color>)> = Vec::new();
+    let mut cur_color: Option<Color> = None;
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '{' {
+            // 找到匹配的 '}' 并解析内部标签
+            if let Some(j) = (i + 1..chars.len()).find(|&k| chars[k] == '}') {
+                let tag: String = chars[i + 1..j].iter().collect();
+                if let Some(col) = parse_color_from_tag(&tag) {
+                    cur_color = Some(col);
+                }
+                i = j + 1;
+                continue;
+            } else {
+                // 没有闭合，作为普通字符处理
+                out.push((c, cur_color));
+                i += 1;
+                continue;
+            }
+        }
+
+        if c == '\\' {
+            // 处理常见的换行标记 \N 或 \n
+            if i + 1 < chars.len() {
+                let nx = chars[i + 1];
+                if nx == 'N' || nx == 'n' {
+                    out.push(('\n', None));
+                    i += 2;
+                    continue;
+                }
+            }
+            // 不是换行，保留反斜杠为文字
+            out.push(('\\', cur_color));
+            i += 1;
+            continue;
+        }
+
+        out.push((c, cur_color));
+        i += 1;
+    }
+
+    out
+}
+
+fn parse_color_from_tag(tag: &str) -> Option<Color> {
+    // 在 tag 中查找 c&H 或 1c&H 等形式（不区分大小写），取后面的十六进制数
+    let lower = tag.to_lowercase();
+    if let Some(pos) = lower.find("c&h") {
+        let rest = &tag[pos + 3..];
+        // 从 rest 中提取连续的十六进制字符
+        let mut hex = String::new();
+        for ch in rest.chars() {
+            if ch.is_ascii_hexdigit() {
+                hex.push(ch);
+            } else {
+                break;
+            }
+        }
+        if !hex.is_empty() {
+            return hex_to_color(&hex).ok();
+        }
+    }
+    None
+}
+
+fn hex_to_color(s: &str) -> Result<Color, ParseIntError> {
+    // ASS 颜色通常为 BBRRGG 或 AABBGGRR（十六进制，低位为 R），我们按 BBGGRR 或 AABBGGRR 来处理，取最低 6 个字节作为 B G R
+    let mut hex = s.trim();
+    if hex.starts_with("&h") || hex.starts_with("&H") {
+        hex = &hex[2..];
+    } else if hex.starts_with('H') || hex.starts_with('h') {
+        hex = &hex[1..];
+    }
+    // 只取连续的十六进制字符（调用者通常已经截取）
+    let hex = hex.trim_start_matches('0');
+    // 如果太短则补齐到至少 6
+    let hex = if hex.len() < 6 {
+        format!("{:0>6}", hex)
+    } else {
+        hex.to_string()
+    };
+    // 只取最后 6 位（BBGGRR 或 AABBGGRR -> 取低 6 位表示 BBGGRR）
+    let hex_tail = if hex.len() > 6 {
+        &hex[hex.len() - 6..]
+    } else {
+        &hex
+    };
+    let val = u32::from_str_radix(hex_tail, 16)?;
+    let r = (val & 0x0000ff) as u8;
+    let g = ((val & 0x00ff00) >> 8) as u8;
+    let b = ((val & 0xff0000) >> 16) as u8;
+    Ok(Color::new(r, g, b))
+}
+
 pub fn render_subtitle(wrap: &mut ContextWrapper) {
     if let Some(played_time) = wrap.played_time {
         let subtitles = get_subtitles(played_time);
         let mut y = wrap.cells_height - 1 - wrap.padding_bottom;
         for sub in subtitles {
-            let n = sub.text.width();
+            // 解析内联 ASS 颜色标签，得到每个字符以及可选的前景色
+            let spans = parse_ass_color_tags(&sub.text);
+            let n: usize = spans
+                .iter()
+                .map(|(ch, _)| ch.width().unwrap_or(1).max(1))
+                .sum();
             let mut i = 0;
             let mut x = (wrap.cells_width - n) / 2;
-            for ch in sub.text.chars() {
+            for (ch, span_color) in spans {
+                // 目前不处理 ch == '\n' 的情况
+
                 let k_in = played_time.as_millis() as f32 - sub.display_time.as_millis() as f32;
                 let k_in = ((k_in - 50.0 * i as f32) / 200.0).clamp(0.0, 1.0);
                 let k_out = if sub.end.as_millis() as f32 == 0.0 {
@@ -215,7 +322,13 @@ pub fn render_subtitle(wrap: &mut ContextWrapper) {
                 }
                 let p = (y - (k_out * 5.0) as usize) * wrap.cells_pitch + x;
                 let bg = Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg);
-                let fg = Color::mix(best_contrast_color(bg), bg, k);
+                let base_fg = best_contrast_color(bg);
+                // 如果 span 提供了颜色，优先使用该颜色再与背景按 k 混合
+                let fg = if let Some(col) = span_color {
+                    Color::mix(col, bg, k)
+                } else {
+                    Color::mix(base_fg, bg, k)
+                };
                 wrap.cells[p] = Cell::new(ch, fg, bg);
                 for i in 1..cw {
                     wrap.cells[p + i].c = Some('\0');
