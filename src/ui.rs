@@ -1,3 +1,4 @@
+use data_classes::{ToNext, ToPrev};
 use parking_lot::Mutex;
 use std::cmp::min;
 use std::fs::FileType;
@@ -1172,13 +1173,13 @@ pub fn register_input_callbacks() {
 
     stdin::register_keypress_callback(Key::Lower('x'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
-        ctx.chroma_mode.switch_next();
+        ctx.chroma_mode.switch_to_next();
         true
     });
 
     stdin::register_keypress_callback(Key::Upper('x'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
-        ctx.chroma_mode.switch_prev();
+        ctx.chroma_mode.switch_to_prev();
         true
     });
 

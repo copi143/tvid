@@ -1,3 +1,4 @@
+use data_classes::data;
 use parking_lot::Mutex;
 use std::fmt::{Debug, Display};
 use std::io::Write;
@@ -208,23 +209,13 @@ impl From<ColorF32> for Color {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data(default, copy)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
+    #[default = 255]
     pub a: u8,
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Color {
-            r: 0,
-            g: 0,
-            b: 0,
-            a: 255,
-        }
-    }
 }
 
 impl Display for Color {
@@ -300,7 +291,39 @@ pub fn best_contrast_color(bg: Color) -> Color {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TextWithColorInner {
+    pub text: String,
+    pub fg: Color,
+    pub bg: Color,
+}
+
+pub struct TextWithColor {
+    pub inner: Vec<TextWithColorInner>,
+}
+
+impl TextWithColor {
+    pub fn new(text: String, fg: Color, bg: Color) -> Self {
+        TextWithColor {
+            inner: vec![TextWithColorInner { text, fg, bg }],
+        }
+    }
+
+    pub const fn empty() -> Self {
+        TextWithColor { inner: vec![] }
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn push(&mut self, text: String, fg: Color, bg: Color) {
+        self.inner.push(TextWithColorInner { text, fg, bg });
+    }
+}
+
+// @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
+
+#[data(default, copy)]
 pub struct Cell {
     /// 单元格内的字符
     /// - `None` 表示什么都没有
@@ -449,7 +472,7 @@ pub fn try_palette256(c: Color) -> Option<u8> {
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 /// 颜色模式
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data(default, copy, to-prev, to-next)]
 pub enum ColorMode {
     /// 直接显示图像
     #[cfg(feature = "osc1337")]
@@ -564,40 +587,6 @@ impl ColorMode {
         ColorMode::TrueColorOnly
     }
 
-    pub const fn switch_next(&mut self) {
-        *self = match self {
-            #[cfg(feature = "osc1337")]
-            ColorMode::OSC1337 => ColorMode::TrueColorOnly,
-            ColorMode::TrueColorOnly => ColorMode::Palette256Prefer,
-            ColorMode::Palette256Prefer => ColorMode::Palette256Only,
-            ColorMode::Palette256Only => ColorMode::GrayScale,
-            ColorMode::GrayScale => ColorMode::BlackWhite,
-            ColorMode::BlackWhite => ColorMode::AsciiArt,
-            ColorMode::AsciiArt => ColorMode::Braille,
-            #[cfg(feature = "osc1337")]
-            ColorMode::Braille => ColorMode::OSC1337,
-            #[cfg(not(feature = "osc1337"))]
-            ColorMode::Braille => ColorMode::TrueColorOnly,
-        };
-    }
-
-    pub const fn switch_prev(&mut self) {
-        *self = match self {
-            #[cfg(feature = "osc1337")]
-            ColorMode::OSC1337 => ColorMode::Braille,
-            #[cfg(feature = "osc1337")]
-            ColorMode::TrueColorOnly => ColorMode::OSC1337,
-            #[cfg(not(feature = "osc1337"))]
-            ColorMode::TrueColorOnly => ColorMode::Braille,
-            ColorMode::Palette256Prefer => ColorMode::TrueColorOnly,
-            ColorMode::Palette256Only => ColorMode::Palette256Prefer,
-            ColorMode::GrayScale => ColorMode::Palette256Only,
-            ColorMode::BlackWhite => ColorMode::GrayScale,
-            ColorMode::AsciiArt => ColorMode::BlackWhite,
-            ColorMode::Braille => ColorMode::AsciiArt,
-        };
-    }
-
     pub const fn fppc(&self) -> (usize, usize) {
         match self {
             #[cfg(feature = "osc1337")]
@@ -615,7 +604,7 @@ impl ColorMode {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data(default, copy, to-prev, to-next)]
 pub enum ChromaMode {
     #[default]
     None,
@@ -720,34 +709,6 @@ impl ChromaMode {
 
     pub const fn default() -> Self {
         ChromaMode::None
-    }
-
-    pub const fn switch_next(&mut self) {
-        *self = match self {
-            ChromaMode::None => ChromaMode::Red,
-            ChromaMode::Red => ChromaMode::Green,
-            ChromaMode::Green => ChromaMode::Blue,
-            ChromaMode::Blue => ChromaMode::Yellow,
-            ChromaMode::Yellow => ChromaMode::Magenta,
-            ChromaMode::Magenta => ChromaMode::Cyan,
-            ChromaMode::Cyan => ChromaMode::White,
-            ChromaMode::White => ChromaMode::Black,
-            ChromaMode::Black => ChromaMode::None,
-        };
-    }
-
-    pub const fn switch_prev(&mut self) {
-        *self = match self {
-            ChromaMode::None => ChromaMode::Black,
-            ChromaMode::Red => ChromaMode::None,
-            ChromaMode::Green => ChromaMode::Red,
-            ChromaMode::Blue => ChromaMode::Green,
-            ChromaMode::Yellow => ChromaMode::Blue,
-            ChromaMode::Magenta => ChromaMode::Yellow,
-            ChromaMode::Cyan => ChromaMode::Magenta,
-            ChromaMode::White => ChromaMode::Cyan,
-            ChromaMode::Black => ChromaMode::White,
-        }
     }
 
     pub const fn color(&self) -> Option<Color> {

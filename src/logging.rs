@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Local};
+use data_classes::data;
 use parking_lot::{Mutex, MutexGuard};
 use std::collections::VecDeque;
 use std::fmt::Write as _;
@@ -14,7 +15,7 @@ pub const COLOR_WARN: Color = Color::new(255, 192, 0);
 pub const COLOR_ERROR: Color = Color::new(255, 128, 64);
 pub const COLOR_FATAL: Color = Color::new(255, 64, 64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data(copy)]
 pub enum MessageLevel {
     Debug,
     Info,
@@ -45,7 +46,7 @@ impl MessageLevel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data]
 pub struct Message {
     pub lv: MessageLevel,
     pub msg: String,

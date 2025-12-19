@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use data_classes::data;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::ffi::c_void;
@@ -136,7 +137,7 @@ impl Getc {
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 // @ 键盘事件 @
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data(copy)]
 pub enum Key {
     Normal(char),
     Lower(char),
@@ -348,7 +349,7 @@ pub fn call_input_callbacks(id: i32, data: &str) {
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 // @ 鼠标事件 @
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data(copy)]
 pub enum MouseAction {
     Move,
     LeftDown,
@@ -409,7 +410,7 @@ impl MouseAction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data(copy)]
 pub struct Mouse {
     pub pos: (i32, i32),
     pub action: MouseAction,

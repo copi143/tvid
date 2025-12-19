@@ -42,3 +42,5 @@ pub fn format_image(
     )
     .unwrap();
 }
+
+pub const STEAL_FOCUS: &str = "\x1b]1337;StealFocus\x1b\\";

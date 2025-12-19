@@ -10,6 +10,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use data_classes::{ToNext as _, ToPrev as _};
 use ffmpeg_next as av;
 use parking_lot::Mutex;
 use std::env;
@@ -386,7 +387,7 @@ fn register_input_callbacks() {
 
     stdin::register_keypress_callback(Key::Lower('c'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
-        ctx.color_mode.switch_next();
+        ctx.color_mode.switch_to_next();
         let (fppc_x, fppc_y) = ctx.color_mode.fppc();
         ctx.update_fppc(fppc_x, fppc_y);
         ctx.force_flush_next();
@@ -395,7 +396,7 @@ fn register_input_callbacks() {
 
     stdin::register_keypress_callback(Key::Upper('c'), |_, _| {
         let mut ctx = render::RENDER_CONTEXT.lock();
-        ctx.color_mode.switch_prev();
+        ctx.color_mode.switch_to_prev();
         let (fppc_x, fppc_y) = ctx.color_mode.fppc();
         ctx.update_fppc(fppc_x, fppc_y);
         ctx.force_flush_next();

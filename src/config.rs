@@ -1,6 +1,6 @@
 use anyhow::Result;
+use data_classes::data;
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -24,11 +24,15 @@ pub static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 static ORIG_CONFIG: Mutex<Config> = Mutex::new(Config::new());
 static TOML_SOURCE: Mutex<Option<String>> = Mutex::new(None);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[data(default, serde)]
 pub struct Config {
     /// 音量，范围 0-200
+    #[default = 100]
+    #[serde(default)]
     pub volume: u32,
     /// 是否循环播放播放列表
+    #[default = false]
+    #[serde(default)]
     pub looping: bool,
 }
 

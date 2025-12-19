@@ -1,3 +1,4 @@
+use data_classes::data;
 use parking_lot::Mutex;
 use std::{collections::VecDeque, time::Duration};
 use unicode_width::UnicodeWidthChar;
@@ -7,7 +8,7 @@ use crate::render::ContextWrapper;
 use crate::util::{Cell, Color, best_contrast_color};
 use std::num::ParseIntError;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[data]
 pub struct AssDialogue {
     /// 应该开始显示的时间
     pub start: Duration,
