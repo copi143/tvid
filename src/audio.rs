@@ -280,7 +280,7 @@ pub fn audio_main() {
     let config = device.default_output_config().unwrap();
     let target_channels = config.channels();
     let target_sample_fmt = Sample::F32(SampleType::Packed);
-    let target_sample_rate = config.sample_rate().0;
+    let target_sample_rate = config.sample_rate();
     let cpal_stream = build_cpal_stream(&device, &config).unwrap();
     if target_sample_rate == 0 {
         error_l10n!(

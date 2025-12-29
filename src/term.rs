@@ -129,7 +129,7 @@ static ORIG_TERMIOS: Mutex<Option<libc::termios>> = Mutex::new(None);
 pub fn init() {
     use libc::{STDIN_FILENO, STDOUT_FILENO};
 
-    unsafe { libc::signal(libc::SIGINT, request_quit as usize) };
+    unsafe { libc::signal(libc::SIGINT, request_quit as *const () as usize) };
 
     stdout::print_all_sync(TERM_INIT_SEQ);
 
