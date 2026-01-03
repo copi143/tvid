@@ -474,6 +474,8 @@ pub fn try_palette256(c: Color) -> Option<u8> {
 /// 颜色模式
 #[data(default, copy, to-prev, to-next)]
 pub enum ColorMode {
+    #[cfg(feature = "sixel")]
+    Sixel,
     /// 直接显示图像
     #[cfg(feature = "osc1337")]
     OSC1337,
@@ -498,6 +500,8 @@ impl Display for ColorMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match locale!() {
             "zh-cn" => match self {
+                #[cfg(feature = "sixel")]
+                ColorMode::Sixel => write!(f, "Sixel"),
                 #[cfg(feature = "osc1337")]
                 ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
@@ -509,6 +513,8 @@ impl Display for ColorMode {
                 ColorMode::Braille => write!(f, "Unicode 盲文模式"),
             },
             "zh-tw" => match self {
+                #[cfg(feature = "sixel")]
+                ColorMode::Sixel => write!(f, "Sixel"),
                 #[cfg(feature = "osc1337")]
                 ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "真彩色模式"),
@@ -520,6 +526,8 @@ impl Display for ColorMode {
                 ColorMode::Braille => write!(f, "Unicode 盲文模式"),
             },
             "ja-jp" => match self {
+                #[cfg(feature = "sixel")]
+                ColorMode::Sixel => write!(f, "Sixel"),
                 #[cfg(feature = "osc1337")]
                 ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "フルカラー"),
@@ -531,6 +539,8 @@ impl Display for ColorMode {
                 ColorMode::Braille => write!(f, "Unicode 点字モード"),
             },
             "fr-fr" => match self {
+                #[cfg(feature = "sixel")]
+                ColorMode::Sixel => write!(f, "Sixel"),
                 #[cfg(feature = "osc1337")]
                 ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "Couleurs vraies"),
@@ -542,6 +552,8 @@ impl Display for ColorMode {
                 ColorMode::Braille => write!(f, "Mode braille Unicode"),
             },
             "de-de" => match self {
+                #[cfg(feature = "sixel")]
+                ColorMode::Sixel => write!(f, "Sixel"),
                 #[cfg(feature = "osc1337")]
                 ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "Truecolor-Modus"),
@@ -553,6 +565,8 @@ impl Display for ColorMode {
                 ColorMode::Braille => write!(f, "Unicode-Braille-Modus"),
             },
             "es-es" => match self {
+                #[cfg(feature = "sixel")]
+                ColorMode::Sixel => write!(f, "Sixel"),
                 #[cfg(feature = "osc1337")]
                 ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "Modo de color verdadero"),
@@ -564,6 +578,8 @@ impl Display for ColorMode {
                 ColorMode::Braille => write!(f, "Modo braille Unicode"),
             },
             _ => match self {
+                #[cfg(feature = "sixel")]
+                ColorMode::Sixel => write!(f, "Sixel"),
                 #[cfg(feature = "osc1337")]
                 ColorMode::OSC1337 => write!(f, "OSC1337"),
                 ColorMode::TrueColorOnly => write!(f, "True Color Mode"),
@@ -589,6 +605,8 @@ impl ColorMode {
 
     pub const fn fppc(&self) -> (usize, usize) {
         match self {
+            #[cfg(feature = "sixel")]
+            ColorMode::Sixel => (0, 0),
             #[cfg(feature = "osc1337")]
             ColorMode::OSC1337 => (0, 0),
             ColorMode::TrueColorOnly => (1, 2),
@@ -751,6 +769,8 @@ pub fn escape_set_color(
         bg = None;
     };
     match mode {
+        #[cfg(feature = "sixel")]
+        ColorMode::Sixel => escape_set_color_rgb(wr, fg, bg),
         #[cfg(feature = "osc1337")]
         ColorMode::OSC1337 => escape_set_color_rgb(wr, fg, bg),
         ColorMode::TrueColorOnly => escape_set_color_rgb(wr, fg, bg),

@@ -1,6 +1,6 @@
 [package]
 name = "tvid"
-version = "0.1.0-beta.6"
+version = "0.1.0-beta.7"
 edition = "2024"
 authors = ["copi143 <copi143@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -14,6 +14,10 @@ readme = "README.md"
 [profile.dev]
 debug = true
 opt-level = 2
+lto = false
+debug-assertions = true
+overflow-checks = true
+codegen-units = 16
 
 [profile.release]
 debug = false

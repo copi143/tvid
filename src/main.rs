@@ -11,13 +11,14 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use data_classes::{ToNext as _, ToPrev as _};
-use ffmpeg_next as av;
 use parking_lot::Mutex;
 use std::env;
 use std::sync::atomic::Ordering;
 use std::sync::{LazyLock, OnceLock};
 use std::time::Instant;
 use tokio::runtime::Runtime;
+
+extern crate ffmpeg_next as av;
 
 use crate::escape::format_link;
 use crate::ffmpeg::seek_request_relative;

@@ -1,6 +1,5 @@
 use av::software::scaling::{context::Context as Scaler, flag::Flags};
 use av::util::frame::video::Video as VideoFrame;
-use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;

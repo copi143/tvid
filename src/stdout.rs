@@ -112,6 +112,8 @@ pub async fn output_main() {
         let instant = Instant::now();
         let succ = print_all(&buf).await;
         statistics::set_output_time(0, instant.elapsed());
+        statistics::set_output_bytes(0, buf.len());
+        statistics::increment_total_output_bytes(0, buf.len());
 
         // let terms = crate::ssh::TERMINALS
         //     .lock()

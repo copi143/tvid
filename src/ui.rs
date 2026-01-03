@@ -4,6 +4,7 @@ use std::cmp::min;
 use std::fs::FileType;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use unicode_width::UnicodeWidthChar;
 
 use crate::logging::get_messages;
@@ -548,16 +549,8 @@ fn render_help(wrap: &mut ContextWrapper) {
 
 pub static SHOW_OVERLAY_TEXT: AtomicBool = AtomicBool::new(true);
 
-fn render_overlay_text(wrap: &mut ContextWrapper) {
-    if wrap.cells_width < 8 || wrap.cells_height < 8 {
-        return; // 防炸
-    }
-
-    if !SHOW_OVERLAY_TEXT.load(Ordering::SeqCst) {
-        return;
-    }
-
-    let playing_time_str = if let Some(t) = wrap.played_time {
+fn format_time(time: Option<Duration>) -> String {
+    if let Some(t) = time {
         format!(
             "{:02}h {:02}m {:02}s {:03}ms",
             t.as_secs() / 3600,
@@ -567,7 +560,40 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
         )
     } else {
         "       N/A       ".to_string()
-    };
+    }
+}
+
+// fn format_delay(dur: Option<Duration>) -> String {
+//     let Some(dur) = dur else {
+//         return "   N/A   ".to_string();
+//     };
+// }
+
+fn format_bytes_count(count: usize) -> String {
+    match count {
+        _ if count >= (1 << 30) * 100 => format!("{:5.1} GiB", (count >> 20) as f64 / 1024.0),
+        _ if count >= (1 << 30) * 10 => format!("{:5.2} GiB", (count >> 20) as f64 / 1024.0),
+        _ if count >= (1 << 20) * 1000 => format!("{:5.3} GiB", (count >> 20) as f64 / 1024.0),
+        _ if count >= (1 << 20) * 100 => format!("{:5.1} MiB", (count >> 10) as f64 / 1024.0),
+        _ if count >= (1 << 20) * 10 => format!("{:5.2} MiB", (count >> 10) as f64 / 1024.0),
+        _ if count >= (1 << 10) * 1000 => format!("{:5.3} MiB", (count >> 10) as f64 / 1024.0),
+        _ if count >= (1 << 10) * 100 => format!("{:5.1} KiB", count as f64 / 1024.0),
+        _ if count >= (1 << 10) * 10 => format!("{:5.2} KiB", count as f64 / 1024.0),
+        _ if count >= 1000 => format!("{:5.3} KiB", count as f64 / 1024.0),
+        _ => format!("{count:3} Bytes"),
+    }
+}
+
+fn render_overlay_text(wrap: &mut ContextWrapper) {
+    if wrap.cells_width < 8 || wrap.cells_height < 8 {
+        return; // 防炸
+    }
+
+    if !SHOW_OVERLAY_TEXT.load(Ordering::SeqCst) {
+        return;
+    }
+
+    let playing_time_str = format_time(wrap.played_time);
 
     let audio_offset_str = if avsync::has_audio() {
         format!(
@@ -591,16 +617,7 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
         "   N/A   ".to_string()
     };
 
-    let app_time_str = {
-        let t = wrap.app_time;
-        format!(
-            "{:02}h {:02}m {:02}s {:03}ms",
-            t.as_secs() / 3600,
-            (t.as_secs() % 3600) / 60,
-            t.as_secs() % 60,
-            t.subsec_millis()
-        )
-    };
+    let app_time_str = format_time(Some(wrap.app_time));
 
     // 这边关闭 autowrap，防止 unifont 渲染出问题
     textbox(2, 1, wrap.cells_width - 4, wrap.cells_height - 2, false);
@@ -618,7 +635,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "转义字符串编码时间: {:.2?} (最近 60 次平均)", statistics.escape_string_encode_time.avg();
             "渲染时间: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
             "输出时间: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
+            "输出字节数: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
             "视频跳过帧数: {}", statistics.video_skipped_frames;
+            "总输出字节数: {}", format_bytes_count(statistics.total_output_bytes);
             "颜色模式: {}", wrap.color_mode;
             "绿幕模式: {}", wrap.chroma_mode;
         ),
@@ -631,7 +650,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "轉義字串編碼時間: {:.2?} (最近 60 次平均)", statistics.escape_string_encode_time.avg();
             "渲染時間: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
             "輸出時間: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
+            "輸出位元組數: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
             "視頻跳過幀數: {}", statistics.video_skipped_frames;
+            "總輸出位元組數: {}", format_bytes_count(statistics.total_output_bytes);
             "顏色模式: {}", wrap.color_mode;
             "綠幕模式: {}", wrap.chroma_mode;
         ),
@@ -644,7 +665,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "エスケープ文字列エンコード時間: {:.2?} (直近 60 回の平均)", statistics.escape_string_encode_time.avg();
             "レンダリング時間: {:.2?} (直近 60 回の平均)", statistics.render_time.avg();
             "出力時間: {:.2?} (直近 60 回の平均)", statistics.output_time.avg();
+            "出力バイト数: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
             "ビデオスキップフレーム数: {}", statistics.video_skipped_frames;
+            "総出力バイト数: {}", format_bytes_count(statistics.total_output_bytes);
             "カラーモード: {}", wrap.color_mode;
             "クロマモード: {}", wrap.chroma_mode;
         ),
@@ -657,7 +680,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Temps d'encodage de la chaîne d'échappement: {:.2?} (moyenne des 60 dernières)", statistics.escape_string_encode_time.avg();
             "Temps de rendu: {:.2?} (moyenne des 60 dernières)", statistics.render_time.avg();
             "Temps de sortie: {:.2?} (moyenne des 60 dernières)", statistics.output_time.avg();
+            "Nombre de bytes de sortie: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
             "Images vidéo sautées: {}", statistics.video_skipped_frames;
+            "Nombre total de bytes de sortie: {}", format_bytes_count(statistics.total_output_bytes);
             "Mode couleur: {}", wrap.color_mode;
             "Mode chroma: {}", wrap.chroma_mode;
         ),
@@ -670,7 +695,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Escape-String-Kodierungszeit: {:.2?} (Durchschnitt der letzten 60)", statistics.escape_string_encode_time.avg();
             "Render-Zeit: {:.2?} (Durchschnitt der letzten 60)", statistics.render_time.avg();
             "Ausgabezeit: {:.2?} (Durchschnitt der letzten 60)", statistics.output_time.avg();
+            "Ausgabe-Bytes: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
             "Übersprungene Videoframes: {}", statistics.video_skipped_frames;
+            "Gesamt-Ausgabe-Bytes: {}", format_bytes_count(statistics.total_output_bytes);
             "Farbmodus: {}", wrap.color_mode;
             "Chroma-Modus: {}", wrap.chroma_mode;
         ),
@@ -683,7 +710,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Tiempo de codificación de cadena de escape: {:.2?} (promedio de los últimos 60)", statistics.escape_string_encode_time.avg();
             "Tiempo de renderizado: {:.2?} (promedio de los últimos 60)", statistics.render_time.avg();
             "Tiempo de salida: {:.2?} (promedio de los últimos 60)", statistics.output_time.avg();
+            "Bytes de salida: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
             "Fotogramas de video omitidos: {}", statistics.video_skipped_frames;
+            "Total de bytes de salida: {}", format_bytes_count(statistics.total_output_bytes);
             "Modo de color: {}", wrap.color_mode;
             "Modo de croma: {}", wrap.chroma_mode;
         ),
@@ -696,7 +725,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Escape String Encode Time: {:.2?} (avg over last 60)", statistics.escape_string_encode_time.avg();
             "Render Time: {:.2?} (avg over last 60)", statistics.render_time.avg();
             "Output Time: {:.2?} (avg over last 60)", statistics.output_time.avg();
+            "Output Bytes: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
             "Video Skipped Frames: {}", statistics.video_skipped_frames;
+            "Total Output Bytes: {}", format_bytes_count(statistics.total_output_bytes);
             "Color Mode: {}", wrap.color_mode;
             "Chroma Mode: {}", wrap.chroma_mode;
         ),

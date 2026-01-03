@@ -4,7 +4,6 @@ use av::util::frame::Audio as AudioFrame;
 use av::{ChannelLayout, software::resampling::context::Context as Resampler};
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
 use std::mem::MaybeUninit;

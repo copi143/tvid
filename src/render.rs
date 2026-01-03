@@ -1,5 +1,5 @@
 use av::util::frame::video::Video as VideoFrame;
-use ffmpeg_next as av;
+use core::panic;
 use parking_lot::{Condvar, Mutex};
 use std::io::Write as _;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use crate::{avsync, util::*};
 
 pub struct RenderContext {
     /// 是否强制下一帧全屏刷新
-    pub force_flush_next: bool,
+    force_flush_next: bool,
 
     /// 视频帧宽度（像素）
     pub frame_width: usize,
@@ -78,6 +78,8 @@ pub struct RenderContext {
 /// 渲染回调的包装结构
 #[allow(unused)]
 pub struct ContextWrapper<'frame, 'cells> {
+    /// 是否先清除再渲染
+    pub clear_before_render: bool,
     /// 是否强制下一帧全屏刷新
     pub force_flush_next: bool,
 
@@ -219,8 +221,16 @@ impl RenderContext {
 
         if self.cells_width == xchars && self.cells_height == ychars {
             if self.pixels_width == xpixels && self.pixels_height == ypixels {
-                if Some((self.video_origin_width, self.video_origin_height)) == xvideo.zip(yvideo) {
-                    return;
+                if xvideo.is_none() && yvideo.is_none() {
+                    if !self.force_flush_next {
+                        return;
+                    }
+                } else if let Some((xvideo, yvideo)) = xvideo.zip(yvideo) {
+                    if self.video_origin_width == xvideo && self.video_origin_height == yvideo {
+                        return;
+                    }
+                } else {
+                    panic!("Invalid video size update");
                 }
             }
         }
@@ -340,7 +350,8 @@ impl RenderContext {
         let (app_time, delta_time) = calc_app_time();
 
         Some(ContextWrapper {
-            force_flush_next: self.force_flush_next,
+            clear_before_render: self.force_flush_next,
+            force_flush_next: std::mem::take(&mut self.force_flush_next),
             frame,
             frame_width,
             frame_height,
@@ -419,7 +430,7 @@ fn render(frame: &[Color], width: usize, height: usize, pitch: usize) -> bool {
 
     let pf = pending_frames();
     if pf > 3 {
-        error_l10n!(
+        warning_l10n!(
             "zh-cn" => "待处理帧过多: {pf}";
             "zh-tw" => "待處理幀過多: {pf}";
             "ja-jp" => "保留フレームが多すぎます: {pf}";
@@ -463,6 +474,8 @@ async fn print_diff_line(
     color_mode: ColorMode,
 ) -> Vec<u8> {
     let default_char = match color_mode {
+        #[cfg(feature = "sixel")]
+        ColorMode::Sixel => ' ',
         #[cfg(feature = "osc1337")]
         ColorMode::OSC1337 => ' ',
         ColorMode::TrueColorOnly => '▄',
@@ -516,12 +529,22 @@ async fn print_diff_inner(
 ) {
     let instant = Instant::now();
 
+    let mut text_force_flush = wrap.force_flush_next;
+    #[cfg(feature = "sixel")]
+    if wrap.color_mode == ColorMode::Sixel {
+        text_force_flush = true; // 由于图像会覆盖文本
+    }
+    #[cfg(feature = "osc1337")]
+    if wrap.color_mode == ColorMode::OSC1337 {
+        text_force_flush = true; // 由于图像会覆盖文本
+    }
+
     let result = (cells.into_iter().zip(lasts.into_iter()))
         .map(|(cell, last)| {
             tokio::spawn(print_diff_line(
                 cell,
                 last,
-                wrap.force_flush_next,
+                text_force_flush,
                 wrap.color_mode,
             ))
         })
@@ -530,6 +553,31 @@ async fn print_diff_inner(
         .await;
 
     let mut buf = Vec::with_capacity(65536);
+
+    if wrap.clear_before_render {
+        buf.extend_from_slice(b"\x1b[m\x1b[H\x1b[2J");
+    }
+
+    #[cfg(feature = "sixel")]
+    if wrap.color_mode == ColorMode::Sixel {
+        // TODO: Sixel 渲染
+        write!(
+            buf,
+            "\x1b[{};{}H",
+            wrap.padding_top + 1,
+            wrap.padding_left + 1,
+        )
+        .unwrap();
+        crate::escape::format_sixel(
+            &mut buf,
+            wrap.frame,
+            wrap.frame_width,
+            wrap.frame_height,
+            wrap.frame_pitch,
+            wrap.video_cells_width,
+            wrap.video_cells_height,
+        );
+    }
 
     #[cfg(feature = "osc1337")]
     if wrap.color_mode == ColorMode::OSC1337 {
@@ -863,6 +911,8 @@ fn render_video_2x4(wrap: &mut ContextWrapper) {
 
 pub fn render_video(wrap: &mut ContextWrapper) {
     match wrap.color_mode {
+        #[cfg(feature = "sixel")]
+        ColorMode::Sixel => (),
         #[cfg(feature = "osc1337")]
         ColorMode::OSC1337 => (),
         ColorMode::TrueColorOnly => render_video_1x2(wrap),

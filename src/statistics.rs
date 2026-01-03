@@ -85,7 +85,9 @@ pub struct Statistics {
     pub render_time: MaxSizedQueue<Duration, 60>,
     pub escape_string_encode_time: MaxSizedQueue<Duration, 60>,
     pub output_time: MaxSizedQueue<Duration, 60>,
+    pub output_bytes: MaxSizedQueue<usize, 60>,
     pub video_skipped_frames: usize,
+    pub total_output_bytes: usize,
 }
 
 impl Statistics {
@@ -94,7 +96,9 @@ impl Statistics {
             render_time: MaxSizedQueue::new(),
             escape_string_encode_time: MaxSizedQueue::new(),
             output_time: MaxSizedQueue::new(),
+            output_bytes: MaxSizedQueue::new(),
             video_skipped_frames: 0,
+            total_output_bytes: 0,
         }
     }
 }
@@ -121,6 +125,14 @@ pub fn set_output_time(id: i32, duration: Duration) {
     get(id).lock().output_time.push_back(duration);
 }
 
+pub fn set_output_bytes(id: i32, num: usize) {
+    get(id).lock().output_bytes.push_back(num);
+}
+
 pub fn increment_video_skipped_frames(id: i32, num: usize) {
     get(id).lock().video_skipped_frames += num;
+}
+
+pub fn increment_total_output_bytes(id: i32, num: usize) {
+    get(id).lock().total_output_bytes += num;
 }

@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 use av::codec::context::Context as AVCCtx;
+use av::decoder::{Audio as AudioDecoder, Subtitle as SubtitleDecoder, Video as VideoDecoder};
 use av::ffi::{AV_TIME_BASE, av_read_frame, av_seek_frame};
 use av::format::context::Input;
 use av::packet::Mut as _;
 use av::util::frame::{Audio as AudioFrame, video::Video as VideoFrame};
 use av::{Packet, Subtitle};
-use ffmpeg_next as av;
 use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
@@ -380,8 +380,8 @@ fn do_seek(
     ictx: &mut Input,
     abs: bool,
     off: f64,
-    video_queue: &mut VecDeque<ffmpeg_next::Packet>,
-    audio_queue: &mut VecDeque<ffmpeg_next::Packet>,
+    video_queue: &mut VecDeque<Packet>,
+    audio_queue: &mut VecDeque<Packet>,
 ) -> bool {
     let now = || avsync::played_time_or_zero().as_secs_f64();
     let ts = (if abs { off } else { now() + off } * AV_TIME_BASE as f64) as i64;
@@ -413,8 +413,8 @@ fn do_seek(
 
 #[cfg(feature = "video")]
 fn decode_video(
-    video_decoder: &mut Option<ffmpeg_next::decoder::Video>,
-    video_queue: &mut VecDeque<ffmpeg_next::Packet>,
+    video_decoder: &mut Option<VideoDecoder>,
+    video_queue: &mut VecDeque<Packet>,
     video_pts: &mut Option<i64>,
 ) {
     if VIDEO_FRAME.lock().is_some() {
@@ -464,8 +464,8 @@ fn decode_video(
 
 #[cfg(feature = "audio")]
 fn decode_audio(
-    audio_decoder: &mut Option<ffmpeg_next::decoder::Audio>,
-    audio_queue: &mut VecDeque<ffmpeg_next::Packet>,
+    audio_decoder: &mut Option<AudioDecoder>,
+    audio_queue: &mut VecDeque<Packet>,
     audio_pts: &mut Option<i64>,
 ) {
     if AUDIO_FRAME.lock().is_some() {
@@ -514,10 +514,7 @@ fn decode_audio(
 }
 
 #[cfg(feature = "subtitle")]
-fn decode_subtitle(
-    subtitle_decoder: &mut Option<ffmpeg_next::decoder::Subtitle>,
-    packet: ffmpeg_next::Packet,
-) {
+fn decode_subtitle(subtitle_decoder: &mut Option<SubtitleDecoder>, packet: Packet) {
     let Some(subtitle_decoder) = subtitle_decoder.as_mut() else {
         return;
     };
