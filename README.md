@@ -17,6 +17,9 @@
 ## Features
 
 - **Play almost any format** supported by FFmpeg
+- **Audio output and subtitle rendering** (ASS / text)
+- **Multiple render modes**: true color, 256-color, grayscale, ASCII art, Unicode braille
+- **Optional image protocols**: Sixel and OSC 1337 (iTerm2-style)
 - **Terminal UI overlay**: progress bar, messages and on‑screen help
 - **Playlist support**:
   - pass multiple files on the command line
@@ -24,7 +27,7 @@
   - optional playlist side panel
 - **Mouse & keyboard control** for seeking and navigation
 - **Config file & default playlist** under `~/.config/tvid/`
-- Uses **Unifont** for better glyph coverage in the overlay UI
+- **Localized UI** (system locale) and **Unifont** fallback for glyph coverage
 
 ## Requirements
 
@@ -45,6 +48,14 @@ You can install `tvid` directly using Cargo:
 cargo install tvid
 ```
 
+Optional features are enabled at build time. Defaults are `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+
+```sh
+cargo install tvid --features sixel,osc1337
+# or disable defaults and pick a minimal set
+cargo install tvid --no-default-features --features ffmpeg,video
+```
+
 ### Build It Manually
 
 1. Clone the repository:
@@ -58,6 +69,14 @@ cargo install tvid
 
    ```sh
    cargo build --release
+   ```
+
+   With optional features:
+
+   ```sh
+   cargo build --release --features sixel,osc1337
+   # or disable defaults and pick a minimal set
+   cargo build --release --no-default-features --features ffmpeg,video
    ```
 
 3. Run the player:

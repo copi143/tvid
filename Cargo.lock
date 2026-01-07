@@ -2770,7 +2770,7 @@ checksum = "ab16f14aed21ee8bfd8ec22513f7287cd4a91aa92e44edfe2c17ddd004e92607"
 
 [[package]]
 name = "tvid"
-version = "0.1.0-beta.7"
+version = "0.1.0-beta.8"
 dependencies = [
  "anyhow",
  "base64",

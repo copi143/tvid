@@ -17,6 +17,9 @@
 ## Características
 
 - **Reproduce casi cualquier formato** compatible con FFmpeg
+- **Salida de audio y renderizado de subtítulos** (ASS / texto)
+- **Varios modos de renderizado**: color verdadero, 256 colores, escala de grises, arte ASCII, braille Unicode
+- **Protocolos de imagen opcionales**: Sixel y OSC 1337 (estilo iTerm2)
 - **Interfaz superpuesta en el terminal**: barra de progreso, mensajes y ayuda en pantalla
 - **Soporte de lista de reproducción**:
   - pasar varios archivos por la línea de comandos
@@ -24,7 +27,7 @@
   - panel lateral de lista de reproducción opcional
 - **Control con ratón y teclado** para buscar y navegar
 - **Archivo de configuración y lista de reproducción por defecto** en `~/.config/tvid/`
-- Usa **Unifont** para una mejor cobertura de glifos en la interfaz
+- **Interfaz localizada** (según la configuración regional del sistema) y **Unifont** como respaldo de glifos
 
 ## Requisitos
 
@@ -48,6 +51,14 @@
 
    ```sh
    cargo build --release
+   ```
+
+   Las funciones opcionales se habilitan al compilar. Por defecto: `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+
+   ```sh
+   cargo build --release --features sixel,osc1337
+   # o desactivar las funciones por defecto y elegir un mínimo
+   cargo build --release --no-default-features --features ffmpeg,video
    ```
 
 3. Ejecuta el reproductor:

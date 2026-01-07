@@ -17,6 +17,9 @@
 ## 特徴
 
 - **FFmpeg がサポートする多くの形式を再生可能**
+- **音声出力と字幕描画**（ASS / テキスト）
+- **複数の描画モード**：フルカラー、256 色、グレースケール、ASCII アート、Unicode 点字
+- **任意の画像プロトコル**：Sixel と OSC 1337（iTerm2 風）
 - **ターミナルオーバーレイ UI**：進捗バー、メッセージ、ヘルプパネルなど
 - **プレイリスト機能**：
   - コマンドライン引数で複数ファイルを指定可能
@@ -24,7 +27,7 @@
   - オプションのプレイリストサイドバー
 - **キーボード / マウス操作** によるシークや選択
 - `~/.config/tvid/` 配下の **設定ファイルとデフォルトプレイリスト** を利用
-- UI での文字表示のために **Unifont** を利用
+- **ローカライズされた UI**（システムのロケール）と **Unifont** によるグリフ補完
 
 ## 必要環境
 
@@ -46,6 +49,14 @@
 
    ```sh
    cargo build --release
+   ```
+
+   オプション機能はビルド時に有効化します。既定は `ffmpeg`、`i18n`、`config`、`audio`、`video`、`subtitle`、`unicode`、`unifont` です。
+
+   ```sh
+   cargo build --release --features sixel,osc1337
+   # 既定機能を無効化して最小構成にする場合
+   cargo build --release --no-default-features --features ffmpeg,video
    ```
 
 3. プレーヤーの実行：

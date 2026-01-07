@@ -17,6 +17,9 @@
 ## Fonctionnalités
 
 - **Lecture de presque tous les formats** pris en charge par FFmpeg
+- **Sortie audio et rendu des sous-titres** (ASS / texte)
+- **Plusieurs modes de rendu** : couleurs vraies, palette 256, niveaux de gris, art ASCII, braille Unicode
+- **Protocoles d'image optionnels** : Sixel et OSC 1337 (style iTerm2)
 - **Interface en surimpression dans le terminal** : barre de progression, messages et aide à l’écran
 - **Support de playlist** :
   - passer plusieurs fichiers en ligne de commande
@@ -24,7 +27,7 @@
   - panneau latéral de playlist optionnel
 - **Contrôle souris & clavier** pour le déplacement dans la vidéo et la navigation
 - **Fichier de configuration & playlist par défaut** sous `~/.config/tvid/`
-- Utilise **Unifont** pour une meilleure couverture de glyphes dans l’UI
+- **Interface localisée** (locale système) et **Unifont** en secours pour la couverture des glyphes
 
 ## Prérequis
 
@@ -48,6 +51,14 @@
 
    ```sh
    cargo build --release
+   ```
+
+   Les fonctionnalités optionnelles s’activent à la compilation. Par défaut : `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+
+   ```sh
+   cargo build --release --features sixel,osc1337
+   # ou désactiver les fonctionnalités par défaut et choisir un minimum
+   cargo build --release --no-default-features --features ffmpeg,video
    ```
 
 3. Lancer le lecteur :

@@ -17,6 +17,9 @@
 ## Funktionen
 
 - **Wiedergabe fast aller Formate**, die von FFmpeg unterstützt werden
+- **Audioausgabe und Untertitel-Rendering** (ASS / Text)
+- **Mehrere Render-Modi**: True Color, 256 Farben, Graustufen, ASCII-Kunst, Unicode-Braille
+- **Optionale Bildprotokolle**: Sixel und OSC 1337 (iTerm2-ähnlich)
 - **Terminal-Overlay-UI**: Fortschrittsleiste, Meldungen und Hilfe auf dem Bildschirm
 - **Playlist-Unterstützung**:
   - mehrere Dateien über die Kommandozeile übergeben
@@ -24,7 +27,7 @@
   - optionales Playlist-Seitenpanel
 - **Maus- & Tastatursteuerung** für Sprünge und Navigation
 - **Konfigurationsdatei & Standard-Playlist** unter `~/.config/tvid/`
-- Verwendet **Unifont** für eine bessere Glyphenabdeckung in der Overlay-UI
+- **Lokalisierte UI** (Systemsprache) und **Unifont**-Fallback für Glyphenabdeckung
 
 ## Voraussetzungen
 
@@ -48,6 +51,14 @@
 
    ```sh
    cargo build --release
+   ```
+
+   Optionale Features werden beim Build aktiviert. Standard sind `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+
+   ```sh
+   cargo build --release --features sixel,osc1337
+   # oder Standard-Features deaktivieren und ein Minimum wählen
+   cargo build --release --no-default-features --features ffmpeg,video
    ```
 
 3. Player starten:

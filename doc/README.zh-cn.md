@@ -17,6 +17,9 @@
 ## 功能概览
 
 - **几乎支持所有 FFmpeg 能解码的格式**
+- **音频输出与字幕渲染**（ASS / 纯文本）
+- **多种渲染模式**：真彩色、256 色、灰度、ASCII 艺术、Unicode 盲文
+- **可选图像协议**：Sixel 与 OSC 1337（iTerm2 风格）
 - **终端覆盖 UI**：底部进度条、消息提示、帮助面板等
 - **播放列表支持**：
   - 命令行一次传入多个文件
@@ -24,7 +27,7 @@
   - 可选播放列表侧边栏
 - **键盘 + 鼠标控制**，包括快进 / 后退、切歌、拖动进度条等
 - **配置文件和默认播放列表**：位于 `~/.config/tvid/`
-- 使用 **Unifont** 作为 UI 字体源，以获得更好的字符覆盖率
+- **界面多语言**（跟随系统 locale）并通过 **Unifont** 作为字形兜底
 
 ## 环境依赖
 
@@ -48,6 +51,14 @@
 
    ```sh
    cargo build --release
+   ```
+
+   可选功能在构建时启用，默认包含 `ffmpeg`、`i18n`、`config`、`audio`、`video`、`subtitle`、`unicode`、`unifont`。
+
+   ```sh
+   cargo build --release --features sixel,osc1337
+   # 或禁用默认功能并选择最小集
+   cargo build --release --no-default-features --features ffmpeg,video
    ```
 
 3. 运行播放器：
