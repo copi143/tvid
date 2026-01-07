@@ -5,6 +5,7 @@ use std::io::Write as _;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+#[cfg(feature = "unicode")]
 use unicode_width::UnicodeWidthChar;
 
 use crate::playlist::PLAYLIST;
@@ -495,7 +496,10 @@ async fn print_diff_line(
             continue;
         }
 
+        #[cfg(feature = "unicode")]
         let cw = cell.c.map_or(1, |c| c.width().unwrap_or(1).max(1));
+        #[cfg(not(feature = "unicode"))]
+        let cw = 1;
         if !force_flush && cell == last && cw == 1 {
             skip_count += 1;
             continue;
@@ -529,6 +533,7 @@ async fn print_diff_inner(
 ) {
     let instant = Instant::now();
 
+    #[allow(unused_mut)]
     let mut text_force_flush = wrap.force_flush_next;
     #[cfg(feature = "sixel")]
     if wrap.color_mode == ColorMode::Sixel {

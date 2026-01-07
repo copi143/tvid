@@ -1,6 +1,7 @@
 use data_classes::derive::*;
 use parking_lot::Mutex;
 use std::{collections::VecDeque, time::Duration};
+#[cfg(feature = "unicode")]
 use unicode_width::UnicodeWidthChar;
 
 use crate::avsync::played_time_or_zero;
@@ -296,10 +297,13 @@ pub fn render_subtitle(wrap: &mut ContextWrapper) {
         for sub in subtitles {
             // 解析内联 ASS 颜色标签，得到每个字符以及可选的前景色
             let spans = parse_ass_color_tags(&sub.text);
+            #[cfg(feature = "unicode")]
             let n: usize = spans
                 .iter()
                 .map(|(ch, _)| ch.width().unwrap_or(1).max(1))
                 .sum();
+            #[cfg(not(feature = "unicode"))]
+            let n: usize = spans.len();
             let mut i = 0;
             let mut x = (wrap.cells_width - n) / 2;
             for (ch, span_color) in spans {
@@ -314,7 +318,10 @@ pub fn render_subtitle(wrap: &mut ContextWrapper) {
                 };
                 let k_out = (k_out / 500.0).clamp(0.0, 1.0);
                 let k = k_in * (1.0 - k_out);
+                #[cfg(feature = "unicode")]
                 let cw = ch.width().unwrap_or(1).max(1);
+                #[cfg(not(feature = "unicode"))]
+                let cw = 1;
                 if x < wrap.padding_left || x + cw > wrap.cells_width - wrap.padding_right {
                     break;
                 }
@@ -331,6 +338,7 @@ pub fn render_subtitle(wrap: &mut ContextWrapper) {
                     Color::mix(base_fg, bg, k)
                 };
                 wrap.cells[p] = Cell::new(ch, fg, bg);
+                #[cfg(feature = "unicode")]
                 for i in 1..cw {
                     wrap.cells[p + i].c = Some('\0');
                 }

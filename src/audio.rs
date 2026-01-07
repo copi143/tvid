@@ -113,7 +113,17 @@ static CPAL_BUFFER_LEN: AtomicUsize = AtomicUsize::new(0);
 /// 当前音频缓冲区长度（采样点数）
 static AUDIO_BUFFER_LEN: AtomicUsize = AtomicUsize::new(0);
 
+static mut VOLUME: f32 = 0.5;
 static mut VOLUME_K: f32 = 0.25;
+
+pub fn get_volume() -> f32 {
+    unsafe { VOLUME }
+}
+
+pub fn adjust_volume(delta: f32) {
+    unsafe { VOLUME = (VOLUME + delta).clamp(0.0, 2.0) };
+    unsafe { VOLUME_K = VOLUME * VOLUME };
+}
 
 macro_rules! data_callback {
     ($channels:expr, $ty:ty, $default:expr, $expr:expr) => {

@@ -211,10 +211,23 @@ pub fn decode_main(path: &str) -> Result<bool> {
     if let (Some(video_timebase), Some(video_rate)) = (video_timebase, video_rate) {
         VIDEO_TIME_BASE.lock().replace(video_timebase);
         #[cfg(feature = "video")]
-        VIDEO_FRAMETIME.store(
-            video_rate.1 as u64 * 1_000_000 / video_rate.0 as u64,
-            Ordering::SeqCst,
-        );
+        if video_rate.0 != 0 {
+            VIDEO_FRAMETIME.store(
+                video_rate.1 as u64 * 1_000_000 / video_rate.0 as u64,
+                Ordering::SeqCst,
+            );
+        } else {
+            error_l10n!(
+                "zh-cn" => "视频流帧率无效";
+                "zh-tw" => "視訊串流幀率無效";
+                "ja-jp" => "ビデオストリームのフレームレートが無効です";
+                "fr-fr" => "Le taux de trame du flux vidéo est invalide";
+                "de-de" => "Ungültige Bildrate im Videostream";
+                "es-es" => "La tasa de fotogramas de la secuencia de vídeo no es válida";
+                _       => "Video stream frame rate is invalid";
+            );
+            return Ok(false);
+        }
     }
 
     if let Some(audio_timebase) = audio_timebase {
@@ -234,10 +247,15 @@ pub fn decode_main(path: &str) -> Result<bool> {
         return Ok(true);
     }
 
-    let duration = Duration::new(
-        ictx.duration() as u64 / AV_TIME_BASE as u64,
-        (ictx.duration() as u64 % AV_TIME_BASE as u64 * 1_000_000_000 / AV_TIME_BASE as u64) as u32,
-    );
+    let duration = ictx.duration();
+    let duration = if duration > 0 {
+        Duration::new(
+            duration as u64 / AV_TIME_BASE as u64,
+            (duration as u64 % AV_TIME_BASE as u64 * 1_000_000_000 / AV_TIME_BASE as u64) as u32,
+        )
+    } else {
+        Duration::ZERO
+    };
 
     avsync::reset(duration, audio_decoder.is_some(), video_decoder.is_some());
 

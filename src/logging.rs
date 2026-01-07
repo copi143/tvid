@@ -90,18 +90,18 @@ pub fn print_messages() -> Result<()> {
     let mut text = String::new();
     for err in lock.queue.iter() {
         let datetime = DateTime::<Local>::from(err.ts).format("%Y-%m-%d %H:%M:%S");
+        let lv = err.lv.level_color();
         write!(text, "[{}] {}", datetime, err.lv.level_str())?;
         if let Some(fg) = err.fg {
             write!(text, "\x1b[38;2;{};{};{}m", fg.r, fg.g, fg.b)?;
+        } else {
+            write!(text, "\x1b[38;2;{};{};{}m", lv.r, lv.g, lv.b)?;
         }
         if let Some(bg) = err.bg {
             write!(text, "\x1b[48;2;{};{};{}m", bg.r, bg.g, bg.b)?;
         }
         write!(text, "{}", err.msg)?;
-        if err.fg.is_some() || err.bg.is_some() {
-            write!(text, "\x1b[0m")?;
-        }
-        text.push('\n');
+        write!(text, "\x1b[0m\n")?;
     }
     let bytes = text.as_bytes();
     if stdout::print(bytes) == Some(bytes.len()) {

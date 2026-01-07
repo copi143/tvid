@@ -153,7 +153,11 @@ pub fn reset(duration: Duration, has_audio: bool, has_video: bool) {
 }
 
 pub fn playback_progress() -> f64 {
-    played_time_or_zero().as_secs_f64() / total_duration().as_secs_f64()
+    let total = total_duration();
+    if total.is_zero() {
+        return 0.0;
+    }
+    played_time_or_zero().as_secs_f64() / total.as_secs_f64()
 }
 
 pub fn total_duration() -> Duration {

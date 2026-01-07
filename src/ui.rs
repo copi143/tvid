@@ -5,8 +5,11 @@ use std::fs::FileType;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+#[cfg(feature = "unicode")]
 use unicode_width::UnicodeWidthChar;
 
+#[cfg(feature = "audio")]
+use crate::audio;
 use crate::logging::get_messages;
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
 use crate::render::ContextWrapper;
@@ -19,9 +22,11 @@ use crate::{ffmpeg, term};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+#[cfg(feature = "unifont")]
 const UNIFONT: *const [u8; 32] =
     include_bytes!("../unifont-17.0.01.bin").as_ptr() as *const [u8; 32];
 
+#[cfg(feature = "unifont")]
 pub fn unifont_get(ch: char) -> &'static [u8; 32] {
     let ch = ch as u32;
     if ch < 65536 {
@@ -83,18 +88,35 @@ pub fn mask(
                     wrap.cells[p].bg = Color::halfhalf(wrap.cells[p].fg, wrap.cells[p].bg)
                 }
                 wrap.cells[p].fg = border;
-                wrap.cells[p].c = if i == 0 && j == 0 {
-                    Some('┌')
-                } else if i == w - 1 && j == 0 {
-                    Some('┐')
-                } else if i == 0 && j == h - 1 {
-                    Some('└')
-                } else if i == w - 1 && j == h - 1 {
-                    Some('┘')
-                } else if i == 0 || i == w - 1 {
-                    Some('│')
-                } else {
-                    Some('─')
+                wrap.cells[p].c = {
+                    #[cfg(feature = "unicode")]
+                    if i == 0 && j == 0 {
+                        Some('┌')
+                    } else if i == w - 1 && j == 0 {
+                        Some('┐')
+                    } else if i == 0 && j == h - 1 {
+                        Some('└')
+                    } else if i == w - 1 && j == h - 1 {
+                        Some('┘')
+                    } else if i == 0 || i == w - 1 {
+                        Some('│')
+                    } else {
+                        Some('─')
+                    }
+                    #[cfg(not(feature = "unicode"))]
+                    if i == 0 && j == 0 {
+                        Some('+')
+                    } else if i == w - 1 && j == 0 {
+                        Some('+')
+                    } else if i == 0 && j == h - 1 {
+                        Some('+')
+                    } else if i == w - 1 && j == h - 1 {
+                        Some('+')
+                    } else if i == 0 || i == w - 1 {
+                        Some('|')
+                    } else {
+                        Some('-')
+                    }
                 };
             }
         }
@@ -130,12 +152,21 @@ pub fn putat(
     let mut cy = y; // 当前光标位置
     let mut pn = 0; // 实际打印的字符数
     for ch in text.chars() {
+        #[cfg(feature = "unicode")]
         let cw = ch.width().unwrap_or(0) as isize;
         // 跳过不可见字符
+        #[cfg(feature = "unicode")]
         if cw == 0 {
             pn += 1; // 假装是打印了
             continue;
         }
+        #[cfg(not(feature = "unicode"))]
+        if ch == '\0' || ch == '\n' || ch == '\r' {
+            pn += 1; // 假装是打印了
+            continue;
+        }
+        #[cfg(not(feature = "unicode"))]
+        let cw = 1;
         // 检查是否超出参数指定的区域
         if cy >= sy + h as isize {
             break;
@@ -201,6 +232,7 @@ pub fn putat(
         });
         wrap.cells[p] = Cell::new(ch, fg, bg);
         // 直接设置为占位符应该是没问题的，颜色应该不需要去动
+        #[cfg(feature = "unicode")]
         for i in 1..cw as usize {
             wrap.cells[p + i].c = Some('\0');
         }
@@ -263,8 +295,11 @@ macro_rules! putln {
 }
 
 macro_rules! putlns {
-    ($wrap:expr; $($fmt:expr $(, $args:expr)*);+ $(;)?) => {{
+    ($wrap:expr; $($(#[$meta:meta])* $fmt:literal $(, $args:expr)*);+ $(;)?) => {{
         $(
+            $(
+                #[$meta]
+            )*
             putln!($wrap, $fmt $(, $args)*);
         )+
     }};
@@ -272,8 +307,10 @@ macro_rules! putlns {
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+#[cfg(feature = "unifont")]
 pub fn putufln(wrap: &mut ContextWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
     let mut data = [const { String::new() }; 4];
+    #[cfg(feature = "unicode")]
     for ch in text.chars() {
         let font = unifont_get(ch);
         let cw = ch.width().unwrap_or(0);
@@ -292,20 +329,34 @@ pub fn putufln(wrap: &mut ContextWrapper, text: &str, fg: Option<Color>, bg: Opt
             }
         }
     }
+    #[cfg(not(feature = "unicode"))]
+    for ch in text.chars() {
+        let font = unifont_get(ch);
+        for y in 0..4 {
+            for x in 0..8 {
+                data[y].push(char::from_u32(0x2800 + font[y * 8 + x] as u32).unwrap());
+            }
+        }
+    }
     for text in data {
         putln(wrap, &text, fg, bg);
     }
 }
 
+#[cfg(feature = "unifont")]
 macro_rules! putufln {
     ($wrap:expr, $($arg:tt)*) => {
         crate::ui::putufln($wrap, &format!($($arg)*), None, None)
     };
 }
 
+#[cfg(feature = "unifont")]
 macro_rules! putuflns {
-    ($wrap:expr; $($fmt:expr $(, $args:expr)*);+ $(;)?) => {{
+    ($wrap:expr; $($(#[$meta:meta])* $fmt:literal $(, $args:expr)*);+ $(;)?) => {{
         $(
+            $(
+                #[$meta]
+            )*
             putufln!($wrap, $fmt $(, $args)*);
         )+
     }};
@@ -320,31 +371,40 @@ fn font_large_enough(wrap: &ContextWrapper) -> bool {
 }
 
 pub fn putln_or_ufln(wrap: &mut ContextWrapper, text: &str, fg: Option<Color>, bg: Option<Color>) {
+    #[cfg(feature = "unifont")]
     if font_large_enough(wrap) {
         putln(wrap, text, fg, bg);
     } else {
         putufln(wrap, text, fg, bg);
     }
+    #[cfg(not(feature = "unifont"))]
+    putln(wrap, text, fg, bg);
 }
 
 macro_rules! putln_or_ufln {
-    ($wrap:expr, $($arg:tt)*) => {
+    ($wrap:expr, $($arg:tt)*) => {{
+        #[cfg(feature = "unifont")]
         if font_large_enough($wrap) {
             putln!($wrap, $($arg)*);
         } else {
             putufln!($wrap, $($arg)*);
         }
-    };
+        #[cfg(not(feature = "unifont"))]
+        putln!($wrap, $($arg)*);
+    }};
 }
 
 macro_rules! putlns_or_uflns {
-    ($wrap:expr; $($fmt:expr $(, $args:expr)*);+ $(;)?) => {
+    ($wrap:expr; $($(#[$meta:meta])* $fmt:literal $(, $args:expr)*);+ $(;)?) => {{
+        #[cfg(feature = "unifont")]
         if font_large_enough($wrap) {
-            putlns!($wrap; $($fmt $(, $args)*);+);
+            putlns!($wrap; $($(#[$meta])* $fmt $(, $args)*);+);
         } else {
-            putuflns!($wrap; $($fmt $(, $args)*);+);
+            putuflns!($wrap; $($(#[$meta])* $fmt $(, $args)*);+);
         }
-    };
+        #[cfg(not(feature = "unifont"))]
+        putlns!($wrap; $($(#[$meta])* $fmt $(, $args)*);+);
+    }};
 }
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -563,12 +623,6 @@ fn format_time(time: Option<Duration>) -> String {
     }
 }
 
-// fn format_delay(dur: Option<Duration>) -> String {
-//     let Some(dur) = dur else {
-//         return "   N/A   ".to_string();
-//     };
-// }
-
 fn format_bytes_count(count: usize) -> String {
     match count {
         _ if count >= (1 << 30) * 100 => format!("{:5.1} GiB", (count >> 20) as f64 / 1024.0),
@@ -640,6 +694,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "总输出字节数: {}", format_bytes_count(statistics.total_output_bytes);
             "颜色模式: {}", wrap.color_mode;
             "绿幕模式: {}", wrap.chroma_mode;
+            #[cfg(feature = "audio")]
+            "音量: {}%", (audio::get_volume() * 100.0).round() as usize;
         ),
         "zh-tw" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -655,6 +711,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "總輸出位元組數: {}", format_bytes_count(statistics.total_output_bytes);
             "顏色模式: {}", wrap.color_mode;
             "綠幕模式: {}", wrap.chroma_mode;
+            #[cfg(feature = "audio")]
+            "音量: {}%", (audio::get_volume() * 100.0).round() as usize;
         ),
         "ja-jp" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -670,6 +728,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "総出力バイト数: {}", format_bytes_count(statistics.total_output_bytes);
             "カラーモード: {}", wrap.color_mode;
             "クロマモード: {}", wrap.chroma_mode;
+            #[cfg(feature = "audio")]
+            "音量: {}%", (audio::get_volume() * 100.0).round() as usize;
         ),
         "fr-fr" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -685,6 +745,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Nombre total de bytes de sortie: {}", format_bytes_count(statistics.total_output_bytes);
             "Mode couleur: {}", wrap.color_mode;
             "Mode chroma: {}", wrap.chroma_mode;
+            #[cfg(feature = "audio")]
+            "Volume: {}%", (audio::get_volume() * 100.0).round() as usize;
         ),
         "de-de" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -700,6 +762,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Gesamt-Ausgabe-Bytes: {}", format_bytes_count(statistics.total_output_bytes);
             "Farbmodus: {}", wrap.color_mode;
             "Chroma-Modus: {}", wrap.chroma_mode;
+            #[cfg(feature = "audio")]
+            "Lautstärke: {}%", (audio::get_volume() * 100.0).round() as usize;
         ),
         "es-es" => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -715,6 +779,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Total de bytes de salida: {}", format_bytes_count(statistics.total_output_bytes);
             "Modo de color: {}", wrap.color_mode;
             "Modo de croma: {}", wrap.chroma_mode;
+            #[cfg(feature = "audio")]
+            "Volumen: {}%", (audio::get_volume() * 100.0).round() as usize;
         ),
         _ => putlns_or_uflns!(wrap;
             "tvid v{}", env!("CARGO_PKG_VERSION");
@@ -730,6 +796,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
             "Total Output Bytes: {}", format_bytes_count(statistics.total_output_bytes);
             "Color Mode: {}", wrap.color_mode;
             "Chroma Mode: {}", wrap.chroma_mode;
+            #[cfg(feature = "audio")]
+            "Volume: {}%", (audio::get_volume() * 100.0).round() as usize;
         ),
     }
 }
@@ -821,6 +889,7 @@ fn render_messages(wrap: &mut ContextWrapper) {
 
     let width = (wrap.cells_width * 4 / 10).max(50);
 
+    #[cfg(feature = "unifont")]
     if font_large_enough(wrap) {
         for (i, message) in get_messages().queue.iter().rev().enumerate() {
             let y = wrap.cells_height as isize - i as isize - 1;
@@ -843,6 +912,18 @@ fn render_messages(wrap: &mut ContextWrapper) {
             textbox_default_color(Some(TERM_DEFAULT_BG), None);
             putufln(wrap, &message.msg, message.fg, message.bg);
         }
+    }
+
+    #[cfg(not(feature = "unifont"))]
+    for (i, message) in get_messages().queue.iter().rev().enumerate() {
+        let y = wrap.cells_height as isize - i as isize - 1;
+        if y < 0 {
+            continue;
+        }
+        mask(wrap, 0, y, width, 1, None, message.lv.level_color(), 0.5);
+        textbox(0, y, width, 1, false);
+        textbox_default_color(Some(TERM_DEFAULT_BG), None);
+        putln(wrap, &message.msg, message.fg, message.bg);
     }
 }
 
@@ -1176,6 +1257,19 @@ fn render_quit_confirmation(wrap: &mut ContextWrapper) {
 
 pub fn register_input_callbacks() {
     register_input_callbacks_progressbar();
+
+    #[cfg(feature = "audio")]
+    stdin::register_mouse_callback(|_, m| match m.action {
+        MouseAction::ScrollUp => {
+            audio::adjust_volume(0.05);
+            true
+        }
+        MouseAction::ScrollDown => {
+            audio::adjust_volume(-0.05);
+            true
+        }
+        _ => false,
+    });
 
     stdin::register_keypress_callback(Key::Normal('h'), |_, _| {
         SHOW_HELP.store(!SHOW_HELP.load(Ordering::SeqCst), Ordering::SeqCst);
