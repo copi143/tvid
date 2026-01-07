@@ -27,7 +27,8 @@ unsafe extern "C" fn ffmpeg_log_callback(
     arg1: *mut std::ffi::c_void,
     arg2: std::ffi::c_int,
     arg3: *const std::ffi::c_char,
-    #[cfg(unix)] arg4: *mut ffmpeg_sys_next::__va_list_tag,
+    #[cfg(all(unix, not(target_os = "macos")))] arg4: *mut ffmpeg_sys_next::__va_list_tag,
+    #[cfg(target_os = "macos")] arg4: ffmpeg_sys_next::va_list,
     #[cfg(windows)] arg4: ffmpeg_sys_next::va_list,
 ) {
     if arg2 > ffmpeg_sys_next::AV_LOG_WARNING {

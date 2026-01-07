@@ -27,11 +27,11 @@ pub enum MessageLevel {
 impl MessageLevel {
     pub const fn level_str(&self) -> &'static str {
         match self {
-            MessageLevel::Debug => "[Debug] ",
-            MessageLevel::Info => "[Info ] ",
-            MessageLevel::Warn => "[Warn ] ",
-            MessageLevel::Error => "[Error] ",
-            MessageLevel::Fatal => "[Fatal] ",
+            MessageLevel::Debug => "[Debug]",
+            MessageLevel::Info => "[Info ]",
+            MessageLevel::Warn => "[Warn ]",
+            MessageLevel::Error => "[Error]",
+            MessageLevel::Fatal => "[Fatal]",
         }
     }
 
@@ -91,7 +91,16 @@ pub fn print_messages() -> Result<()> {
     for err in lock.queue.iter() {
         let datetime = DateTime::<Local>::from(err.ts).format("%Y-%m-%d %H:%M:%S");
         let lv = err.lv.level_color();
-        write!(text, "[{}] {}", datetime, err.lv.level_str())?;
+        text.write_char('[')?;
+        write!(text, "\x1b[38;2;{};{};{}m", lv.r, lv.g, lv.b)?;
+        write!(text, "{}", datetime)?;
+        write!(text, "\x1b[0m")?;
+        text.write_char(']')?;
+        text.write_char(' ')?;
+        write!(text, "\x1b[48;2;{};{};{}m", lv.r, lv.g, lv.b)?;
+        write!(text, "{}", err.lv.level_str())?;
+        write!(text, "\x1b[0m")?;
+        text.write_char(' ')?;
         if let Some(fg) = err.fg {
             write!(text, "\x1b[38;2;{};{};{}m", fg.r, fg.g, fg.b)?;
         } else {

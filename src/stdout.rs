@@ -17,8 +17,12 @@ pub fn print(bytes: &[u8]) -> Option<usize> {
     if res >= 0 {
         Some(res as usize)
     } else {
+        #[cfg(target_os = "macos")]
+        let errno = unsafe { *libc::__error() };
+        #[cfg(not(target_os = "macos"))]
+        let errno = unsafe { *libc::__errno_location() };
         #[allow(unreachable_patterns)]
-        match unsafe { *libc::__errno_location() } {
+        match errno {
             EAGAIN | EWOULDBLOCK => Some(0),
             _ => None,
         }
