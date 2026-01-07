@@ -1,4 +1,4 @@
-use data_classes::data;
+use data_classes::{deps::*, derive::*};
 use parking_lot::Mutex;
 use std::fmt::{Debug, Display};
 use std::io::Write;

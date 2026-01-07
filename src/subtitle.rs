@@ -1,4 +1,4 @@
-use data_classes::data;
+use data_classes::derive::*;
 use parking_lot::Mutex;
 use std::{collections::VecDeque, time::Duration};
 use unicode_width::UnicodeWidthChar;

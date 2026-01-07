@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use data_classes::data;
+use data_classes::derive::*;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::ffi::c_void;

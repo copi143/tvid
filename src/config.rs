@@ -1,5 +1,5 @@
 use anyhow::Result;
-use data_classes::data;
+use data_classes::derive::*;
 use parking_lot::Mutex;
 use std::fs::File;
 use std::io::{Read, Write};

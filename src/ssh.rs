@@ -9,10 +9,10 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::TryRecvError;
 
-use crate::TOKIO_RUNTIME;
 use crate::config;
 use crate::stdin::input_task;
 use crate::term::{TERM_EXIT_SEQ, TERM_INIT_SEQ, Winsize};
+use crate::{TOKIO_RUNTIME, render::RENDER_CONTEXT};
 
 pub static TERMINALS: Mutex<BTreeMap<i32, Arc<Terminal>>> = Mutex::new(BTreeMap::new());
 
@@ -49,6 +49,7 @@ impl Terminal {
             }),
         });
         TERMINALS.lock().insert(id, term.clone());
+        RENDER_CONTEXT.lock().force_flush_next();
         term
     }
 

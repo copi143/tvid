@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Local};
-use data_classes::data;
+use data_classes::derive::*;
 use parking_lot::{Mutex, MutexGuard};
 use std::collections::VecDeque;
 use std::fmt::Write as _;
