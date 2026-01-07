@@ -434,6 +434,7 @@ pub fn palette256_to_color(index: u8) -> Color {
     if index < 16 {
         palette256::ANSI_COLORS[index as usize]
     } else if index < 232 {
+        let index = index - 16;
         let r = palette256::scale(index / 36);
         let g = palette256::scale(index % 36 / 6);
         let b = palette256::scale(index % 6);

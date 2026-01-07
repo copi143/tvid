@@ -576,7 +576,8 @@ async fn print_diff_inner(
             wrap.frame_pitch,
             wrap.video_cells_width,
             wrap.video_cells_height,
-        );
+        )
+        .await;
     }
 
     #[cfg(feature = "osc1337")]
