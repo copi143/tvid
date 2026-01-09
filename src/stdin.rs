@@ -22,7 +22,9 @@ pub fn scan(bytes: &mut [u8]) -> Option<usize> {
     } else {
         #[cfg(target_os = "macos")]
         let errno = unsafe { *libc::__error() };
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "android")]
+        let errno = unsafe { *libc::__errno() };
+        #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
         let errno = unsafe { *libc::__errno_location() };
         #[allow(unreachable_patterns)]
         match errno {

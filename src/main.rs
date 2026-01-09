@@ -18,8 +18,6 @@ use std::sync::{LazyLock, OnceLock};
 use std::time::Instant;
 use tokio::runtime::Runtime;
 
-extern crate ffmpeg_next as av;
-
 use crate::escape::format_link;
 use crate::ffmpeg::seek_request_relative;
 use crate::ui::QUIT_CONFIRMATION;
@@ -69,12 +67,16 @@ mod stdout;
 mod term;
 
 /// TODO
+#[allow(unused)]
 #[cfg(feature = "ssh")]
 mod ssh;
 
+/// TODO
+#[allow(unused)]
 #[cfg(feature = "config")]
 mod config;
 
+#[allow(unused_imports)]
 #[cfg(feature = "ffmpeg")]
 mod ffmpeg;
 

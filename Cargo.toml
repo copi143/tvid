@@ -1,6 +1,6 @@
 [package]
 name = "tvid"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["copi143 <copi143@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -38,10 +38,7 @@ default = [
   "unicode",
   "unifont",
 ]
-ffmpeg = [
-  "dep:ffmpeg-next",
-  "dep:ffmpeg-sys-next",
-] # 使用 ffmpeg 进行视频解码 (目前只支持这一个解码器)
+ffmpeg = ["dep:av", "dep:avsys"] # 使用 ffmpeg 进行视频解码 (目前只支持这一个解码器)
 i18n = ["dep:sys-locale"] # 支持多语言界面
 sixel = [] # 支持 sixel 终端图像协议
 osc1337 = ["dep:base64", "dep:jpeg-encoder"] # 支持 osc1337 终端图像协议
@@ -58,8 +55,8 @@ data-classes = { version = "0.0.0-17", features = ["serde"] }
 anyhow = "1.0.100"
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "time", "sync"] }
 parking_lot = "0.12.5"
-ffmpeg-sys-next = { version = "8.0.1", optional = true }
-ffmpeg-next = { version = "8.0.0", optional = true }
+avsys = { version = "8.0.1", optional = true, package = "ffmpeg-sys-next" }
+av = { version = "8.0.0", optional = true, package = "ffmpeg-next" }
 cpal = { version = "0.17.1", optional = true }
 unicode-width = { version = "0.2.2", optional = true }
 chrono = "0.4.42"

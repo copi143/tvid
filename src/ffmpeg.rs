@@ -27,18 +27,18 @@ unsafe extern "C" fn ffmpeg_log_callback(
     arg1: *mut std::ffi::c_void,
     arg2: std::ffi::c_int,
     arg3: *const std::ffi::c_char,
-    #[cfg(all(unix, not(target_os = "macos")))] arg4: *mut ffmpeg_sys_next::__va_list_tag,
-    #[cfg(target_os = "macos")] arg4: ffmpeg_sys_next::va_list,
-    #[cfg(windows)] arg4: ffmpeg_sys_next::va_list,
+    #[cfg(any(windows, target_os = "macos", target_os = "android"))] arg4: avsys::va_list,
+    #[cfg(not(any(windows, target_os = "macos", target_os = "android")))]
+    arg4: *mut avsys::__va_list_tag,
 ) {
-    if arg2 > ffmpeg_sys_next::AV_LOG_WARNING {
+    if arg2 > avsys::AV_LOG_WARNING {
         return;
     }
     static LOCK: Mutex<()> = Mutex::new(());
     let guard = LOCK.lock();
     static mut PRINT_PREFIX: core::ffi::c_int = 0;
     static mut BUF: [u8; 1024] = [0u8; 1024];
-    ffmpeg_sys_next::av_log_format_line(
+    avsys::av_log_format_line(
         arg1,
         arg2,
         arg3,
@@ -51,14 +51,14 @@ unsafe extern "C" fn ffmpeg_log_callback(
     if let Ok(str_slice) = c_str.to_str() {
         let str_slice = str_slice.trim_end();
         match arg2 {
-            ffmpeg_sys_next::AV_LOG_PANIC => fatal!("{str_slice}"),
-            ffmpeg_sys_next::AV_LOG_FATAL => error!("{str_slice}"),
-            ffmpeg_sys_next::AV_LOG_ERROR => warning!("{str_slice}"),
-            ffmpeg_sys_next::AV_LOG_WARNING => warning!("{str_slice}"),
-            ffmpeg_sys_next::AV_LOG_INFO => info!("{str_slice}"),
-            ffmpeg_sys_next::AV_LOG_VERBOSE => debug!("{str_slice}"),
-            ffmpeg_sys_next::AV_LOG_DEBUG => debug!("{str_slice}"),
-            ffmpeg_sys_next::AV_LOG_TRACE => debug!("{str_slice}"),
+            avsys::AV_LOG_PANIC => fatal!("{str_slice}"),
+            avsys::AV_LOG_FATAL => error!("{str_slice}"),
+            avsys::AV_LOG_ERROR => warning!("{str_slice}"),
+            avsys::AV_LOG_WARNING => warning!("{str_slice}"),
+            avsys::AV_LOG_INFO => info!("{str_slice}"),
+            avsys::AV_LOG_VERBOSE => debug!("{str_slice}"),
+            avsys::AV_LOG_DEBUG => debug!("{str_slice}"),
+            avsys::AV_LOG_TRACE => debug!("{str_slice}"),
             _ => error_l10n!(
                 "zh-cn" => "FFmpeg 未知的日志级别 {arg2}: {str_slice}";
                 "zh-tw" => "FFmpeg 未知的日誌級別 {arg2}: {str_slice}";
@@ -85,7 +85,7 @@ unsafe extern "C" fn ffmpeg_log_callback(
 
 /// 初始化 FFmpeg 日志回调
 pub fn init() {
-    unsafe { ffmpeg_sys_next::av_log_set_callback(Some(ffmpeg_log_callback)) };
+    unsafe { avsys::av_log_set_callback(Some(ffmpeg_log_callback)) };
 }
 
 pub static VIDEO_TIME_BASE: Mutex<Option<av::Rational>> = Mutex::new(None);

@@ -1,4 +1,3 @@
-use parking_lot::Mutex;
 use std::panic;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
@@ -72,7 +71,7 @@ pub fn get_winsize() -> Option<Winsize> {
         let mut font_px_h: u16 = 16;
         let mut cfi: CONSOLE_FONT_INFOEX = std::mem::zeroed();
         cfi.cbSize = std::mem::size_of::<CONSOLE_FONT_INFOEX>() as u32;
-        if GetCurrentConsoleFontEx as usize != 0 {
+        if GetCurrentConsoleFontEx as *const () as usize != 0 {
             // SAFETY: GetCurrentConsoleFontEx is available on modern Windows; it may still fail at runtime.
             if GetCurrentConsoleFontEx(handle, 0, &mut cfi) != 0 {
                 // dwFontSize is a COORD (X=width, Y=height) in pixels
@@ -121,6 +120,8 @@ pub extern "C" fn request_quit() {
     stdout::notify_quit();
 }
 
+#[cfg(unix)]
+use parking_lot::Mutex;
 #[cfg(unix)]
 static ORIG_TERMIOS: Mutex<Option<libc::termios>> = Mutex::new(None);
 
@@ -174,7 +175,7 @@ pub fn init() {
     unsafe {
         SetConsoleCP(65001);
         SetConsoleOutputCP(65001);
-        stdout::print(TERM_INIT_SEQ);
+        stdout::print_all_sync(TERM_INIT_SEQ);
 
         unsafe extern "system" fn console_handler(ctrl_type: u32) -> i32 {
             match ctrl_type {
@@ -225,7 +226,7 @@ pub fn quit() -> ! {
 /// 在退出前必须终止 stdin 和 stdout 线程
 #[cfg(windows)]
 pub fn quit() -> ! {
-    stdout::print(TERM_EXIT_SEQ);
+    stdout::print_all_sync(TERM_EXIT_SEQ);
     print_messages().ok();
     exit(0);
 }

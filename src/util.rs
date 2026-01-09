@@ -1,6 +1,6 @@
-use data_classes::{deps::*, derive::*};
+use data_classes::derive::*;
 use parking_lot::Mutex;
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 use std::io::Write;
 use std::ops::{Add, Div, Mul};
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};

@@ -127,6 +127,7 @@ impl AVSyncState {
                 if adiff > 0.02 {
                     self.set_time(atime);
                 }
+                let _ = vdiff;
             }
             (Some(atime), None) => {
                 let adiff = (time.as_secs_f64() - atime.as_secs_f64()).abs();
