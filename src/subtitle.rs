@@ -64,6 +64,7 @@ pub fn parse_duration(s: &str) -> Duration {
     Duration::from_secs(hours * 3600 + minutes * 60 + seconds) + Duration::from_millis(milliseconds)
 }
 
+/// 解析 ASS 事件行；ffmpeg 输出的 ASS 内容不包含 "Dialogue:" 前缀。
 pub fn parse_ass_line(start: Duration, end: Duration, line: &str) -> Option<AssDialogue> {
     let parts = line
         .trim()

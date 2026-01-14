@@ -7,7 +7,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
 use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crate::ffmpeg::{AUDIO_TIME_BASE, DECODER_WAKEUP, DECODER_WAKEUP_MUTEX};
@@ -113,16 +113,20 @@ static CPAL_BUFFER_LEN: AtomicUsize = AtomicUsize::new(0);
 /// 当前音频缓冲区长度（采样点数）
 static AUDIO_BUFFER_LEN: AtomicUsize = AtomicUsize::new(0);
 
-static mut VOLUME: f32 = 0.5;
-static mut VOLUME_K: f32 = 0.25;
+/// 当前音量（线性）
+static VOLUME: AtomicU32 = AtomicU32::new(0.5f32.to_bits());
+/// 当前音量的平方（用于音频处理）
+static VOLUME_K: AtomicU32 = AtomicU32::new(0.25f32.to_bits());
 
 pub fn get_volume() -> f32 {
-    unsafe { VOLUME }
+    f32::from_bits(VOLUME.load(Ordering::Relaxed))
 }
 
 pub fn adjust_volume(delta: f32) {
-    unsafe { VOLUME = (VOLUME + delta).clamp(0.0, 2.0) };
-    unsafe { VOLUME_K = VOLUME * VOLUME };
+    let mut cur = f32::from_bits(VOLUME.load(Ordering::Relaxed));
+    cur = (cur + delta).clamp(0.0, 2.0);
+    VOLUME.store(cur.to_bits(), Ordering::Relaxed);
+    VOLUME_K.store((cur * cur).to_bits(), Ordering::Relaxed);
 }
 
 macro_rules! data_callback {
@@ -136,6 +140,7 @@ macro_rules! data_callback {
                 data.fill($default);
                 return;
             }
+            let volume_k = f32::from_bits(VOLUME_K.load(Ordering::Relaxed));
             let sr = AUDIO_SAMPLERATE.load(Ordering::SeqCst);
             let mut dur = None;
             let mut add = None;
@@ -169,7 +174,7 @@ macro_rules! data_callback {
                 if prev_skiped || next_skiped {
                     for (j, &v) in wrap.slice().iter().enumerate() {
                         let k = (slice_begin + j) as f32 / slice_full_len as f32;
-                        let mut v = v * unsafe { VOLUME_K };
+                        let mut v = v * volume_k;
                         if prev_skiped {
                             v *= k;
                         }
@@ -188,7 +193,7 @@ macro_rules! data_callback {
                     }
                 } else {
                     for (j, &v) in wrap.slice().iter().enumerate() {
-                        data[i] = ($expr)(v * unsafe { VOLUME_K });
+                        data[i] = ($expr)(v * volume_k);
                         i += 1;
                         if i == data.len() {
                             let n = j + 1;
@@ -277,6 +282,9 @@ fn build_cpal_stream(
     .map_err(|e| e.into())
 }
 
+/// 下一个要播放的音频帧
+///
+/// ASSUME 永远只能在解码器处插入音频帧
 pub static AUDIO_FRAME: Mutex<Option<AudioFrame>> = Mutex::new(None);
 pub static AUDIO_FRAME_SIG: Condvar = Condvar::new();
 

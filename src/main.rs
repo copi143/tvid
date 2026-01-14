@@ -30,6 +30,7 @@ macro_rules! usemod {
     };
 }
 
+/// ASSUME 获取语言全部使用此宏，不使用 crate::LOCALE.as_str() 直接获取
 #[cfg(feature = "i18n")]
 macro_rules! locale {
     () => {
@@ -111,6 +112,7 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .expect("Failed to create Tokio runtime")
 });
 
+/// 不要直接使用此变量，使用 locale!() 宏
 #[cfg(feature = "i18n")]
 pub static LOCALE: LazyLock<String> = LazyLock::new(|| {
     sys_locale::get_locale()

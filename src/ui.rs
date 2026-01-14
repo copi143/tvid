@@ -22,9 +22,16 @@ use crate::{ffmpeg, term};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
+/// Unifont 字体数据（转换为盲文字符的点阵）
+/// - 每个字符 8x16 或 16x16 点阵，填充为 16x16 点阵
+/// - 转换为盲文后正好 32 字节每字符
+/// - 具体生成方法见 README
 #[cfg(feature = "unifont")]
-const UNIFONT: *const [u8; 32] =
-    include_bytes!("../unifont-17.0.01.bin").as_ptr() as *const [u8; 32];
+const UNIFONT: *const [u8; 32] = {
+    let bytes = include_bytes!("../unifont-17.0.01.bin");
+    assert!(bytes.len() == 65536 * 32, "unifont data size incorrect");
+    bytes.as_ptr() as *const [u8; 32]
+};
 
 #[cfg(feature = "unifont")]
 pub fn unifont_get(ch: char) -> &'static [u8; 32] {
@@ -69,6 +76,7 @@ pub fn mask(
             if let Some(border) = border
                 && (i == 0 || i == w - 1 || j == 0 || j == h - 1)
             {
+                // ASSUME 这里 '\0' 只会来自同一行的宽字符占位，不会出现在行首。
                 if wrap.cells[p].c == Some('\0') {
                     let mut i = p - 1;
                     while wrap.cells[i].c == Some('\0') {
@@ -77,6 +85,7 @@ pub fn mask(
                     }
                     wrap.cells[i].c = Some(' ');
                 }
+                // ASSUME 向后搜索时因为有哨兵不会越界
                 if wrap.cells[p + 1].c == Some('\0') {
                     let mut i = p + 1;
                     while wrap.cells[i].c == Some('\0') {
@@ -192,6 +201,7 @@ pub fn putat(
         // 计算索引
         let p = cy as usize * wrap.cells_pitch + cx as usize;
         // 如果覆盖了一个宽字符那么要清除整个宽字符，防止渲染爆炸
+        // ASSUME 这里 '\0' 只会来自同一行的宽字符占位，不会出现在行首。
         if wrap.cells[p].c == Some('\0') {
             let mut i = p - 1;
             while wrap.cells[i].c == Some('\0') {
@@ -200,6 +210,7 @@ pub fn putat(
             }
             wrap.cells[i].c = Some(' ');
         }
+        // ASSUME 向后搜索时因为有哨兵不会越界
         if wrap.cells[p + 1].c == Some('\0') {
             let mut i = p + 1;
             while wrap.cells[i].c == Some('\0') {

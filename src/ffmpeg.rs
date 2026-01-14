@@ -450,6 +450,7 @@ fn decode_video(
         if frame.pts().is_none() {
             frame.set_pts(*video_pts);
         }
+        // ASSUME 视频帧只能在此处插入，所以函数开头的判断足够保证队列为空
         let mut lock = VIDEO_FRAME.lock();
         assert!(lock.is_none(), "video frame queue should be empty");
         lock.replace(frame);
@@ -474,6 +475,7 @@ fn decode_video(
         if frame.pts().is_none() {
             frame.set_pts(*video_pts);
         }
+        // ASSUME 视频帧只能在此处插入，所以函数开头的判断足够保证队列为空
         let mut lock = VIDEO_FRAME.lock();
         assert!(lock.is_none(), "video frame queue should be empty");
         lock.replace(frame);
@@ -501,6 +503,7 @@ fn decode_audio(
         if frame.pts().is_none() {
             frame.set_pts(*audio_pts);
         }
+        // ASSUME 音频帧只能在此处插入，所以函数开头的判断足够保证队列为空
         let mut lock = AUDIO_FRAME.lock();
         assert!(lock.is_none(), "audio frame queue should be empty");
         lock.replace(frame);
@@ -525,6 +528,7 @@ fn decode_audio(
         if frame.pts().is_none() {
             frame.set_pts(*audio_pts);
         }
+        // ASSUME 音频帧只能在此处插入，所以函数开头的判断足够保证队列为空
         let mut lock = AUDIO_FRAME.lock();
         assert!(lock.is_none(), "audio frame queue should be empty");
         lock.replace(frame);

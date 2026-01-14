@@ -113,7 +113,7 @@ pub fn print_messages() -> Result<()> {
         write!(text, "\x1b[0m\n")?;
     }
     let bytes = text.as_bytes();
-    if stdout::print(bytes) == Some(bytes.len()) {
+    if stdout::print_all_sync(bytes) {
         Ok(())
     } else {
         Err(anyhow::anyhow!("Failed to print all log messages"))
@@ -187,7 +187,7 @@ macro_rules! fatal {
 #[cfg(feature = "i18n")]
 macro_rules! debug_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             $(
                 $lang => debug!($($arg),+),
             )+
@@ -208,7 +208,7 @@ macro_rules! debug_l10n {
 #[cfg(feature = "i18n")]
 macro_rules! info_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             $(
                 $lang => info!($($arg),+),
             )+
@@ -229,7 +229,7 @@ macro_rules! info_l10n {
 #[cfg(feature = "i18n")]
 macro_rules! warning_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             $(
                 $lang => warning!($($arg),+),
             )+
@@ -250,7 +250,7 @@ macro_rules! warning_l10n {
 #[cfg(feature = "i18n")]
 macro_rules! error_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             $(
                 $lang => error!($($arg),+),
             )+
@@ -271,7 +271,7 @@ macro_rules! error_l10n {
 #[cfg(feature = "i18n")]
 macro_rules! fatal_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             $(
                 $lang => fatal!($($arg),+),
             )+
@@ -292,7 +292,7 @@ macro_rules! fatal_l10n {
 #[cfg(feature = "i18n")]
 macro_rules! eprintln_l10n {
     ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match crate::LOCALE.as_str() {
+        match locale!() {
             $(
                 $lang => eprintln!($($arg),+),
             )+

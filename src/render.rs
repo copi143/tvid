@@ -531,6 +531,10 @@ async fn print_diff_inner(
     cells: Vec<&'static mut [Cell]>,
     lasts: Vec<&'static [Cell]>,
 ) {
+    assert!(
+        cells.len() == lasts.len(),
+        "cells and lasts length mismatch"
+    );
     let instant = Instant::now();
 
     #[allow(unused_mut)]
@@ -544,6 +548,7 @@ async fn print_diff_inner(
         text_force_flush = true; // 由于图像会覆盖文本
     }
 
+    // ASSUME cells 和 lasts 只在此处使用并且所有 task 均被正确回收
     let result = (cells.into_iter().zip(lasts.into_iter()))
         .map(|(cell, last)| {
             tokio::spawn(print_diff_line(
@@ -556,6 +561,7 @@ async fn print_diff_inner(
         .collect::<Vec<_>>()
         .join_all()
         .await;
+    // ASSUME cells 和 lasts 在此之后不会被使用
 
     let mut buf = Vec::with_capacity(65536);
 
@@ -565,7 +571,6 @@ async fn print_diff_inner(
 
     #[cfg(feature = "sixel")]
     if wrap.color_mode == ColorMode::Sixel {
-        // TODO: Sixel 渲染
         write!(
             buf,
             "\x1b[{};{}H",
@@ -625,6 +630,7 @@ async fn print_diff_inner(
 
 /// 打印帧差异部分
 async fn print_diff(wrap: &mut ContextWrapper<'_, '_>) {
+    // ASSUME cells 和 lasts 在 print_diff_inner 内使用，手动保证生命周期
     let cells = unsafe {
         wrap.cells
             .split_at_mut(wrap.cells.len() - 1)

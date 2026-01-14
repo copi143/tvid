@@ -12,6 +12,9 @@ use crate::term::TERM_QUIT;
 
 pub static VIDEO_FRAMETIME: AtomicU64 = AtomicU64::new(1_000_000 / 30);
 
+/// 当前待渲染的视频帧
+///
+/// ASSUME 永远只能在解码器处插入视频帧
 pub static VIDEO_FRAME: Mutex<Option<VideoFrame>> = Mutex::new(None);
 pub static VIDEO_FRAME_SIG: Condvar = Condvar::new();
 
