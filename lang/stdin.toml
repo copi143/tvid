@@ -1,0 +1,39 @@
+["Invalid paste data (not UTF-8 encoded)"]
+zh-cn = "无效的粘贴数据（非 UTF-8 编码）"
+zh-tw = "無效的貼上資料（非 UTF-8 編碼）"
+ja-jp = "無効なペーストデータ（UTF-8 エンコードではありません）"
+fr-fr = "Données collées invalides (non encodées en UTF-8)"
+de-de = "Ungültige Einfügedaten (nicht UTF-8-codiert)"
+es-es = "Datos pegados no válidos (no codificados en UTF-8)"
+
+["Unknown escape sequence: ESC [ {} ~"]
+zh-cn = "未知的转义序列：ESC [ {} ~"
+zh-tw = "未知的轉義序列：ESC [ {} ~"
+ja-jp = "不明なエスケープシーケンス：ESC [ {} ~"
+fr-fr = "Séquence d'échappement inconnue : ESC [ {} ~"
+de-de = "Unbekannte Escape-Sequenz: ESC [ {} ~"
+es-es = "Secuencia de escape desconocida: ESC [ {} ~"
+
+["Unknown escape sequence: ESC {} ({})"]
+zh-cn = "未知的转义序列：ESC {} ({})"
+zh-tw = "未知的轉義序列：ESC {} ({})"
+ja-jp = "不明なエスケープシーケンス：ESC {} ({})"
+fr-fr = "Séquence d'échappement inconnue : ESC {} ({})"
+de-de = "Unbekannte Escape-Sequenz: ESC {} ({})"
+es-es = "Secuencia de escape desconocida: ESC {} ({})"
+
+["Unhandled key: NUL"]
+zh-cn = "未处理的按键：NUL"
+zh-tw = "未處理的按鍵：NUL"
+ja-jp = "未処理のキー：NUL"
+fr-fr = "Touche non gérée : NUL"
+de-de = "Unbehandelter Schlüssel: NUL"
+es-es = "Tecla no manejada: NUL"
+
+["Unhandled key: {} ({})"]
+zh-cn = "未处理的按键：{} ({})"
+zh-tw = "未處理的按鍵：{} ({})"
+ja-jp = "未処理のキー：{} ({})"
+fr-fr = "Touche non gérée : {} ({})"
+de-de = "Unbehandelter Schlüssel: {} ({})"
+es-es = "Tecla no manejada: {} ({})"

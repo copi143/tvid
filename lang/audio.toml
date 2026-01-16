@@ -1,0 +1,23 @@
+["Invalid audio sample rate: 0"]
+zh-cn = "无效的音频采样率: 0"
+zh-tw = "無效的音訊取樣率: 0"
+ja-jp = "無効なオーディオサンプルレート: 0"
+fr-fr = "taux d'échantillonnage audio invalide : 0"
+de-de = "Ungültige Audio-Samplerate: 0"
+es-es = "frecuencia de muestreo de audio no válida: 0"
+
+["Quiting audio thread"]
+zh-cn = "退出音频线程"
+zh-tw = "退出音訊執行緒"
+ja-jp = "オーディオスレッドを終了します"
+fr-fr = "quitter le thread audio"
+de-de = "Beenden des Audiothreads"
+es-es = "saliendo del hilo de audio"
+
+["Unsupported channel count: {}"]
+zh-cn = "不支持的声道数: {}"
+zh-tw = "不支援的聲道數: {}"
+ja-jp = "サポートされていないチャンネル数: {}"
+fr-fr = "nombre de canaux non pris en charge : {}"
+de-de = "Nicht unterstützte Kanalanzahl: {}"
+es-es = "número de canales no compatible: {}"

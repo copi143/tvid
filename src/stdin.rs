@@ -572,27 +572,11 @@ async fn input_escape_square_number(getc: &mut Getc, num: i64) -> Result<()> {
             if let Ok(s) = std::str::from_utf8(data) {
                 call_paste_callbacks(getc.id, s);
             } else {
-                error_l10n!(
-                    "zh-cn" => "无效的粘贴数据（非 UTF-8 编码）";
-                    "zh-tw" => "無效的貼上資料（非 UTF-8 編碼）";
-                    "ja-jp" => "無効なペーストデータ（UTF-8 エンコードではありません）";
-                    "fr-fr" => "Données collées invalides (non encodées en UTF-8)";
-                    "de-de" => "Ungültige Einfügedaten (nicht UTF-8-codiert)";
-                    "es-es" => "Datos pegados no válidos (no codificados en UTF-8)";
-                    _       => "Invalid paste data (not UTF-8 encoded)";
-                );
+                error_l10n!("Invalid paste data (not UTF-8 encoded)");
             }
         }
         _ => {
-            error_l10n!(
-                "zh-cn" => "未知的转义序列：ESC [ {num} ~";
-                "zh-tw" => "未知的轉義序列：ESC [ {num} ~";
-                "ja-jp" => "不明なエスケープシーケンス：ESC [ {num} ~";
-                "fr-fr" => "Séquence d'échappement inconnue : ESC [ {num} ~";
-                "de-de" => "Unbekannte Escape-Sequenz: ESC [ {num} ~";
-                "es-es" => "Secuencia de escape desconocida: ESC [ {num} ~";
-                _       => "Unknown escape sequence: ESC [ {num} ~";
-            );
+            error_f16n!("Unknown escape sequence: ESC [ {} ~", num);
         }
     }
     Ok(())
@@ -774,15 +758,7 @@ async fn input_escape(getc: &mut Getc) -> Result<()> {
         }
         b'[' => input_escape_square(getc).await?,
         c => {
-            error_l10n!(
-                "zh-cn" => "未知的转义序列：ESC {} ({})", (c as char), c;
-                "zh-tw" => "未知的轉義序列：ESC {} ({})", (c as char), c;
-                "ja-jp" => "不明なエスケープシーケンス：ESC {} ({})", (c as char), c;
-                "fr-fr" => "Séquence d'échappement inconnue : ESC {} ({})", (c as char), c;
-                "de-de" => "Unbekannte Escape-Sequenz: ESC {} ({})", (c as char), c;
-                "es-es" => "Secuencia de escape desconocida: ESC {} ({})", (c as char), c;
-                _ => "Unknown escape sequence: ESC {} ({})", (c as char), c;
-            );
+            error_f16n!("Unknown escape sequence: ESC {} ({})", (c as char), c)
         }
     }
     Ok(())
@@ -791,15 +767,7 @@ async fn input_escape(getc: &mut Getc) -> Result<()> {
 async fn input(getc: &mut Getc) -> Result<()> {
     let c = getc.wait().await?;
     match c {
-        0 => warning_l10n!(
-            "zh-cn" => "未处理的按键：NUL";
-            "zh-tw" => "未處理的按鍵：NUL";
-            "ja-jp" => "未処理のキー：NUL";
-            "fr-fr" => "Touche non gérée : NUL";
-            "de-de" => "Unbehandelter Schlüssel: NUL";
-            "es-es" => "Tecla no manejada: NUL";
-            _       => "Unhandled key: NUL";
-        ),
+        0 => warning_l10n!("Unhandled key: NUL"),
         0x1b => input_escape(getc).await?,
         b'\t' => call_keypress_callbacks(getc.id, Key::Tab),
         b' ' => call_keypress_callbacks(getc.id, Key::Normal(' ')),
@@ -826,15 +794,7 @@ async fn input(getc: &mut Getc) -> Result<()> {
         33..=126 => {
             call_keypress_callbacks(getc.id, Key::Normal(c as char));
         }
-        128.. => warning_l10n!(
-            "zh-cn" => "未处理的按键：{} ({})", (c as char), c;
-            "zh-tw" => "未處理的按鍵：{} ({})", (c as char), c;
-            "ja-jp" => "未処理のキー：{} ({})", (c as char), c;
-            "fr-fr" => "Touche non gérée : {} ({})", (c as char), c;
-            "de-de" => "Unbehandelter Schlüssel: {} ({})", (c as char), c;
-            "es-es" => "Tecla no manejada: {} ({})", (c as char), c;
-            _       => "Unhandled key: {} ({})", (c as char), c;
-        ),
+        128.. => warning_f16n!("Unhandled key: {} ({})", (c as char), c),
     }
     Ok(())
 }

@@ -185,127 +185,169 @@ macro_rules! fatal {
 }
 
 #[cfg(feature = "i18n")]
+macro_rules! l10n {
+    ($key:literal $(,)?) => {
+        static_l10n::l10n!($key)
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! l10n {
+    ($key:literal $(,)?) => {
+        $key
+    };
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        static_l10n::f16n!($key $(, $arg)*)
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        format!($key $(, $arg)*)
+    };
+}
+
+#[cfg(feature = "i18n")]
 macro_rules! debug_l10n {
-    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match locale!() {
-            $(
-                $lang => debug!($($arg),+),
-            )+
-        }
+    ($key:literal $(,)?) => {
+        debug!("{}", static_l10n::l10n!($key))
     };
 }
 
 #[cfg(not(feature = "i18n"))]
 macro_rules! debug_l10n {
-    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
-        debug_l10n!($($rest)+)
-    };
-    (_ => $($arg:tt),+ $(;)?) => {
-        debug!($($arg),+)
+    ($key:literal $(,)?) => {
+        debug!("{}", $key)
     };
 }
 
 #[cfg(feature = "i18n")]
 macro_rules! info_l10n {
-    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match locale!() {
-            $(
-                $lang => info!($($arg),+),
-            )+
-        }
+    ($key:literal $(,)?) => {
+        info!("{}", static_l10n::l10n!($key))
     };
 }
 
 #[cfg(not(feature = "i18n"))]
 macro_rules! info_l10n {
-    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
-        info_l10n!($($rest)+)
-    };
-    (_ => $($arg:tt),+ $(;)?) => {
-        info!($($arg),+)
+    ($key:literal $(,)?) => {
+        info!("{}", $key)
     };
 }
 
 #[cfg(feature = "i18n")]
 macro_rules! warning_l10n {
-    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match locale!() {
-            $(
-                $lang => warning!($($arg),+),
-            )+
-        }
+    ($key:literal $(,)?) => {
+        warning!("{}", static_l10n::l10n!($key))
     };
 }
 
 #[cfg(not(feature = "i18n"))]
 macro_rules! warning_l10n {
-    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
-        warning_l10n!($($rest)+)
-    };
-    (_ => $($arg:tt),+ $(;)?) => {
-        warning!($($arg),+)
+    ($key:literal $(,)?) => {
+        warning!("{}", $key)
     };
 }
 
 #[cfg(feature = "i18n")]
 macro_rules! error_l10n {
-    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match locale!() {
-            $(
-                $lang => error!($($arg),+),
-            )+
-        }
+    ($key:literal $(,)?) => {
+        error!("{}", static_l10n::l10n!($key))
     };
 }
 
 #[cfg(not(feature = "i18n"))]
 macro_rules! error_l10n {
-    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
-        error_l10n!($($rest)+)
-    };
-    (_ => $($arg:tt),+ $(;)?) => {
-        error!($($arg),+)
+    ($key:literal $(,)?) => {
+        error!("{}", $key)
     };
 }
 
 #[cfg(feature = "i18n")]
 macro_rules! fatal_l10n {
-    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match locale!() {
-            $(
-                $lang => fatal!($($arg),+),
-            )+
-        }
+    ($key:literal $(,)?) => {
+        fatal!("{}", static_l10n::l10n!($key))
     };
 }
 
 #[cfg(not(feature = "i18n"))]
 macro_rules! fatal_l10n {
-    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
-        fatal_l10n!($($rest)+)
-    };
-    (_ => $($arg:tt),+ $(;)?) => {
-        fatal!($($arg),+)
+    ($key:literal $(,)?) => {
+        fatal!("{}", $key)
     };
 }
 
 #[cfg(feature = "i18n")]
-macro_rules! eprintln_l10n {
-    ($($lang:tt => $($arg:tt),+);+ $(;)?) => {
-        match locale!() {
-            $(
-                $lang => eprintln!($($arg),+),
-            )+
-        }
+macro_rules! debug_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        debug!("{}", static_l10n::f16n!($key $(, $arg)*))
     };
 }
 
 #[cfg(not(feature = "i18n"))]
-macro_rules! eprintln_l10n {
-    ($_a:tt => $($_b:tt),+ ; $($rest:tt)+) => {
-        eprintln_l10n!($($rest)+)
+macro_rules! debug_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        debug!("{}", format_args!($key $(, $arg)*))
     };
-    (_ => $($arg:tt),+ $(;)?) => {
-        eprintln!($($arg),+)
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! info_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        info!("{}", static_l10n::f16n!($key $(, $arg)*))
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! info_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        info!("{}", format_args!($key $(, $arg)*))
+    };
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! warning_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        warning!("{}", static_l10n::f16n!($key $(, $arg)*))
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! warning_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        warning!("{}", format_args!($key $(, $arg)*))
+    };
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! error_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        error!("{}", static_l10n::f16n!($key $(, $arg)*))
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! error_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        error!("{}", format_args!($key $(, $arg)*))
+    };
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! fatal_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        fatal!("{}", static_l10n::f16n!($key $(, $arg)*))
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! fatal_f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        fatal!("{}", format_args!($key $(, $arg)*))
     };
 }

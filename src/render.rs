@@ -14,6 +14,8 @@ use crate::term::{self, TERM_QUIT, Winsize};
 use crate::{TOKIO_RUNTIME, statistics};
 use crate::{avsync, util::*};
 
+
+
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 pub struct RenderContext {
@@ -431,15 +433,7 @@ fn render(frame: &[Color], width: usize, height: usize, pitch: usize) -> bool {
 
     let pf = pending_frames();
     if pf > 3 {
-        warning_l10n!(
-            "zh-cn" => "待处理帧过多: {pf}";
-            "zh-tw" => "待處理幀過多: {pf}";
-            "ja-jp" => "保留フレームが多すぎます: {pf}";
-            "fr-fr" => "Trop de trames en attente : {pf}";
-            "de-de" => "Zu viele ausstehende Frames: {pf}";
-            "es-es" => "Demasiados fotogramas pendientes: {pf}";
-            _ => "Too many pending frames: {pf}";
-        );
+        warning_f16n!("Too many pending frames: {}", pf);
         wrap.force_flush_next = true;
     }
     TOKIO_RUNTIME.block_on(print_diff(&mut wrap));

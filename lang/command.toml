@@ -1,0 +1,55 @@
+["Unknown command: {}"]
+zh-cn = "未知命令: {}"
+zh-tw = "未知命令: {}"
+ja-jp = "不明なコマンド: {}"
+fr-fr = "Commande inconnue : {}"
+de-de = "Unbekannter Befehl: {}"
+es-es = "Comando desconocido: {}"
+
+["Commands: {}"]
+zh-cn = "命令: {}"
+zh-tw = "命令: {}"
+ja-jp = "コマンド: {}"
+fr-fr = "Commandes: {}"
+de-de = "Befehle: {}"
+es-es = "Comandos: {}"
+
+["seek: missing argument"]
+zh-cn = "seek 缺少参数"
+zh-tw = "seek 缺少參數"
+ja-jp = "seek の引数が不足しています"
+fr-fr = "seek: argument manquant"
+de-de = "seek: fehlendes Argument"
+es-es = "seek: falta el argumento"
+
+["seek: invalid argument: {}"]
+zh-cn = "seek 参数无效: {}"
+zh-tw = "seek 參數無效: {}"
+ja-jp = "seek の引数が無効です: {}"
+fr-fr = "seek: argument invalide: {}"
+de-de = "seek: ungültiges Argument: {}"
+es-es = "seek: argumento inválido: {}"
+
+["vol: missing argument"]
+zh-cn = "vol 缺少参数"
+zh-tw = "vol 缺少參數"
+ja-jp = "vol の引数が不足しています"
+fr-fr = "vol: argument manquant"
+de-de = "vol: fehlendes Argument"
+es-es = "vol: falta el argumento"
+
+["vol: invalid argument: {}"]
+zh-cn = "vol 参数无效: {}"
+zh-tw = "vol 參數無效: {}"
+ja-jp = "vol の引数が無効です: {}"
+fr-fr = "vol: argument invalide: {}"
+de-de = "vol: ungültiges Argument: {}"
+es-es = "vol: argumento inválido: {}"
+
+["Audio is disabled"]
+zh-cn = "未启用音频功能"
+zh-tw = "未啟用音訊功能"
+ja-jp = "オーディオ機能が無効です"
+fr-fr = "Audio désactivé"
+de-de = "Audio deaktiviert"
+es-es = "Audio desactivado"

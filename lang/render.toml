@@ -1,0 +1,7 @@
+["Too many pending frames: {}"]
+zh-cn = "待处理帧过多: {}"
+zh-tw = "待處理幀過多: {}"
+ja-jp = "保留フレームが多すぎます: {}"
+fr-fr = "Trop de trames en attente : {}"
+de-de = "Zu viele ausstehende Frames: {}"
+es-es = "Demasiados fotogramas pendientes: {}"

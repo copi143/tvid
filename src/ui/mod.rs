@@ -143,92 +143,18 @@ fn render_help(wrap: &mut ContextWrapper) {
     );
     helper::textbox(x + 2, y + 1, w - 4, h - 2, false);
     helper::textbox_default_color(Some(TERM_DEFAULT_BG), None);
-    match locale!() {
-        "zh-cn" => putlns_or_uflns!(wrap;
-            "               帮助信息 (按 h 关闭)               ";
-            "--------------------------------------------------";
-            "     q:           退出程序                        ";
-            "     n:           下一项                          ";
-            "     l:           打开/关闭播放列表               ";
-            "     空格/回车:   选择文件                        ";
-            "     w/s/↑/↓:     上/下移动                       ";
-            "     a/d/←/→:     进入/返回目录                   ";
-            "     h:           打开/关闭帮助                   ";
-            "--------------------------------------------------";
-        ),
-        "zh-tw" => putlns_or_uflns!(wrap;
-            "               幫助資訊 (按 h 關閉)               ";
-            "--------------------------------------------------";
-            "     q:           離開程式                        ";
-            "     n:           下一項                          ";
-            "     l:           開啟/關閉播放清單               ";
-            "     空格/Enter:  選擇檔案                        ";
-            "     w/s/↑/↓:     上/下移動                       ";
-            "     a/d/←/→:     進入/返回目錄                   ";
-            "     h:           開啟/關閉幫助                   ";
-            "--------------------------------------------------";
-        ),
-        "ja-jp" => putlns_or_uflns!(wrap;
-            "            ヘルプ情報 (hキーで閉じる)            ";
-            "--------------------------------------------------";
-            "     q:           プログラムを終了                ";
-            "     n:           次の項目                        ";
-            "     l:           プレイリストを開く/閉じる       ";
-            "     スペース/エンター: ファイルを選択            ";
-            "     w/s/↑/↓:     上/下に移動                     ";
-            "     a/d/←/→:     ディレクトリに入る/戻る         ";
-            "     h:           ヘルプを開く/閉じる             ";
-            "--------------------------------------------------";
-        ),
-        "fr-fr" => putlns_or_uflns!(wrap;
-            "  Informations d'aide (appuyez sur h pour fermer) ";
-            "--------------------------------------------------";
-            "   q:            Quitter le programme             ";
-            "   n:            Élément suivant                  ";
-            "   l:            Ouvrir/fermer la liste de lecture";
-            "   Espace/Entrée: Sélectionner un fichier         ";
-            "   w/s/↑/↓:      Déplacer vers le haut/bas        ";
-            "   a/d/←/→:      Entrer/revenir au répertoire     ";
-            "   h:            Ouvrir/fermer l'aide             ";
-            "--------------------------------------------------";
-        ),
-        "de-de" => putlns_or_uflns!(wrap;
-            " Hilfeinformationen (drücken Sie h zum Schließen) ";
-            "--------------------------------------------------";
-            "   q:           Programm beenden                  ";
-            "   n:           Nächstes Element                  ";
-            "   l:           Wiedergabeliste öffnen/schließen  ";
-            "   Leertaste/Eingabetaste: Datei auswählen        ";
-            "   w/s/↑/↓:     Nach oben/unten bewegen           ";
-            "   a/d/←/→:     Verzeichnis betreten/zurückkehren ";
-            "   h:           Hilfe öffnen/schließen            ";
-            "--------------------------------------------------";
-        ),
-        "es-es" => putlns_or_uflns!(wrap;
-            "   Información de ayuda (presione h para cerrar)  ";
-            "--------------------------------------------------";
-            "   q:           Salir del programa                ";
-            "   n:           Siguiente elemento                ";
-            "   l:           Abrir/cerrar lista de reproducción";
-            "   Espacio/Enter: Seleccionar archivo             ";
-            "   w/s/↑/↓:     Mover arriba/abajo                ";
-            "   a/d/←/→:     Entrar/volver al directorio       ";
-            "   h:           Abrir/cerrar ayuda                ";
-            "--------------------------------------------------";
-        ),
-        _ => putlns_or_uflns!(wrap;
-            "        Help Information (press h to close)       ";
-            "--------------------------------------------------";
-            "     q:            Quit the program               ";
-            "     n:            Next item                      ";
-            "     l:            Open/close playlist            ";
-            "     Space/Enter:  Select file                    ";
-            "     w/s/↑/↓:      Move up/down                   ";
-            "     a/d/←/→:      Enter/return directory         ";
-            "     h:            Open/close help                ";
-            "--------------------------------------------------";
-        ),
-    }
+    putlns_or_uflns!(wrap;
+        "{}", l10n!("        Help Information (press h to close)       ");
+        "{}", l10n!("--------------------------------------------------");
+        "{}", l10n!("     q:            Quit the program               ");
+        "{}", l10n!("     n:            Next item                      ");
+        "{}", l10n!("     l:            Open/close playlist            ");
+        "{}", l10n!("     Space/Enter:  Select file                    ");
+        "{}", l10n!("     w/s/↑/↓:      Move up/down                   ");
+        "{}", l10n!("     a/d/←/→:      Enter/return directory         ");
+        "{}", l10n!("     h:            Open/close help                ");
+        "{}", l10n!("--------------------------------------------------");
+    );
 }
 
 pub static SHOW_OVERLAY_TEXT: AtomicBool = AtomicBool::new(true);
@@ -303,127 +229,28 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
     let statistics = statistics::get(0);
     let statistics = statistics.lock();
 
-    match locale!() {
-        "zh-cn" => putlns_or_uflns!(wrap;
-            "tvid v{}", env!("CARGO_PKG_VERSION");
-            "按 'q' 退出，'n' 跳到下一项，'l' 打开播放列表";
-            "{}: {}", if avsync::is_paused() { "暂停中" } else { "播放中" }, wrap.playing;
-            "视频时间: {playing_time_str} (音频偏移: {audio_offset_str}, 视频偏移: {video_offset_str})";
-            "应用开启时间: {app_time_str}";
-            "转义字符串编码时间: {:.2?} (最近 60 次平均)", statistics.escape_string_encode_time.avg();
-            "渲染时间: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
-            "输出时间: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
-            "输出字节数: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
-            "视频跳过帧数: {}", statistics.video_skipped_frames;
-            "总输出字节数: {}", format_bytes_count(statistics.total_output_bytes);
-            "颜色模式: {}", wrap.color_mode;
-            "绿幕模式: {}", wrap.chroma_mode;
-            #[cfg(feature = "audio")]
-            "音量: {}%", (audio::get_volume() * 100.0).round() as usize;
-        ),
-        "zh-tw" => putlns_or_uflns!(wrap;
-            "tvid v{}", env!("CARGO_PKG_VERSION");
-            "按 'q' 離開，'n' 跳到下一項，'l' 打開播放清單";
-            "{}: {}", if avsync::is_paused() { "暫停中" } else { "播放中" }, wrap.playing;
-            "視頻時間: {playing_time_str} (音頻偏移: {audio_offset_str}, 視頻偏移: {video_offset_str})";
-            "應用開啟時間: {app_time_str}";
-            "轉義字串編碼時間: {:.2?} (最近 60 次平均)", statistics.escape_string_encode_time.avg();
-            "渲染時間: {:.2?} (最近 60 次平均)", statistics.render_time.avg();
-            "輸出時間: {:.2?} (最近 60 次平均)", statistics.output_time.avg();
-            "輸出位元組數: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
-            "視頻跳過幀數: {}", statistics.video_skipped_frames;
-            "總輸出位元組數: {}", format_bytes_count(statistics.total_output_bytes);
-            "顏色模式: {}", wrap.color_mode;
-            "綠幕模式: {}", wrap.chroma_mode;
-            #[cfg(feature = "audio")]
-            "音量: {}%", (audio::get_volume() * 100.0).round() as usize;
-        ),
-        "ja-jp" => putlns_or_uflns!(wrap;
-            "tvid v{}", env!("CARGO_PKG_VERSION");
-            "'q'で終了、'n'で次へ、'l'でプレイリストを開く";
-            "{}: {}", if avsync::is_paused() { "一時停止中" } else { "再生中" }, wrap.playing;
-            "ビデオ時間: {playing_time_str} (オーディオオフセット: {audio_offset_str}, ビデオオフセット: {video_offset_str})";
-            "アプリ起動時間: {app_time_str}";
-            "エスケープ文字列エンコード時間: {:.2?} (直近 60 回の平均)", statistics.escape_string_encode_time.avg();
-            "レンダリング時間: {:.2?} (直近 60 回の平均)", statistics.render_time.avg();
-            "出力時間: {:.2?} (直近 60 回の平均)", statistics.output_time.avg();
-            "出力バイト数: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
-            "ビデオスキップフレーム数: {}", statistics.video_skipped_frames;
-            "総出力バイト数: {}", format_bytes_count(statistics.total_output_bytes);
-            "カラーモード: {}", wrap.color_mode;
-            "クロマモード: {}", wrap.chroma_mode;
-            #[cfg(feature = "audio")]
-            "音量: {}%", (audio::get_volume() * 100.0).round() as usize;
-        ),
-        "fr-fr" => putlns_or_uflns!(wrap;
-            "tvid v{}", env!("CARGO_PKG_VERSION");
-            "Appuyez sur 'q' pour quitter, 'n' pour passer au suivant, 'l' pour la liste de lecture";
-            "{}: {}", if avsync::is_paused() { "En pause" } else { "Lecture" }, wrap.playing;
-            "Temps vidéo: {playing_time_str} (décalage audio: {audio_offset_str}, décalage vidéo: {video_offset_str})";
-            "Temps d'exécution de l'application: {app_time_str}";
-            "Temps d'encodage de la chaîne d'échappement: {:.2?} (moyenne des 60 dernières)", statistics.escape_string_encode_time.avg();
-            "Temps de rendu: {:.2?} (moyenne des 60 dernières)", statistics.render_time.avg();
-            "Temps de sortie: {:.2?} (moyenne des 60 dernières)", statistics.output_time.avg();
-            "Nombre de bytes de sortie: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
-            "Images vidéo sautées: {}", statistics.video_skipped_frames;
-            "Nombre total de bytes de sortie: {}", format_bytes_count(statistics.total_output_bytes);
-            "Mode couleur: {}", wrap.color_mode;
-            "Mode chroma: {}", wrap.chroma_mode;
-            #[cfg(feature = "audio")]
-            "Volume: {}%", (audio::get_volume() * 100.0).round() as usize;
-        ),
-        "de-de" => putlns_or_uflns!(wrap;
-            "tvid v{}", env!("CARGO_PKG_VERSION");
-            "Drücken Sie 'q' zum Beenden, 'n' zum Überspringen zum Nächsten, 'l' für die Wiedergabeliste";
-            "{}: {}", if avsync::is_paused() { "Pausiert" } else { "Wiedergabe" }, wrap.playing;
-            "Videozeit: {playing_time_str} (Audio-Offset: {audio_offset_str}, Video-Offset: {video_offset_str})";
-            "App-Zeit: {app_time_str}";
-            "Escape-String-Kodierungszeit: {:.2?} (Durchschnitt der letzten 60)", statistics.escape_string_encode_time.avg();
-            "Render-Zeit: {:.2?} (Durchschnitt der letzten 60)", statistics.render_time.avg();
-            "Ausgabezeit: {:.2?} (Durchschnitt der letzten 60)", statistics.output_time.avg();
-            "Ausgabe-Bytes: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
-            "Übersprungene Videoframes: {}", statistics.video_skipped_frames;
-            "Gesamt-Ausgabe-Bytes: {}", format_bytes_count(statistics.total_output_bytes);
-            "Farbmodus: {}", wrap.color_mode;
-            "Chroma-Modus: {}", wrap.chroma_mode;
-            #[cfg(feature = "audio")]
-            "Lautstärke: {}%", (audio::get_volume() * 100.0).round() as usize;
-        ),
-        "es-es" => putlns_or_uflns!(wrap;
-            "tvid v{}", env!("CARGO_PKG_VERSION");
-            "Presione 'q' para salir, 'n' para saltar al siguiente, 'l' para la lista de reproducción";
-            "{}: {}", if avsync::is_paused() { "Pausado" } else { "Reproduciendo" }, wrap.playing;
-            "Tiempo de video: {playing_time_str} (desplazamiento de audio: {audio_offset_str}, desplazamiento de video: {video_offset_str})";
-            "Tiempo de la aplicación: {app_time_str}";
-            "Tiempo de codificación de cadena de escape: {:.2?} (promedio de los últimos 60)", statistics.escape_string_encode_time.avg();
-            "Tiempo de renderizado: {:.2?} (promedio de los últimos 60)", statistics.render_time.avg();
-            "Tiempo de salida: {:.2?} (promedio de los últimos 60)", statistics.output_time.avg();
-            "Bytes de salida: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
-            "Fotogramas de video omitidos: {}", statistics.video_skipped_frames;
-            "Total de bytes de salida: {}", format_bytes_count(statistics.total_output_bytes);
-            "Modo de color: {}", wrap.color_mode;
-            "Modo de croma: {}", wrap.chroma_mode;
-            #[cfg(feature = "audio")]
-            "Volumen: {}%", (audio::get_volume() * 100.0).round() as usize;
-        ),
-        _ => putlns_or_uflns!(wrap;
-            "tvid v{}", env!("CARGO_PKG_VERSION");
-            "Press 'q' to quit, 'n' to skip to next, 'l' for playlist";
-            "{}: {}", if avsync::is_paused() { "Paused" } else { "Playing" }, wrap.playing;
-            "Video Time: {playing_time_str} (a: {audio_offset_str}, v: {video_offset_str})";
-            "App Time: {app_time_str}";
-            "Escape String Encode Time: {:.2?} (avg over last 60)", statistics.escape_string_encode_time.avg();
-            "Render Time: {:.2?} (avg over last 60)", statistics.render_time.avg();
-            "Output Time: {:.2?} (avg over last 60)", statistics.output_time.avg();
-            "Output Bytes: {}", format_bytes_count(statistics.output_bytes.avg::<usize>());
-            "Video Skipped Frames: {}", statistics.video_skipped_frames;
-            "Total Output Bytes: {}", format_bytes_count(statistics.total_output_bytes);
-            "Color Mode: {}", wrap.color_mode;
-            "Chroma Mode: {}", wrap.chroma_mode;
-            #[cfg(feature = "audio")]
-            "Volume: {}%", (audio::get_volume() * 100.0).round() as usize;
-        ),
-    }
+    let status = if avsync::is_paused() {
+        l10n!("Paused")
+    } else {
+        l10n!("Playing")
+    };
+    putlns_or_uflns!(wrap;
+        "{}", f16n!("tvid v{}", env!("CARGO_PKG_VERSION"));
+        "{}", l10n!("Press 'q' to quit, 'n' to skip to next, 'l' for playlist");
+        "{}", f16n!("{}: {}", status, wrap.playing);
+        "{}", f16n!("Video Time: {} (a: {}, v: {})", playing_time_str, audio_offset_str, video_offset_str);
+        "{}", f16n!("App Time: {}", app_time_str);
+        "{}", f16n!("Escape String Encode Time: {:.2?} (avg over last 60)", statistics.escape_string_encode_time.avg());
+        "{}", f16n!("Render Time: {:.2?} (avg over last 60)", statistics.render_time.avg());
+        "{}", f16n!("Output Time: {:.2?} (avg over last 60)", statistics.output_time.avg());
+        "{}", f16n!("Output Bytes: {}", format_bytes_count(statistics.output_bytes.avg::<usize>()));
+        "{}", f16n!("Video Skipped Frames: {}", statistics.video_skipped_frames);
+        "{}", f16n!("Total Output Bytes: {}", format_bytes_count(statistics.total_output_bytes));
+        "{}", f16n!("Color Mode: {}", wrap.color_mode);
+        "{}", f16n!("Chroma Mode: {}", wrap.chroma_mode);
+        #[cfg(feature = "audio")]
+        "{}", f16n!("Volume: {}%", (audio::get_volume() * 100.0).round() as usize);
+    );
 }
 
 fn render_playlist(wrap: &mut ContextWrapper) {
@@ -478,15 +305,7 @@ fn render_playlist(wrap: &mut ContextWrapper) {
     helper::textbox_default_color(Some(TERM_DEFAULT_BG), None);
 
     let len = PLAYLIST.lock().len();
-    match locale!() {
-        "zh-cn" => putln_or_ufln!(wrap, "播放列表 ({len} 项):"),
-        "zh-tw" => putln_or_ufln!(wrap, "播放清單 ({len} 項):"),
-        "ja-jp" => putln_or_ufln!(wrap, "プレイリスト ({len} アイテム):"),
-        "fr-fr" => putln_or_ufln!(wrap, "Liste de lecture ({len} éléments):"),
-        "de-de" => putln_or_ufln!(wrap, "Wiedergabeliste ({len} Elemente):"),
-        "es-es" => putln_or_ufln!(wrap, "Lista de reproducción ({len} elementos):"),
-        _ => putln_or_ufln!(wrap, "Playlist ({len} items):"),
-    }
+    putln_or_ufln!(wrap, "{}", f16n!("Playlist ({} items):", len));
 
     let selected_index = *PLAYLIST_SELECTED_INDEX.lock();
     let playing_index = PLAYLIST.lock().get_pos();
@@ -613,43 +432,11 @@ fn render_file_select(wrap: &mut ContextWrapper) {
     let file_select_shown = file_select_shown.clamp(0.0, min(h - 5, list.len()) as f32);
     unsafe { FILE_SELECT_SHOWN = file_select_shown };
 
-    match locale!() {
-        "zh-cn" => putlns_or_uflns!(wrap;
-            "文件选择: {path}";
-            "  > 使用方向键导航，空格选择，Q 取消。";
-            "{}", "-".repeat(w - 2);
-        ),
-        "zh-tw" => putlns_or_uflns!(wrap;
-            "檔案選擇: {path}";
-            "  > 使用方向鍵導航，空格選擇，Q 取消。";
-            "{}", "-".repeat(w - 2);
-        ),
-        "ja-jp" => putlns_or_uflns!(wrap;
-            "ファイル選択: {path}";
-            "  > 矢印キーで移動、スペースで選択、Qでキャンセル。";
-            "{}", "-".repeat(w - 2);
-        ),
-        "fr-fr" => putlns_or_uflns!(wrap;
-            "Sélection de fichier : {path}";
-            "  > Utilisez les flèches pour naviguer, Espace pour sélectionner, Q pour annuler.";
-            "{}", "-".repeat(w - 2);
-        ),
-        "de-de" => putlns_or_uflns!(wrap;
-            "Datei auswählen: {path}";
-            "  > Verwenden Sie die Pfeiltasten zum Navigieren, Leertaste zum Auswählen, Q zum Abbrechen.";
-            "{}", "-".repeat(w - 2);
-        ),
-        "es-es" => putlns_or_uflns!(wrap;
-            "Seleccionar archivo: {path}";
-            "  > Use las flechas para navegar, Espacio para seleccionar, Q para cancelar.";
-            "{}", "-".repeat(w - 2);
-        ),
-        _ => putlns_or_uflns!(wrap;
-            "File Select: {path}";
-            "  > Use arrow keys to navigate, Space to select, Q to cancel.";
-            "{}", "-".repeat(w - 2);
-        ),
-    }
+    putlns_or_uflns!(wrap;
+        "{}", f16n!("File Select: {}", path);
+        "{}", l10n!("  > Use arrow keys to navigate, Space to select, Q to cancel.");
+        "{}", "-".repeat(w - 2);
+    );
 
     if path.is_empty() {
         *path = "/".to_string();
@@ -732,15 +519,7 @@ fn register_file_select_keypress_callbacks() {
             PLAYLIST.lock().push_and_setnext(&path);
             ffmpeg::notify_quit();
         } else {
-            error_l10n!(
-                "zh-cn" => "无法打开非文件: {}", path;
-                "zh-tw" => "無法開啟非檔案: {}", path;
-                "ja-jp" => "ファイルでないものを開けません: {}", path;
-                "fr-fr" => "Impossible d'ouvrir autre qu'un fichier : {}", path;
-                "de-de" => "Kann keine Nicht-Datei öffnen: {}", path;
-                "es-es" => "No se puede abrir no archivo: {}", path;
-                _ => "Cannot open non-file: {}", path;
-            );
+            error_f16n!("Cannot open non-file: {}", path);
         }
         true
     };
@@ -892,15 +671,7 @@ fn render_quit_confirmation(wrap: &mut ContextWrapper) {
     );
     helper::textbox(x, y, w, h, false);
     helper::textbox_default_color(Some(TERM_DEFAULT_BG), None);
-    match locale!() {
-        "zh-cn" => putln_or_ufln!(wrap, "        确认退出？       "),
-        "zh-tw" => putln_or_ufln!(wrap, "        確認離開？       "),
-        "ja-jp" => putln_or_ufln!(wrap, "   終了を確認しますか？  "),
-        "fr-fr" => putln_or_ufln!(wrap, " Confirmer la fermeture ?"),
-        "de-de" => putln_or_ufln!(wrap, "   Beenden bestätigen?   "),
-        "es-es" => putln_or_ufln!(wrap, "   ¿Confirmar salida?    "),
-        _ => putln_or_ufln!(wrap, "      Confirm Quit?      "),
-    }
+    putln_or_ufln!(wrap, "{}", l10n!("      Confirm Quit?      "));
     putln_or_ufln!(wrap, "-------------------------");
     putln_or_ufln!(wrap, "        q   /   c        ");
 }
@@ -966,42 +737,10 @@ pub fn register_input_callbacks() {
     });
 
     stdin::register_keypress_callback(Key::Normal('t'), |_, _| {
-        debug_l10n!(
-            "zh-cn" => "这是一条测试调试信息。";
-            "zh-tw" => "這是一條測試調試信息。";
-            "ja-jp" => "これはテスト用のデバッグメッセージです。";
-            "fr-fr" => "Ceci est un message de débogage de test.";
-            "de-de" => "Dies ist eine Test-Debug-Nachricht.";
-            "es-es" => "Este es un mensaje de depuración de prueba.";
-            _       => "This is a test debug message.";
-        );
-        info_l10n!(
-            "zh-cn" => "这是一条测试信息。";
-            "zh-tw" => "這是一條測試信息。";
-            "ja-jp" => "これはテスト用のメッセージです。";
-            "fr-fr" => "Ceci est un message de test.";
-            "de-de" => "Dies ist eine Testnachricht.";
-            "es-es" => "Este es un mensaje de prueba.";
-            _       => "This is a test message.";
-        );
-        warning_l10n!(
-            "zh-cn" => "这是一条测试警告。";
-            "zh-tw" => "這是一條測試警告。";
-            "ja-jp" => "これはテスト用の警告です。";
-            "fr-fr" => "Ceci est un avertissement de test.";
-            "de-de" => "Dies ist eine Testwarnung.";
-            "es-es" => "Esta es una advertencia de prueba.";
-            _       => "This is a test warning.";
-        );
-        error_l10n!(
-            "zh-cn" => "这是一条测试错误。";
-            "zh-tw" => "這是一條測試錯誤。";
-            "ja-jp" => "これはテスト用のエラーです。";
-            "fr-fr" => "Ceci est une erreur de test.";
-            "de-de" => "Dies ist ein Testfehler.";
-            "es-es" => "Este es un error de prueba.";
-            _       => "This is a test error.";
-        );
+        debug_l10n!("This is a test debug message.");
+        info_l10n!("This is a test message.");
+        warning_l10n!("This is a test warning.");
+        error_l10n!("This is a test error.");
         true
     });
 

@@ -1,0 +1,15 @@
+["Volume must be between 0 and 200"]
+zh-cn = "音量必须在 0 到 200 之间"
+zh-tw = "音量必須在 0 到 200 之間"
+ja-jp = "音量は0〜200の間でなければなりません"
+fr-fr = "Le volume doit être entre 0 et 200"
+de-de = "Die Lautstärke muss zwischen 0 und 200 liegen"
+es-es = "El volumen debe estar entre 0 y 200"
+
+["Unknown config key: {}"]
+zh-cn = "未知的配置项: {}"
+zh-tw = "未知的設定項: {}"
+ja-jp = "不明な設定キー: {}"
+fr-fr = "Clé de configuration inconnue : {}"
+de-de = "Unbekannter Konfigurationsschlüssel: {}"
+es-es = "Clave de configuración desconocida: {}"

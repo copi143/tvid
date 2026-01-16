@@ -1,0 +1,39 @@
+["Video frame has zero width or height, skipping"]
+zh-cn = "视频帧宽度或高度为零，跳过"
+zh-tw = "視訊幀寬度或高度為零，跳過"
+ja-jp = "ビデオフレームの幅または高さがゼロのため、スキップします"
+fr-fr = "la largeur ou la hauteur de la trame vidéo est nulle, saut"
+de-de = "Videoframe hat null Breite oder Höhe, überspringen"
+es-es = "El fotograma de video tiene ancho o alto cero, se omite"
+
+["Video frame too late: frame time {:?}, played time {:?}"]
+zh-cn = "视频帧太晚: 帧时间 {:?}, 播放时间 {:?}"
+zh-tw = "視訊幀太晚: 幀時間 {:?}, 播放時間 {:?}"
+ja-jp = "ビデオフレームが遅すぎる: フレーム時間 {:?}, 再生時間 {:?}"
+fr-fr = "Trame vidéo trop tard : temps de la trame {:?}, temps de lecture {:?}"
+de-de = "Videoframe zu spät: Frame-Zeit {:?}, Wiedergabe-Zeit {:?}"
+es-es = "Fotograma de video demasiado tarde: tiempo de fotograma {:?}, tiempo de reproducción {:?}"
+
+["Video frame too late, skipping"]
+zh-cn = "视频帧太晚，跳过"
+zh-tw = "視訊幀太晚，跳過"
+ja-jp = "ビデオフレームが遅すぎるため、スキップします"
+fr-fr = "Trame vidéo trop tard, saut"
+de-de = "Videoframe zu spät, überspringen"
+es-es = "Fotograma de video demasiado tarde, se omite"
+
+["Could not create scaler for video frame"]
+zh-cn = "无法为视频帧创建缩放器"
+zh-tw = "無法為視訊幀建立縮放器"
+ja-jp = "ビデオフレームのスケーラーを作成できません"
+fr-fr = "Impossible de créer un scaler pour la trame vidéo"
+de-de = "Konnte keinen Skalierer für Videoframes erstellen"
+es-es = "No se pudo crear un escalador para el fotograma de video"
+
+["Could not scale video frame: {}"]
+zh-cn = "无法缩放视频帧: {}"
+zh-tw = "無法縮放視訊幀: {}"
+ja-jp = "ビデオフレームをスケーリングできません: {}"
+fr-fr = "Impossible de mettre à l'échelle la trame vidéo : {}"
+de-de = "Konnte Videoframe nicht skalieren: {}"
+es-es = "No se pudo escalar el fotograma de video: {}"

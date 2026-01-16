@@ -300,24 +300,8 @@ pub fn audio_main() {
     let target_sample_rate = config.sample_rate();
     let cpal_stream = build_cpal_stream(&device, &config).unwrap();
     if target_sample_rate == 0 {
-        error_l10n!(
-            "zh-cn" => "无效的音频采样率: 0";
-            "zh-tw" => "無效的音訊取樣率: 0";
-            "ja-jp" => "無効なオーディオサンプルレート: 0";
-            "fr-fr" => "taux d'échantillonnage audio invalide : 0";
-            "de-de" => "Ungültige Audio-Samplerate: 0";
-            "es-es" => "frecuencia de muestreo de audio no válida: 0";
-            _       => "Invalid audio sample rate: 0";
-        );
-        error_l10n!(
-            "zh-cn" => "退出音频线程";
-            "zh-tw" => "退出音訊執行緒";
-            "ja-jp" => "オーディオスレッドを終了します";
-            "fr-fr" => "quitter le thread audio";
-            "de-de" => "Beenden des Audiothreads";
-            "es-es" => "saliendo del hilo de audio";
-            _       => "Quiting audio thread";
-        );
+        error_l10n!("Invalid audio sample rate: 0");
+        error_l10n!("Quiting audio thread");
         ffmpeg::notify_quit();
         return;
     }
@@ -338,24 +322,8 @@ pub fn audio_main() {
         7 => ChannelLayout::_6POINT1,
         8 => ChannelLayout::_7POINT1,
         _ => {
-            error_l10n!(
-                "zh-cn" => "不支持的声道数: {target_channels}";
-                "zh-tw" => "不支援的聲道數: {target_channels}";
-                "ja-jp" => "サポートされていないチャンネル数: {target_channels}";
-                "fr-fr" => "nombre de canaux non pris en charge : {target_channels}";
-                "de-de" => "Nicht unterstützte Kanalanzahl: {target_channels}";
-                "es-es" => "número de canales no compatible: {target_channels}";
-                _       => "Unsupported channel count: {target_channels}";
-            );
-            error_l10n!(
-                "zh-cn" => "退出音频线程";
-                "zh-tw" => "退出音訊執行緒";
-                "ja-jp" => "オーディオスレッドを終了します";
-                "fr-fr" => "quitter le thread audio";
-                "de-de" => "Beenden des Audiothreads";
-                "es-es" => "saliendo del hilo de audio";
-                _       => "Quiting audio thread";
-            );
+            error_f16n!("Unsupported channel count: {}", target_channels);
+            error_l10n!("Quiting audio thread");
             ffmpeg::notify_quit();
             return;
         }

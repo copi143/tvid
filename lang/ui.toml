@@ -1,0 +1,271 @@
+["        Help Information (press h to close)       "]
+zh-cn = "               帮助信息 (按 h 关闭)               "
+zh-tw = "               幫助資訊 (按 h 關閉)               "
+ja-jp = "            ヘルプ情報 (hキーで閉じる)            "
+fr-fr = "  Informations d'aide (appuyez sur h pour fermer) "
+de-de = " Hilfeinformationen (drücken Sie h zum Schließen) "
+es-es = "   Información de ayuda (presione h para cerrar)  "
+
+["--------------------------------------------------"]
+zh-cn = "--------------------------------------------------"
+zh-tw = "--------------------------------------------------"
+ja-jp = "--------------------------------------------------"
+fr-fr = "--------------------------------------------------"
+de-de = "--------------------------------------------------"
+es-es = "--------------------------------------------------"
+
+["     q:            Quit the program               "]
+zh-cn = "     q:           退出程序                        "
+zh-tw = "     q:           離開程式                        "
+ja-jp = "     q:           プログラムを終了                "
+fr-fr = "   q:            Quitter le programme             "
+de-de = "   q:           Programm beenden                  "
+es-es = "   q:           Salir del programa                "
+
+["     n:            Next item                      "]
+zh-cn = "     n:           下一项                          "
+zh-tw = "     n:           下一項                          "
+ja-jp = "     n:           次の項目                        "
+fr-fr = "   n:            Élément suivant                  "
+de-de = "   n:           Nächstes Element                  "
+es-es = "   n:           Siguiente elemento                "
+
+["     l:            Open/close playlist            "]
+zh-cn = "     l:           打开/关闭播放列表               "
+zh-tw = "     l:           開啟/關閉播放清單               "
+ja-jp = "     l:           プレイリストを開く/閉じる       "
+fr-fr = "   l:            Ouvrir/fermer la liste de lecture"
+de-de = "   l:           Wiedergabeliste öffnen/schließen  "
+es-es = "   l:           Abrir/cerrar lista de reproducción"
+
+["     Space/Enter:  Select file                    "]
+zh-cn = "     空格/回车:   选择文件                        "
+zh-tw = "     空格/Enter:  選擇檔案                        "
+ja-jp = "     スペース/エンター: ファイルを選択            "
+fr-fr = "   Espace/Entrée: Sélectionner un fichier         "
+de-de = "   Leertaste/Eingabetaste: Datei auswählen        "
+es-es = "   Espacio/Enter: Seleccionar archivo             "
+
+["     w/s/↑/↓:      Move up/down                   "]
+zh-cn = "     w/s/↑/↓:     上/下移动                       "
+zh-tw = "     w/s/↑/↓:     上/下移動                       "
+ja-jp = "     w/s/↑/↓:     上/下に移動                     "
+fr-fr = "   w/s/↑/↓:      Déplacer vers le haut/bas        "
+de-de = "   w/s/↑/↓:     Nach oben/unten bewegen           "
+es-es = "   w/s/↑/↓:     Mover arriba/abajo                "
+
+["     a/d/←/→:      Enter/return directory         "]
+zh-cn = "     a/d/←/→:     进入/返回目录                   "
+zh-tw = "     a/d/←/→:     進入/返回目錄                   "
+ja-jp = "     a/d/←/→:     ディレクトリに入る/戻る         "
+fr-fr = "   a/d/←/→:      Entrer/revenir au répertoire     "
+de-de = "   a/d/←/→:     Verzeichnis betreten/zurückkehren "
+es-es = "   a/d/←/→:     Entrar/volver al directorio       "
+
+["     h:            Open/close help                "]
+zh-cn = "     h:           打开/关闭帮助                   "
+zh-tw = "     h:           開啟/關閉幫助                   "
+ja-jp = "     h:           ヘルプを開く/閉じる             "
+fr-fr = "   h:            Ouvrir/fermer l'aide             "
+de-de = "   h:           Hilfe öffnen/schließen            "
+es-es = "   h:           Abrir/cerrar ayuda                "
+
+["tvid v{}"]
+zh-cn = "tvid v{}"
+zh-tw = "tvid v{}"
+ja-jp = "tvid v{}"
+fr-fr = "tvid v{}"
+de-de = "tvid v{}"
+es-es = "tvid v{}"
+
+["Press 'q' to quit, 'n' to skip to next, 'l' for playlist"]
+zh-cn = "按 'q' 退出，'n' 跳到下一项，'l' 打开播放列表"
+zh-tw = "按 'q' 離開，'n' 跳到下一項，'l' 打開播放清單"
+ja-jp = "'q'で終了、'n'で次へ、'l'でプレイリストを開く"
+fr-fr = "Appuyez sur 'q' pour quitter, 'n' pour passer au suivant, 'l' pour la liste de lecture"
+de-de = "Drücken Sie 'q' zum Beenden, 'n' zum Überspringen zum Nächsten, 'l' für die Wiedergabeliste"
+es-es = "Presione 'q' para salir, 'n' para saltar al siguiente, 'l' para la lista de reproducción"
+
+["Paused"]
+zh-cn = "暂停中"
+zh-tw = "暫停中"
+ja-jp = "一時停止中"
+fr-fr = "En pause"
+de-de = "Pausiert"
+es-es = "Pausado"
+
+["Playing"]
+zh-cn = "播放中"
+zh-tw = "播放中"
+ja-jp = "再生中"
+fr-fr = "Lecture"
+de-de = "Wiedergabe"
+es-es = "Reproduciendo"
+
+["{}: {}"]
+zh-cn = "{}: {}"
+zh-tw = "{}: {}"
+ja-jp = "{}: {}"
+fr-fr = "{}: {}"
+de-de = "{}: {}"
+es-es = "{}: {}"
+
+["Video Time: {} (a: {}, v: {})"]
+zh-cn = "视频时间: {} (音频偏移: {}, 视频偏移: {})"
+zh-tw = "視頻時間: {} (音頻偏移: {}, 視頻偏移: {})"
+ja-jp = "ビデオ時間: {} (オーディオオフセット: {}, ビデオオフセット: {})"
+fr-fr = "Temps vidéo: {} (décalage audio: {}, décalage vidéo: {})"
+de-de = "Videozeit: {} (Audio-Offset: {}, Video-Offset: {})"
+es-es = "Tiempo de video: {} (desplazamiento de audio: {}, desplazamiento de video: {})"
+
+["App Time: {}"]
+zh-cn = "应用开启时间: {}"
+zh-tw = "應用開啟時間: {}"
+ja-jp = "アプリ起動時間: {}"
+fr-fr = "Temps d'exécution de l'application: {}"
+de-de = "App-Zeit: {}"
+es-es = "Tiempo de la aplicación: {}"
+
+["Escape String Encode Time: {:.2?} (avg over last 60)"]
+zh-cn = "转义字符串编码时间: {:.2?} (最近 60 次平均)"
+zh-tw = "轉義字串編碼時間: {:.2?} (最近 60 次平均)"
+ja-jp = "エスケープ文字列エンコード時間: {:.2?} (直近 60 回の平均)"
+fr-fr = "Temps d'encodage de la chaîne d'échappement: {:.2?} (moyenne des 60 dernières)"
+de-de = "Escape-String-Kodierungszeit: {:.2?} (Durchschnitt der letzten 60)"
+es-es = "Tiempo de codificación de cadena de escape: {:.2?} (promedio de los últimos 60)"
+
+["Render Time: {:.2?} (avg over last 60)"]
+zh-cn = "渲染时间: {:.2?} (最近 60 次平均)"
+zh-tw = "渲染時間: {:.2?} (最近 60 次平均)"
+ja-jp = "レンダリング時間: {:.2?} (直近 60 回の平均)"
+fr-fr = "Temps de rendu: {:.2?} (moyenne des 60 dernières)"
+de-de = "Render-Zeit: {:.2?} (Durchschnitt der letzten 60)"
+es-es = "Tiempo de renderizado: {:.2?} (promedio de los últimos 60)"
+
+["Output Time: {:.2?} (avg over last 60)"]
+zh-cn = "输出时间: {:.2?} (最近 60 次平均)"
+zh-tw = "輸出時間: {:.2?} (最近 60 次平均)"
+ja-jp = "出力時間: {:.2?} (直近 60 回の平均)"
+fr-fr = "Temps de sortie: {:.2?} (moyenne des 60 dernières)"
+de-de = "Ausgabezeit: {:.2?} (Durchschnitt der letzten 60)"
+es-es = "Tiempo de salida: {:.2?} (promedio de los últimos 60)"
+
+["Output Bytes: {}"]
+zh-cn = "输出字节数: {}"
+zh-tw = "輸出位元組數: {}"
+ja-jp = "出力バイト数: {}"
+fr-fr = "Nombre de bytes de sortie: {}"
+de-de = "Ausgabe-Bytes: {}"
+es-es = "Bytes de salida: {}"
+
+["Video Skipped Frames: {}"]
+zh-cn = "视频跳过帧数: {}"
+zh-tw = "視頻跳過幀數: {}"
+ja-jp = "ビデオスキップフレーム数: {}"
+fr-fr = "Images vidéo sautées: {}"
+de-de = "Übersprungene Videoframes: {}"
+es-es = "Fotogramas de video omitidos: {}"
+
+["Total Output Bytes: {}"]
+zh-cn = "总输出字节数: {}"
+zh-tw = "總輸出位元組數: {}"
+ja-jp = "総出力バイト数: {}"
+fr-fr = "Nombre total de bytes de sortie: {}"
+de-de = "Gesamt-Ausgabe-Bytes: {}"
+es-es = "Total de bytes de salida: {}"
+
+["Color Mode: {}"]
+zh-cn = "颜色模式: {}"
+zh-tw = "顏色模式: {}"
+ja-jp = "カラーモード: {}"
+fr-fr = "Mode couleur: {}"
+de-de = "Farbmodus: {}"
+es-es = "Modo de color: {}"
+
+["Chroma Mode: {}"]
+zh-cn = "绿幕模式: {}"
+zh-tw = "綠幕模式: {}"
+ja-jp = "クロマモード: {}"
+fr-fr = "Mode chroma: {}"
+de-de = "Chroma-Modus: {}"
+es-es = "Modo de croma: {}"
+
+["Volume: {}%"]
+zh-cn = "音量: {}%"
+zh-tw = "音量: {}%"
+ja-jp = "音量: {}%"
+fr-fr = "Volume: {}%"
+de-de = "Lautstärke: {}%"
+es-es = "Volumen: {}%"
+
+["Playlist ({} items):"]
+zh-cn = "播放列表 ({} 项):"
+zh-tw = "播放清單 ({} 項):"
+ja-jp = "プレイリスト ({} アイテム):"
+fr-fr = "Liste de lecture ({} éléments):"
+de-de = "Wiedergabeliste ({} Elemente):"
+es-es = "Lista de reproducción ({} elementos):"
+
+["File Select: {}"]
+zh-cn = "文件选择: {}"
+zh-tw = "檔案選擇: {}"
+ja-jp = "ファイル選択: {}"
+fr-fr = "Sélection de fichier : {}"
+de-de = "Datei auswählen: {}"
+es-es = "Seleccionar archivo: {}"
+
+["  > Use arrow keys to navigate, Space to select, Q to cancel."]
+zh-cn = "  > 使用方向键导航，空格选择，Q 取消。"
+zh-tw = "  > 使用方向鍵導航，空格選擇，Q 取消。"
+ja-jp = "  > 矢印キーで移動、スペースで選択、Qでキャンセル。"
+fr-fr = "  > Utilisez les flèches pour naviguer, Espace pour sélectionner, Q pour annuler."
+de-de = "  > Verwenden Sie die Pfeiltasten zum Navigieren, Leertaste zum Auswählen, Q zum Abbrechen."
+es-es = "  > Use las flechas para navegar, Espacio para seleccionar, Q para cancelar."
+
+["Cannot open non-file: {}"]
+zh-cn = "无法打开非文件: {}"
+zh-tw = "無法開啟非檔案: {}"
+ja-jp = "ファイルでないものを開けません: {}"
+fr-fr = "Impossible d'ouvrir autre qu'un fichier : {}"
+de-de = "Kann keine Nicht-Datei öffnen: {}"
+es-es = "No se puede abrir no archivo: {}"
+
+["      Confirm Quit?      "]
+zh-cn = "        确认退出？       "
+zh-tw = "        確認離開？       "
+ja-jp = "   終了を確認しますか？  "
+fr-fr = " Confirmer la fermeture ?"
+de-de = "   Beenden bestätigen?   "
+es-es = "   ¿Confirmar salida?    "
+
+["This is a test debug message."]
+zh-cn = "这是一条测试调试信息。"
+zh-tw = "這是一條測試調試信息。"
+ja-jp = "これはテスト用のデバッグメッセージです。"
+fr-fr = "Ceci est un message de débogage de test."
+de-de = "Dies ist eine Test-Debug-Nachricht."
+es-es = "Este es un mensaje de depuración de prueba."
+
+["This is a test message."]
+zh-cn = "这是一条测试信息。"
+zh-tw = "這是一條測試信息。"
+ja-jp = "これはテスト用のメッセージです。"
+fr-fr = "Ceci est un message de test."
+de-de = "Dies ist eine Testnachricht."
+es-es = "Este es un mensaje de prueba."
+
+["This is a test warning."]
+zh-cn = "这是一条测试警告。"
+zh-tw = "這是一條測試警告。"
+ja-jp = "これはテスト用の警告です。"
+fr-fr = "Ceci est un avertissement de test."
+de-de = "Dies ist eine Testwarnung."
+es-es = "Esta es una advertencia de prueba."
+
+["This is a test error."]
+zh-cn = "这是一条测试错误。"
+zh-tw = "這是一條測試錯誤。"
+ja-jp = "これはテスト用のエラーです。"
+fr-fr = "Ceci est une erreur de test."
+de-de = "Dies ist ein Testfehler."
+es-es = "Este es un error de prueba."

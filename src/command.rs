@@ -1,5 +1,4 @@
 use parking_lot::Mutex;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::stdin::{self, Key};
@@ -72,15 +71,7 @@ fn execute_command(line: &str) {
     if let Some(handler) = handler {
         handler(&args);
     } else {
-        error_l10n!(
-            "zh-cn" => "未知命令: {cmd}";
-            "zh-tw" => "未知命令: {cmd}";
-            "ja-jp" => "不明なコマンド: {cmd}";
-            "fr-fr" => "Commande inconnue : {cmd}";
-            "de-de" => "Unbekannter Befehl: {cmd}";
-            "es-es" => "Comando desconocido: {cmd}";
-            _ => "Unknown command: {cmd}";
-        );
+        error_f16n!("Unknown command: {}", cmd);
     }
 }
 
@@ -115,40 +106,16 @@ fn cmd_help(_args: &[&str]) {
     let mut names = COMMANDS.lock().iter().map(|c| c.name).collect::<Vec<_>>();
     names.sort_unstable();
     let list = names.join(" ");
-    info_l10n!(
-        "zh-cn" => "命令: {}", list;
-        "zh-tw" => "命令: {}", list;
-        "ja-jp" => "コマンド: {}", list;
-        "fr-fr" => "Commandes: {}", list;
-        "de-de" => "Befehle: {}", list;
-        "es-es" => "Comandos: {}", list;
-        _ => "Commands: {}", list;
-    );
+    info_f16n!("Commands: {}", list);
 }
 
 fn cmd_seek(args: &[&str]) {
     let Some(arg) = args.first() else {
-        error_l10n!(
-            "zh-cn" => "seek 缺少参数";
-            "zh-tw" => "seek 缺少參數";
-            "ja-jp" => "seek の引数が不足しています";
-            "fr-fr" => "seek: argument manquant";
-            "de-de" => "seek: fehlendes Argument";
-            "es-es" => "seek: falta el argumento";
-            _ => "seek: missing argument";
-        );
+        error_l10n!("seek: missing argument");
         return;
     };
     let Ok(value) = arg.parse::<f64>() else {
-        error_l10n!(
-            "zh-cn" => "seek 参数无效: {arg}";
-            "zh-tw" => "seek 參數無效: {arg}";
-            "ja-jp" => "seek の引数が無効です: {arg}";
-            "fr-fr" => "seek: argument invalide: {arg}";
-            "de-de" => "seek: ungültiges Argument: {arg}";
-            "es-es" => "seek: argumento inválido: {arg}";
-            _ => "seek: invalid argument: {arg}";
-        );
+        error_f16n!("seek: invalid argument: {}", arg);
         return;
     };
     if arg.starts_with('+') || arg.starts_with('-') {
@@ -160,27 +127,11 @@ fn cmd_seek(args: &[&str]) {
 
 fn cmd_volume(args: &[&str]) {
     let Some(arg) = args.first() else {
-        error_l10n!(
-            "zh-cn" => "vol 缺少参数";
-            "zh-tw" => "vol 缺少參數";
-            "ja-jp" => "vol の引数が不足しています";
-            "fr-fr" => "vol: argument manquant";
-            "de-de" => "vol: fehlendes Argument";
-            "es-es" => "vol: falta el argumento";
-            _ => "vol: missing argument";
-        );
+        error_l10n!("vol: missing argument");
         return;
     };
     let Ok(value) = arg.parse::<f32>() else {
-        error_l10n!(
-            "zh-cn" => "vol 参数无效: {arg}";
-            "zh-tw" => "vol 參數無效: {arg}";
-            "ja-jp" => "vol の引数が無効です: {arg}";
-            "fr-fr" => "vol: argument invalide: {arg}";
-            "de-de" => "vol: ungültiges Argument: {arg}";
-            "es-es" => "vol: argumento inválido: {arg}";
-            _ => "vol: invalid argument: {arg}";
-        );
+        error_f16n!("vol: invalid argument: {}", arg);
         return;
     };
     #[cfg(feature = "audio")]
@@ -192,15 +143,7 @@ fn cmd_volume(args: &[&str]) {
     #[cfg(not(feature = "audio"))]
     {
         let _ = value;
-        warning_l10n!(
-            "zh-cn" => "未启用音频功能";
-            "zh-tw" => "未啟用音訊功能";
-            "ja-jp" => "オーディオ機能が無効です";
-            "fr-fr" => "Audio désactivé";
-            "de-de" => "Audio deaktiviert";
-            "es-es" => "Audio desactivado";
-            _ => "Audio is disabled";
-        );
+        warning_l10n!("Audio is disabled");
     }
 }
 

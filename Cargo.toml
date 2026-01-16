@@ -39,7 +39,7 @@ default = [
   "unifont",
 ]
 ffmpeg = ["dep:av", "dep:avsys"] # 使用 ffmpeg 进行视频解码 (目前只支持这一个解码器)
-i18n = ["dep:sys-locale"] # 支持多语言界面
+i18n = ["dep:sys-locale", "dep:static-l10n"] # 支持多语言界面
 sixel = [] # 支持 sixel 终端图像协议
 osc1337 = ["dep:base64", "dep:jpeg-encoder"] # 支持 osc1337 终端图像协议
 config = ["dep:serde", "dep:toml_edit"] # WIP
@@ -50,7 +50,13 @@ unicode = ["dep:unicode-width"] # 支持渲染 Unicode 宽字符
 unifont = [] # 在终端字体过小时使用盲文字符打印 Unifont 字体
 ssh = ["dep:russh"] # WIP
 
+[package.metadata.static-l10n]
+path = "lang"
+base = "en-us"
+langs = ["en-us", "zh-cn", "zh-tw", "ja-jp", "fr-fr", "de-de", "es-es"]
+
 [dependencies]
+static-l10n = { version = "0.0.2", optional = true }
 data-classes = { version = "0.0.0-17", features = ["serde"] }
 anyhow = "1.0.100"
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "time", "sync"] }

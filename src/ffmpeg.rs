@@ -59,26 +59,10 @@ unsafe extern "C" fn ffmpeg_log_callback(
             avsys::AV_LOG_VERBOSE => debug!("{str_slice}"),
             avsys::AV_LOG_DEBUG => debug!("{str_slice}"),
             avsys::AV_LOG_TRACE => debug!("{str_slice}"),
-            _ => error_l10n!(
-                "zh-cn" => "FFmpeg 未知的日志级别 {arg2}: {str_slice}";
-                "zh-tw" => "FFmpeg 未知的日誌級別 {arg2}: {str_slice}";
-                "ja-jp" => "FFmpeg の不明なログレベル {arg2}：{str_slice}";
-                "fr-fr" => "Niveau de journalisation FFmpeg inconnu {arg2} : {str_slice}";
-                "de-de" => "FFmpeg unbekanntes Protokollniveau {arg2}: {str_slice}";
-                "es-es" => "Nivel de registro desconocido de FFmpeg {arg2}: {str_slice}";
-                _       => "FFmpeg unknown log level {arg2}: {str_slice}";
-            ),
+            _ => error_f16n!("FFmpeg unknown log level {}: {}", arg2, str_slice),
         }
     } else {
-        error_l10n!(
-            "zh-cn" => "FFmpeg 日志: <无效的 UTF-8>";
-            "zh-tw" => "FFmpeg 日誌: <無效的 UTF-8>";
-            "ja-jp" => "FFmpeg ログ: <無効な UTF-8>";
-            "fr-fr" => "Journal FFmpeg : <UTF-8 non valide>";
-            "de-de" => "FFmpeg-Protokoll: <ungültiges UTF-8>";
-            "es-es" => "Registro de FFmpeg: <UTF-8 no válido>";
-            _       => "FFmpeg log: <invalid UTF-8>";
-        );
+        error_l10n!("FFmpeg log: <invalid UTF-8>");
     }
     drop(guard);
 }
@@ -121,15 +105,7 @@ pub fn seek_request_absolute(sec: f64) {
 #[allow(unused_variables, unused_mut, unused_assignments)]
 pub fn decode_main(path: &str) -> Result<bool> {
     let Ok(mut ictx) = av::format::input(path) else {
-        error_l10n!(
-            "zh-cn" => "无法打开输入文件: {path}";
-            "zh-tw" => "無法打開輸入檔案: {path}";
-            "ja-jp" => "入力ファイルを開けません: {path}";
-            "fr-fr" => "Impossible d'ouvrir le fichier d'entrée : {path}";
-            "de-de" => "Eingabedatei kann nicht geöffnet werden: {path}";
-            "es-es" => "No se puede abrir el archivo de entrada: {path}";
-            _       => "Failed to open input file: {path}";
-        );
+        error_f16n!("Failed to open input file: {}", path);
         return Ok(false);
     };
 
@@ -163,10 +139,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
     let (mut video_decoder, video_timebase, video_rate) = if video_stream_index >= 0 {
         let Some(stream) = ictx.stream(video_stream_index as usize) else {
             error!("video stream index is valid, so stream must exist");
-            fatal_l10n!(
-                "zh-cn" => "FFmpeg 炸完了";
-                _       => "What happened with FFmpeg?";
-            );
+            fatal_l10n!("What happened with FFmpeg?");
         };
         let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context("video decoder")?;
         let codec = codec_ctx.decoder().video().context("video decoder")?;
@@ -182,10 +155,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
     let (mut audio_decoder, audio_timebase, audio_rate) = if audio_stream_index >= 0 {
         let Some(stream) = ictx.stream(audio_stream_index as usize) else {
             error!("audio stream index is valid, so stream must exist");
-            fatal_l10n!(
-                "zh-cn" => "FFmpeg 炸完了";
-                _       => "What happened with FFmpeg?";
-            );
+            fatal_l10n!("What happened with FFmpeg?");
         };
         let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context("audio decoder")?;
         let codec = codec_ctx.decoder().audio().context("audio decoder")?;
@@ -218,15 +188,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
                 Ordering::SeqCst,
             );
         } else {
-            error_l10n!(
-                "zh-cn" => "视频流帧率无效";
-                "zh-tw" => "視訊串流幀率無效";
-                "ja-jp" => "ビデオストリームのフレームレートが無効です";
-                "fr-fr" => "Le taux de trame du flux vidéo est invalide";
-                "de-de" => "Ungültige Bildrate im Videostream";
-                "es-es" => "La tasa de fotogramas de la secuencia de vídeo no es válida";
-                _       => "Video stream frame rate is invalid";
-            );
+            error_l10n!("Video stream frame rate is invalid");
             return Ok(false);
         }
     }
@@ -237,10 +199,7 @@ pub fn decode_main(path: &str) -> Result<bool> {
 
     if video_decoder.is_none() && audio_decoder.is_none() {
         error!("No audio or video stream found");
-        error_l10n!(
-            "zh-cn" => "啥玩意啊这";
-            _       => "What the fuck is this file?";
-        );
+        error_l10n!("What the fuck is this file?");
         return Ok(false);
     }
 
@@ -357,29 +316,13 @@ pub fn decode_main(path: &str) -> Result<bool> {
     #[cfg(feature = "video")]
     if let Some(video_main) = video_main {
         video_main.join().unwrap_or_else(|err| {
-            error_l10n!(
-                "zh-cn" => "合并视频线程时出错: {:?}", err;
-                "zh-tw" => "合併視訊執行緒時出錯: {:?}", err;
-                "ja-jp" => "ビデオスレッドの結合エラー: {:?}", err;
-                "fr-fr" => "erreur de jonction du thread vidéo : {:?}", err;
-                "de-de" => "Fehler beim Zusammenführen des Videothreads: {:?}", err;
-                "es-es" => "error al unir el hilo de vídeo: {:?}", err;
-                _       => "video thread join error: {:?}", err;
-            );
+            error_f16n!("video thread join error: {:?}", err);
         });
     }
     #[cfg(feature = "audio")]
     if let Some(audio_main) = audio_main {
         audio_main.join().unwrap_or_else(|err| {
-            error_l10n!(
-                "zh-cn" => "合并音频线程时出错: {:?}", err;
-                "zh-tw" => "合併音訊執行緒時出錯: {:?}", err;
-                "ja-jp" => "オーディオスレッドの結合エラー: {:?}", err;
-                "fr-fr" => "erreur de jonction du thread audio : {:?}", err;
-                "de-de" => "Fehler beim Zusammenführen des Audiothreads: {:?}", err;
-                "es-es" => "error al unir el hilo de audio: {:?}", err;
-                _       => "audio thread join error: {:?}", err;
-            );
+            error_f16n!("audio thread join error: {:?}", err);
         });
     }
 
@@ -562,15 +505,7 @@ fn decode_subtitle(subtitle_decoder: &mut Option<SubtitleDecoder>, packet: Packe
                     let _y = sub.y();
                     let _width = sub.width();
                     let _height = sub.height();
-                    warning_l10n!(
-                        "zh-cn" => "不支持位图字幕";
-                        "zh-tw" => "不支援位圖字幕";
-                        "ja-jp" => "ビットマップ字幕はサポートされていません";
-                        "fr-fr" => "les sous-titres bitmap ne sont pas pris en charge";
-                        "de-de" => "Bitmap-Untertitel werden nicht unterstützt";
-                        "es-es" => "los subtítulos de mapa de bits no son compatibles";
-                        _       => "bitmap subtitle not supported";
-                    );
+                    warning_l10n!("bitmap subtitle not supported");
                 }
                 av::subtitle::Rect::Text(sub) => {
                     subtitle::push_text(start, end, sub.get());

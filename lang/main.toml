@@ -1,0 +1,159 @@
+["No input files as playlist."]
+zh-cn = "没有播放列表。"
+zh-tw = "沒有播放清單。"
+ja-jp = "プレイリストがありません。"
+fr-fr = "Aucune liste de lecture."
+de-de = "Keine Wiedergabeliste."
+es-es = "No hay lista de reproducción."
+
+["Usage: {} <input> [input] ..."]
+zh-cn = "用法: {} <输入文件> [输入文件] ..."
+zh-tw = "用法: {} <輸入檔案> [輸入檔案] ..."
+ja-jp = "使用法: {} <入力ファイル> [入力ファイル] ..."
+fr-fr = "Utilisation: {} <fichier d'entrée> [fichier d'entrée] ..."
+de-de = "Verwendung: {} <Eingabedatei> [Eingabedatei] ..."
+es-es = "Uso: {} <archivo de entrada> [archivo de entrada] ..."
+
+["tvid - Terminal Video Player"]
+zh-cn = "tvid - 终端视频播放器"
+zh-tw = "tvid - 終端機視訊播放器"
+ja-jp = "tvid - ターミナルビデオプレーヤー"
+fr-fr = "tvid - Lecteur vidéo terminal"
+de-de = "tvid - Terminal Video Player"
+es-es = "tvid - Reproductor de video de terminal"
+
+["version: {}"]
+zh-cn = "版本: {}"
+zh-tw = "版本: {}"
+ja-jp = "バージョン: {}"
+fr-fr = "version: {}"
+de-de = "Version: {}"
+es-es = "versión: {}"
+
+["repo: {}"]
+zh-cn = "仓库: {}"
+zh-tw = "儲存庫: {}"
+ja-jp = "リポジトリ: {}"
+fr-fr = "dépôt: {}"
+de-de = "Repository: {}"
+es-es = "repositorio: {}"
+
+["license: {}"]
+zh-cn = "许可: {}"
+zh-tw = "授權: {}"
+ja-jp = "ライセンス: {}"
+fr-fr = "licence: {}"
+de-de = "Lizenz: {}"
+es-es = "licencia: {}"
+
+["Controls:"]
+zh-cn = "控制:"
+zh-tw = "控制:"
+ja-jp = "コントロール:"
+fr-fr = "Contrôles:"
+de-de = "Steuerung:"
+es-es = "Controles:"
+
+["  Space         : Play/Pause"]
+zh-cn = "  空格          : 播放/暂停"
+zh-tw = "  空白鍵        : 播放/暫停"
+ja-jp = "  スペースキー  : 再生/一時停止"
+fr-fr = "  Espace        : Lecture/Pause"
+de-de = "  Leertaste     : Abspielen/Pause"
+es-es = "  Espacio       : Reproducir/Pausar"
+
+["  q             : Quit"]
+zh-cn = "  q             : 退出"
+zh-tw = "  q             : 離開"
+ja-jp = "  q             : 終了"
+fr-fr = "  q             : Quitter"
+de-de = "  q             : Beenden"
+es-es = "  q             : Salir"
+
+["  n             : Next video in playlist"]
+zh-cn = "  n             : 播放列表中下一个视频"
+zh-tw = "  n             : 播放清單中的下一個視訊"
+ja-jp = "  n             : プレイリストの次のビデオ"
+fr-fr = "  n             : Vidéo suivante dans la liste de lecture"
+de-de = "  n             : Nächstes Video in der Wiedergabeliste"
+es-es = "  n             : Siguiente video en la lista de reproducción"
+
+["  l             : Toggle playlist display"]
+zh-cn = "  l             : 切换播放列表显示"
+zh-tw = "  l             : 切換播放清單顯示"
+ja-jp = "  l             : プレイリスト表示の切り替え"
+fr-fr = "  l             : Basculer l'affichage de la liste de lecture"
+de-de = "  l             : Wiedergabelistenanzeige umschalten"
+es-es = "  l             : Alternar visualización de la lista de reproducción"
+
+["  f             : Open file selector"]
+zh-cn = "  f             : 打开文件选择器"
+zh-tw = "  f             : 開啟檔案選擇器"
+ja-jp = "  f             : ファイルセレクターを開く"
+fr-fr = "  f             : Ouvrir le sélecteur de fichiers"
+de-de = "  f             : Dateiauswahl öffnen"
+es-es = "  f             : Abrir selector de archivos"
+
+["  c             : Cycle color mode"]
+zh-cn = "  c             : 循环颜色模式"
+zh-tw = "  c             : 循環顏色模式"
+ja-jp = "  c             : カラーモードを切り替え"
+fr-fr = "  c             : Changer le mode couleur"
+de-de = "  c             : Farbmodus wechseln"
+es-es = "  c             : Cambiar modo de color"
+
+["Got 0 args? What the fuck?"]
+zh-cn = "666 这几把的 0 个参数，没救了属于是"
+zh-tw = "媽的 0 個參數，什麼鳥東西"
+ja-jp = "なんだこれ、引数0個とかありえないだろ"
+fr-fr = "Qu'est-ce que c'est que ça, 0 arguments ?"
+de-de = "Was zum Teufel ist das, 0 Argumente?"
+es-es = "¿Qué diablos es esto, 0 argumentos?"
+
+["ffmpeg decode error: {}"]
+zh-cn = "ffmpeg 解码错误: {}"
+zh-tw = "ffmpeg 解碼錯誤: {}"
+ja-jp = "ffmpeg デコードエラー: {}"
+fr-fr = "erreur de décodage ffmpeg: {}"
+de-de = "ffmpeg Decode-Fehler: {}"
+es-es = "error de decodificación de ffmpeg: {}"
+
+["Too many continuous failures, exiting."]
+zh-cn = "连续失败次数过多，程序退出。"
+zh-tw = "連續失敗次數過多，程式退出。"
+ja-jp = "連続した失敗が多すぎます。終了します。"
+fr-fr = "Trop d'échecs consécutifs, sortie."
+de-de = "Zu viele aufeinanderfolgende Fehler, Programm wird beendet."
+es-es = "Demasiados fallos continuos, saliendo."
+
+["render thread join error: {:?}"]
+zh-cn = "渲染线程 join 错误: {:?}"
+zh-tw = "渲染執行緒 join 錯誤: {:?}"
+ja-jp = "レンダリングスレッドの join エラー: {:?}"
+fr-fr = "Erreur de jointure du thread de rendu : {:?}"
+de-de = "Render-Thread Join-Fehler: {:?}"
+es-es = "Error al unir el hilo de render: {:?}"
+
+["output task join error: {:?}"]
+zh-cn = "输出任务 join 错误: {:?}"
+zh-tw = "輸出任務 join 錯誤: {:?}"
+ja-jp = "出力タスクの join エラー: {:?}"
+fr-fr = "Erreur de jointure de la tâche de sortie : {:?}"
+de-de = "Output-Task Join-Fehler: {:?}"
+es-es = "Error de unión de la tarea de salida: {:?}"
+
+["input task join error: {:?}"]
+zh-cn = "输入任务 join 错误: {:?}"
+zh-tw = "輸入任務 join 錯誤: {:?}"
+ja-jp = "入力タスクの join エラー: {:?}"
+fr-fr = "Erreur de jointure de la tâche d'entrée : {:?}"
+de-de = "Input-Task Join-Fehler: {:?}"
+es-es = "Error de unión de la tarea de entrada: {:?}"
+
+["config save error: {}"]
+zh-cn = "配置保存错误: {}"
+zh-tw = "配置儲存錯誤: {}"
+ja-jp = "設定の保存エラー: {}"
+fr-fr = "Erreur d'enregistrement de la configuration : {}"
+de-de = "Fehler beim Speichern der Konfiguration: {}"
+es-es = "Error al guardar la configuración: {}"

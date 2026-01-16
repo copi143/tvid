@@ -1,0 +1,143 @@
+["Sixel"]
+zh-cn = "Sixel"
+zh-tw = "Sixel"
+ja-jp = "Sixel"
+fr-fr = "Sixel"
+de-de = "Sixel"
+es-es = "Sixel"
+
+["OSC1337"]
+zh-cn = "OSC1337"
+zh-tw = "OSC1337"
+ja-jp = "OSC1337"
+fr-fr = "OSC1337"
+de-de = "OSC1337"
+es-es = "OSC1337"
+
+["True Color Mode"]
+zh-cn = "真彩色模式"
+zh-tw = "真彩色模式"
+ja-jp = "フルカラー"
+fr-fr = "Couleurs vraies"
+de-de = "Truecolor-Modus"
+es-es = "Modo de color verdadero"
+
+["256 Color Palette Prefer"]
+zh-cn = "256 色优先"
+zh-tw = "256 色優先"
+ja-jp = "256色優先"
+fr-fr = "Palette 256 couleurs prioritaire"
+de-de = "256-Farben-Priorität"
+es-es = "Prioridad de paleta de 256 colores"
+
+["256 Color Palette Only"]
+zh-cn = "仅 256 色"
+zh-tw = "僅 256 色"
+ja-jp = "256色のみ"
+fr-fr = "Palette 256 couleurs uniquement"
+de-de = "Nur 256 Farben"
+es-es = "Solo paleta de 256 colores"
+
+["Gray Scale Mode"]
+zh-cn = "灰度模式"
+zh-tw = "灰階模式"
+ja-jp = "グレースケール"
+fr-fr = "Niveaux de gris"
+de-de = "Graustufenmodus"
+es-es = "Modo de escala de grises"
+
+["Black and White Mode"]
+zh-cn = "黑白模式"
+zh-tw = "黑白模式"
+ja-jp = "白黒モード"
+fr-fr = "Noir et blanc"
+de-de = "Schwarz-Weiß-Modus"
+es-es = "Modo blanco y negro"
+
+["ASCII Art Mode"]
+zh-cn = "ASCII 艺术模式"
+zh-tw = "ASCII 藝術模式"
+ja-jp = "ASCII アートモード"
+fr-fr = "Mode art ASCII"
+de-de = "ASCII-Kunstmodus"
+es-es = "Modo arte ASCII"
+
+["Unicode Braille Mode"]
+zh-cn = "Unicode 盲文模式"
+zh-tw = "Unicode 盲文模式"
+ja-jp = "Unicode 点字モード"
+fr-fr = "Mode braille Unicode"
+de-de = "Unicode-Braille-Modus"
+es-es = "Modo braille Unicode"
+
+["None"]
+zh-cn = "无"
+zh-tw = "無"
+ja-jp = "なし"
+fr-fr = "Aucun"
+de-de = "Keine"
+es-es = "Ninguno"
+
+["Red"]
+zh-cn = "红色"
+zh-tw = "紅色"
+ja-jp = "赤"
+fr-fr = "Rouge"
+de-de = "Rot"
+es-es = "Rojo"
+
+["Green"]
+zh-cn = "绿色"
+zh-tw = "綠色"
+ja-jp = "緑"
+fr-fr = "Vert"
+de-de = "Grün"
+es-es = "Verde"
+
+["Blue"]
+zh-cn = "蓝色"
+zh-tw = "藍色"
+ja-jp = "青"
+fr-fr = "Bleu"
+de-de = "Blau"
+es-es = "Azul"
+
+["Yellow"]
+zh-cn = "黄色"
+zh-tw = "黃色"
+ja-jp = "黄"
+fr-fr = "Jaune"
+de-de = "Gelb"
+es-es = "Amarillo"
+
+["Magenta"]
+zh-cn = "品红色"
+zh-tw = "品紅色"
+ja-jp = "マゼンタ"
+fr-fr = "Magenta"
+de-de = "Magenta"
+es-es = "Magenta"
+
+["Cyan"]
+zh-cn = "青色"
+zh-tw = "青色"
+ja-jp = "シアン"
+fr-fr = "Cyan"
+de-de = "Cyan"
+es-es = "Cian"
+
+["White"]
+zh-cn = "白色"
+zh-tw = "白色"
+ja-jp = "白"
+fr-fr = "Blanc"
+de-de = "Weiß"
+es-es = "Blanco"
+
+["Black"]
+zh-cn = "黑色"
+zh-tw = "黑色"
+ja-jp = "黒"
+fr-fr = "Noir"
+de-de = "Schwarz"
+es-es = "Negro"
