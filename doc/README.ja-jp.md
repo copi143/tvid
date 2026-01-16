@@ -1,14 +1,11 @@
-# tvid
+# <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
 `tvid` は Rust で実装されたターミナル向け動画プレーヤーです。FFmpeg を利用して映像・音声・字幕をデコードし、端末上に直接描画します。オーバーレイ UI、プレイリストビュー、キーボード / マウス操作に対応しています。
 
 ---
 
-*翻訳：*<br />
-[en-us/English](README.md) | [zh-cn/简体中文](doc/README.zh-cn.md)
-
-*その他の言語（ChatGPT による翻訳）：*<br />
-**ja-jp/日本語** · [fr-fr/Français](doc/README.fr-fr.md) · [de-de/Deutsch](doc/README.de-de.md) · [es-es/Español](doc/README.es-es.md)
+*Translations (by ChatGPT):*<br />
+[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md) | [zh-tw/繁體中文](README.zh-tw.md) | **ja-jp/日本語** | [fr-fr/Français](README.fr-fr.md) | [de-de/Deutsch](README.de-de.md) | [es-es/Español](README.es-es.md)
 
 ---
 
@@ -37,6 +34,24 @@
   - Arch：`sudo pacman -S ffmpeg`
 
 ## ビルドと実行
+
+### Cargo Install を使用
+
+Cargo で `tvid` を直接インストールできます：
+
+```sh
+cargo install tvid
+```
+
+オプション機能はビルド時に有効化します。既定は `ffmpeg`、`i18n`、`config`、`audio`、`video`、`subtitle`、`unicode`、`unifont` です。
+
+```sh
+cargo install tvid --features sixel,osc1337
+# 既定機能を無効化して最小構成にする場合
+cargo install tvid --no-default-features --features ffmpeg,video
+```
+
+### 手動ビルド
 
 1. リポジトリの取得：
 
@@ -121,6 +136,23 @@ UI など：
   - 左ボタンを押しながらドラッグするとスクラブ（ドラッグシーク）
 
 > プロジェクトは開発中のため、今後ショートカットや UI が追加・変更される可能性があります。
+
+### コマンドモード
+
+`/` を押してコマンド入力を開きます。操作は以下の通りです：
+
+- `Enter` – コマンド実行
+- `Esc` – キャンセル
+- `Tab` – 自動補完（コマンドや引数）
+- `↑` / `↓` – コマンド履歴
+
+例：
+
+- `/seek +5`
+- `/volume 80`
+- `/lang zh-cn`
+
+利用可能な言語コード：`en-us`、`zh-cn`、`zh-tw`、`ja-jp`、`fr-fr`、`de-de`、`es-es`。
 
 ## トラブルシューティング
 

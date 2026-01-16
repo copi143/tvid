@@ -1,14 +1,11 @@
-# tvid
+# <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
 `tvid` 是一個以 Rust 編寫的終端機影片播放器。它使用 FFmpeg 做解碼，並直接在終端中呈現影片、音訊與字幕，提供覆蓋式使用者介面、播放列表檢視，以及基本的鍵盤/滑鼠互動。
 
 ---
 
-*翻譯：*<br />
-[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md) | **zh-tw/繁體中文**
-
-*其他語言（由 ChatGPT 翻譯）：*<br />
-[ja-jp/日本語](README.ja-jp.md) · [fr-fr/Français](README.fr-fr.md) · [de-de/Deutsch](README.de-de.md) · [es-es/Español](README.es-es.md)
+*Translations (by ChatGPT):*<br />
+[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md) | **zh-tw/繁體中文** | [ja-jp/日本語](README.ja-jp.md) | [fr-fr/Français](README.fr-fr.md) | [de-de/Deutsch](README.de-de.md) | [es-es/Español](README.es-es.md)
 
 ---
 
@@ -39,6 +36,24 @@
   - 在 Arch：`sudo pacman -S ffmpeg`
 
 ## 編譯與執行
+
+### 使用 Cargo Install
+
+你可以直接使用 Cargo 安裝 `tvid`：
+
+```sh
+cargo install tvid
+```
+
+可選功能在建置時啟用，預設包含 `ffmpeg`、`i18n`、`config`、`audio`、`video`、`subtitle`、`unicode`、`unifont`。
+
+```sh
+cargo install tvid --features sixel,osc1337
+# 或停用預設功能並選擇最小集合
+cargo install tvid --no-default-features --features ffmpeg,video
+```
+
+### 手動建置
 
 1. 克隆倉庫：
 
@@ -123,6 +138,23 @@ UI 與其他：
   - 按住左鍵拖曳可進行抓取（scrub）
 
 > 注意：專案仍在快速迭代中，可能會新增或調整快捷鍵與 UI 元件。
+
+### 命令模式
+
+按下 `/` 進入命令輸入，然後：
+
+- `Enter` – 執行命令
+- `Esc` – 取消
+- `Tab` – 自動補全（命令或參數）
+- `↑` / `↓` – 歷史命令
+
+範例：
+
+- `/seek +5`
+- `/volume 80`
+- `/lang zh-cn`
+
+可用語言代碼：`en-us`、`zh-cn`、`zh-tw`、`ja-jp`、`fr-fr`、`de-de`、`es-es`。
 
 ## 疑難排解
 

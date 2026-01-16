@@ -1,14 +1,11 @@
-# tvid
+# <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
 `tvid` est un lecteur vidéo en terminal écrit en Rust. Il utilise FFmpeg pour le décodage et rend la vidéo, l’audio et les sous-titres directement dans votre terminal, avec une interface en surimpression, une vue de playlist et des interactions basiques clavier / souris.
 
 ---
 
-*Traductions :*<br />
-[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md)
-
-*Autres langues (traduites par ChatGPT) :*<br />
-[ja-jp/日本語](doc/README.ja-jp.md) · **fr-fr/Français** · [de-de/Deutsch](doc/README.de-de.md) · [es-es/Español](doc/README.es-es.md)
+*Translations (by ChatGPT):*<br />
+[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md) | [zh-tw/繁體中文](README.zh-tw.md) | [ja-jp/日本語](README.ja-jp.md) | **fr-fr/Français** | [de-de/Deutsch](README.de-de.md) | [es-es/Español](README.es-es.md)
 
 ---
 
@@ -39,6 +36,24 @@
   - sur Arch : `sudo pacman -S ffmpeg`
 
 ## Construire & exécuter
+
+### Utiliser Cargo Install
+
+Vous pouvez installer `tvid` directement via Cargo :
+
+```sh
+cargo install tvid
+```
+
+Les fonctionnalités optionnelles s’activent à la compilation. Par défaut : `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+
+```sh
+cargo install tvid --features sixel,osc1337
+# ou désactiver les fonctionnalités par défaut et choisir un minimum
+cargo install tvid --no-default-features --features ffmpeg,video
+```
+
+### Construire manuellement
 
 1. Cloner le dépôt :
 
@@ -123,6 +138,23 @@ Interface & autres :
   - faire glisser avec le bouton gauche pour naviguer dans la vidéo
 
 > Remarque : des raccourcis supplémentaires et des éléments d’interface peuvent être ajoutés au fil de l’évolution du projet.
+
+### Mode commande
+
+Appuyez sur `/` pour ouvrir la saisie de commande, puis :
+
+- `Enter` – exécuter la commande
+- `Esc` – annuler
+- `Tab` – auto-complétion (commandes ou arguments)
+- `↑` / `↓` – historique des commandes
+
+Exemples :
+
+- `/seek +5`
+- `/volume 80`
+- `/lang zh-cn`
+
+Codes de langue disponibles : `en-us`, `zh-cn`, `zh-tw`, `ja-jp`, `fr-fr`, `de-de`, `es-es`.
 
 ## Dépannage
 

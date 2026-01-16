@@ -1,14 +1,11 @@
-# tvid
+# <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
 `tvid` ist ein Terminal-Videoplayer, der in Rust geschrieben ist. Er verwendet FFmpeg zur Dekodierung und rendert Video, Audio und Untertitel direkt in Ihrem Terminal, mit einer Overlay-Oberfläche, Playlist-Ansicht und grundlegender Maus- / Tastatursteuerung.
 
 ---
 
-*Übersetzungen:*<br />
-[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md)
-
-*Weitere Sprachen (von ChatGPT übersetzt):*<br />
-[ja-jp/日本語](doc/README.ja-jp.md) · [fr-fr/Français](doc/README.fr-fr.md) · **de-de/Deutsch** · [es-es/Español](doc/README.es-es.md)
+*Translations (by ChatGPT):*<br />
+[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md) | [zh-tw/繁體中文](README.zh-tw.md) | [ja-jp/日本語](README.ja-jp.md) | [fr-fr/Français](README.fr-fr.md) | **de-de/Deutsch** | [es-es/Español](README.es-es.md)
 
 ---
 
@@ -39,6 +36,24 @@
   - unter Arch: `sudo pacman -S ffmpeg`
 
 ## Build & Ausführung
+
+### Cargo Install verwenden
+
+Du kannst `tvid` direkt mit Cargo installieren:
+
+```sh
+cargo install tvid
+```
+
+Optionale Features werden beim Build aktiviert. Standard sind `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+
+```sh
+cargo install tvid --features sixel,osc1337
+# oder Standard-Features deaktivieren und ein Minimum wählen
+cargo install tvid --no-default-features --features ffmpeg,video
+```
+
+### Manuell bauen
 
 1. Repository klonen:
 
@@ -123,6 +138,23 @@ UI & Sonstiges:
   - mit gedrückter linker Maustaste ziehen, um zu scrubben
 
 > Hinweis: Zusätzliche Tastenkombinationen und UI-Elemente können im Laufe der Entwicklung hinzugefügt werden.
+
+### Befehlsmodus
+
+Drücken Sie `/`, um die Befehlszeile zu öffnen, dann:
+
+- `Enter` – Befehl ausführen
+- `Esc` – abbrechen
+- `Tab` – Autovervollständigung (Befehle oder Argumente)
+- `↑` / `↓` – Befehlsverlauf
+
+Beispiele:
+
+- `/seek +5`
+- `/volume 80`
+- `/lang zh-cn`
+
+Verfügbare Sprachcodes: `en-us`, `zh-cn`, `zh-tw`, `ja-jp`, `fr-fr`, `de-de`, `es-es`.
 
 ## Fehlerbehebung
 

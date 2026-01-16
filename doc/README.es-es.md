@@ -1,14 +1,11 @@
-# tvid
+# <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
 `tvid` es un reproductor de vídeo para terminal escrito en Rust. Utiliza FFmpeg para la decodificación y muestra vídeo, audio y subtítulos directamente en tu terminal, con una interfaz superpuesta, vista de lista de reproducción e interacción básica con ratón y teclado.
 
 ---
 
-*Traducciones:*<br />
-[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md)
-
-*Otros idiomas (traducidos por ChatGPT):*<br />
-[ja-jp/日本語](doc/README.ja-jp.md) · [fr-fr/Français](doc/README.fr-fr.md) · [de-de/Deutsch](doc/README.de-de.md) · **es-es/Español**
+*Translations (by ChatGPT):*<br />
+[en-us/English](../README.md) | [zh-cn/简体中文](README.zh-cn.md) | [zh-tw/繁體中文](README.zh-tw.md) | [ja-jp/日本語](README.ja-jp.md) | [fr-fr/Français](README.fr-fr.md) | [de-de/Deutsch](README.de-de.md) | **es-es/Español**
 
 ---
 
@@ -39,6 +36,24 @@
   - en Arch: `sudo pacman -S ffmpeg`
 
 ## Compilar y ejecutar
+
+### Usar Cargo Install
+
+Puedes instalar `tvid` directamente con Cargo:
+
+```sh
+cargo install tvid
+```
+
+Las funciones opcionales se habilitan al compilar. Por defecto: `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+
+```sh
+cargo install tvid --features sixel,osc1337
+# o desactivar las funciones por defecto y elegir un mínimo
+cargo install tvid --no-default-features --features ffmpeg,video
+```
+
+### Compilar manualmente
 
 1. Clona el repositorio:
 
@@ -123,6 +138,23 @@ Interfaz y otros:
   - arrastrar con el botón izquierdo del ratón para desplazarse
 
 > Nota: se pueden añadir más atajos y elementos de interfaz a medida que el proyecto evolucione.
+
+### Modo de comandos
+
+Pulsa `/` para abrir la entrada de comandos, luego:
+
+- `Enter` – ejecutar el comando
+- `Esc` – cancelar
+- `Tab` – autocompletar (comandos o argumentos)
+- `↑` / `↓` – historial de comandos
+
+Ejemplos:
+
+- `/seek +5`
+- `/volume 80`
+- `/lang zh-cn`
+
+Códigos de idioma disponibles: `en-us`, `zh-cn`, `zh-tw`, `ja-jp`, `fr-fr`, `de-de`, `es-es`.
 
 ## Solución de problemas
 

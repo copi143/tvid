@@ -4,11 +4,8 @@
 
 ---
 
-*Translations:*<br />
-**en-us/English** | [zh-cn/简体中文](doc/README.zh-cn.md) | [zh-tw/繁體中文](doc/README.zh-tw.md)
-
-*Other languages (translated by ChatGPT):*<br />
-[ja-jp/日本語](doc/README.ja-jp.md) · [fr-fr/Français](doc/README.fr-fr.md) · [de-de/Deutsch](doc/README.de-de.md) · [es-es/Español](doc/README.es-es.md)
+*Translations (by ChatGPT):*<br />
+**en-us/English** | [zh-cn/简体中文](doc/README.zh-cn.md) | [zh-tw/繁體中文](doc/README.zh-tw.md) | [ja-jp/日本語](doc/README.ja-jp.md) | [fr-fr/Français](doc/README.fr-fr.md) | [de-de/Deutsch](doc/README.de-de.md) | [es-es/Español](doc/README.es-es.md)
 
 ---
 
@@ -141,6 +138,23 @@ UI & other controls:
   - drag with left mouse button to scrub
 
 > Note: additional shortcuts and UI elements may be added while the project evolves.
+
+### Command Mode
+
+Press `/` to open the command input, then:
+
+- `Enter` – run the command
+- `Esc` – cancel
+- `Tab` – autocomplete (commands or arguments)
+- `↑` / `↓` – command history
+
+Examples:
+
+- `/seek +5`
+- `/volume 80`
+- `/lang zh-cn`
+
+Available language codes: `en-us`, `zh-cn`, `zh-tw`, `ja-jp`, `fr-fr`, `de-de`, `es-es`.
 
 ## Troubleshooting
 
