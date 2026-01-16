@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="32"
+   height="32"
+   viewBox="0 0 32 32"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4 (e7c3feb100, 2024-10-09)"
+   sodipodi:docname="tvid.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:zoom="37.3125"
+     inkscape:cx="21.346734"
+     inkscape:cy="13.319933"
+     inkscape:window-width="2560"
+     inkscape:window-height="1406"
+     inkscape:window-x="1920"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="图层 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:none;stroke:#000000;stroke-width:2;stroke-linejoin:round;stroke-opacity:1;stroke-dasharray:none;fill-opacity:0"
+       id="rect1"
+       width="28"
+       height="18"
+       x="2"
+       y="7" />
+    <path
+       style="fill:none;fill-opacity:0;stroke:#000000;stroke-width:1.19018;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
+       d="M 12,20.708263 H 28"
+       id="path1" />
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-family:Inconsolata;-inkscape-font-specification:Inconsolata;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:none;fill-opacity:0;stroke:#000000;stroke-width:1;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
+       x="10.77387"
+       y="18.090452"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         x="10.77387"
+         y="18.090452"
+         style="font-size:12px;fill:#000000;fill-opacity:1;stroke:none">VID</tspan></text>
+    <path
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:1;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1;stroke-linecap:round"
+       d="m 5,10 4,4 -4,4"
+       id="path2"
+       sodipodi:nodetypes="ccc" />
+  </g>
+</svg>

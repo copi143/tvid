@@ -5,6 +5,12 @@ ja-jp = "プレイリストがありません。"
 fr-fr = "Aucune liste de lecture."
 de-de = "Keine Wiedergabeliste."
 es-es = "No hay lista de reproducción."
+ko-kr = '플레이리스트에 입력 파일이 없습니다.'
+pt-br = 'Nenhum arquivo de entrada na playlist.'
+ru-ru = 'В плейлисте нет входных файлов.'
+it-it = 'Nessun file di input nella playlist.'
+tr-tr = 'Çalma listesinde giriş dosyası yok.'
+vi-vn = 'Không có tệp đầu vào trong danh sách phát.'
 
 ["Usage: {} <input> [input] ..."]
 zh-cn = "用法: {} <输入文件> [输入文件] ..."
@@ -13,6 +19,12 @@ ja-jp = "使用法: {} <入力ファイル> [入力ファイル] ..."
 fr-fr = "Utilisation: {} <fichier d'entrée> [fichier d'entrée] ..."
 de-de = "Verwendung: {} <Eingabedatei> [Eingabedatei] ..."
 es-es = "Uso: {} <archivo de entrada> [archivo de entrada] ..."
+ko-kr = '사용법: {} <input> [input] ...'
+pt-br = 'Uso: {} <input> [input] ...'
+ru-ru = 'Использование: {} <input> [input] ...'
+it-it = 'Uso: {} <input> [input] ...'
+tr-tr = 'Kullanım: {} <input> [input] ...'
+vi-vn = 'Cách dùng: {} <input> [input] ...'
 
 ["tvid - Terminal Video Player"]
 zh-cn = "tvid - 终端视频播放器"
@@ -21,6 +33,12 @@ ja-jp = "tvid - ターミナルビデオプレーヤー"
 fr-fr = "tvid - Lecteur vidéo terminal"
 de-de = "tvid - Terminal Video Player"
 es-es = "tvid - Reproductor de video de terminal"
+ko-kr = 'tvid - 터미널 비디오 플레이어'
+pt-br = 'tvid - Reprodutor de Vídeo no Terminal'
+ru-ru = 'tvid — видеоплеер для терминала'
+it-it = 'tvid - Lettore video da terminale'
+tr-tr = 'tvid - Terminal Video Oynatıcı'
+vi-vn = 'tvid - Trình phát video trong terminal'
 
 ["version: {}"]
 zh-cn = "版本: {}"
@@ -29,6 +47,12 @@ ja-jp = "バージョン: {}"
 fr-fr = "version: {}"
 de-de = "Version: {}"
 es-es = "versión: {}"
+ko-kr = '버전: {}'
+pt-br = 'versão: {}'
+ru-ru = 'версия: {}'
+it-it = 'versione: {}'
+tr-tr = 'sürüm: {}'
+vi-vn = 'phiên bản: {}'
 
 ["repo: {}"]
 zh-cn = "仓库: {}"
@@ -37,6 +61,12 @@ ja-jp = "リポジトリ: {}"
 fr-fr = "dépôt: {}"
 de-de = "Repository: {}"
 es-es = "repositorio: {}"
+ko-kr = '저장소: {}'
+pt-br = 'repositório: {}'
+ru-ru = 'репозиторий: {}'
+it-it = 'repository: {}'
+tr-tr = 'depo: {}'
+vi-vn = 'kho mã: {}'
 
 ["license: {}"]
 zh-cn = "许可: {}"
@@ -45,6 +75,12 @@ ja-jp = "ライセンス: {}"
 fr-fr = "licence: {}"
 de-de = "Lizenz: {}"
 es-es = "licencia: {}"
+ko-kr = '라이선스: {}'
+pt-br = 'licença: {}'
+ru-ru = 'лицензия: {}'
+it-it = 'licenza: {}'
+tr-tr = 'lisans: {}'
+vi-vn = 'giấy phép: {}'
 
 ["Controls:"]
 zh-cn = "控制:"
@@ -53,6 +89,12 @@ ja-jp = "コントロール:"
 fr-fr = "Contrôles:"
 de-de = "Steuerung:"
 es-es = "Controles:"
+ko-kr = '조작법:'
+pt-br = 'Controles:'
+ru-ru = 'Управление:'
+it-it = 'Controlli:'
+tr-tr = 'Kontroller:'
+vi-vn = 'Điều khiển:'
 
 ["  Space         : Play/Pause"]
 zh-cn = "  空格          : 播放/暂停"
@@ -61,6 +103,12 @@ ja-jp = "  スペースキー  : 再生/一時停止"
 fr-fr = "  Espace        : Lecture/Pause"
 de-de = "  Leertaste     : Abspielen/Pause"
 es-es = "  Espacio       : Reproducir/Pausar"
+ko-kr = '  Space         : 재생/일시정지'
+pt-br = '  Space         : Reproduzir/Pausar'
+ru-ru = '  Space         : Воспроизведение/Пауза'
+it-it = '  Space         : Riproduci/Pausa'
+tr-tr = '  Space         : Oynat/Duraklat'
+vi-vn = '  Space         : Phát/Tạm dừng'
 
 ["  q             : Quit"]
 zh-cn = "  q             : 退出"
@@ -69,6 +117,12 @@ ja-jp = "  q             : 終了"
 fr-fr = "  q             : Quitter"
 de-de = "  q             : Beenden"
 es-es = "  q             : Salir"
+ko-kr = '  q             : 종료'
+pt-br = '  q             : Sair'
+ru-ru = '  q             : Выход'
+it-it = '  q             : Esci'
+tr-tr = '  q             : Çık'
+vi-vn = '  q             : Thoát'
 
 ["  n             : Next video in playlist"]
 zh-cn = "  n             : 播放列表中下一个视频"
@@ -77,6 +131,12 @@ ja-jp = "  n             : プレイリストの次のビデオ"
 fr-fr = "  n             : Vidéo suivante dans la liste de lecture"
 de-de = "  n             : Nächstes Video in der Wiedergabeliste"
 es-es = "  n             : Siguiente video en la lista de reproducción"
+ko-kr = '  n             : 플레이리스트 다음 동영상'
+pt-br = '  n             : Próximo vídeo na playlist'
+ru-ru = '  n             : Следующее видео в плейлисте'
+it-it = '  n             : Video successivo nella playlist'
+tr-tr = '  n             : Çalma listesindeki sonraki video'
+vi-vn = '  n             : Video tiếp theo trong danh sách phát'
 
 ["  l             : Toggle playlist display"]
 zh-cn = "  l             : 切换播放列表显示"
@@ -85,6 +145,12 @@ ja-jp = "  l             : プレイリスト表示の切り替え"
 fr-fr = "  l             : Basculer l'affichage de la liste de lecture"
 de-de = "  l             : Wiedergabelistenanzeige umschalten"
 es-es = "  l             : Alternar visualización de la lista de reproducción"
+ko-kr = '  l             : 플레이리스트 표시 전환'
+pt-br = '  l             : Alternar exibição da playlist'
+ru-ru = '  l             : Показ/скрытие плейлиста'
+it-it = '  l             : Mostra/nascondi playlist'
+tr-tr = '  l             : Çalma listesi görünümünü aç/kapat'
+vi-vn = '  l             : Bật/tắt hiển thị danh sách phát'
 
 ["  f             : Open file selector"]
 zh-cn = "  f             : 打开文件选择器"
@@ -93,6 +159,12 @@ ja-jp = "  f             : ファイルセレクターを開く"
 fr-fr = "  f             : Ouvrir le sélecteur de fichiers"
 de-de = "  f             : Dateiauswahl öffnen"
 es-es = "  f             : Abrir selector de archivos"
+ko-kr = '  f             : 파일 선택기 열기'
+pt-br = '  f             : Abrir seletor de arquivos'
+ru-ru = '  f             : Открыть выбор файла'
+it-it = '  f             : Apri selettore file'
+tr-tr = '  f             : Dosya seçiciyi aç'
+vi-vn = '  f             : Mở bộ chọn tệp'
 
 ["  c             : Cycle color mode"]
 zh-cn = "  c             : 循环颜色模式"
@@ -101,6 +173,12 @@ ja-jp = "  c             : カラーモードを切り替え"
 fr-fr = "  c             : Changer le mode couleur"
 de-de = "  c             : Farbmodus wechseln"
 es-es = "  c             : Cambiar modo de color"
+ko-kr = '  c             : 색상 모드 전환'
+pt-br = '  c             : Alternar modo de cor'
+ru-ru = '  c             : Переключить цветовой режим'
+it-it = '  c             : Cambia modalità colore'
+tr-tr = '  c             : Renk modunu değiştir'
+vi-vn = '  c             : Chuyển chế độ màu'
 
 ["Press 'q' to quit."]
 zh-cn = "按 'q' 键退出。"
@@ -109,6 +187,12 @@ ja-jp = "'q' キーを押して終了します。"
 fr-fr = "Appuyez sur 'q' pour quitter."
 de-de = "Drücken Sie 'q', um zu beenden."
 es-es = "Presione 'q' para salir."
+ko-kr = "종료하려면 'q'를 누르세요."
+pt-br = "Pressione 'q' para sair."
+ru-ru = "Нажмите 'q' для выхода."
+it-it = "Premi 'q' per uscire."
+tr-tr = "Çıkmak için 'q' tuşuna basın."
+vi-vn = "Nhấn 'q' để thoát."
 
 ["Got 0 args? What the fuck?"]
 zh-cn = "666 这几把的 0 个参数，没救了属于是"
@@ -117,6 +201,12 @@ ja-jp = "なんだこれ、引数0個とかありえないだろ"
 fr-fr = "Qu'est-ce que c'est que ça, 0 arguments ?"
 de-de = "Was zum Teufel ist das, 0 Argumente?"
 es-es = "¿Qué diablos es esto, 0 argumentos?"
+ko-kr = '인수가 0개? 뭐야?'
+pt-br = 'Recebeu 0 argumentos? Que diabos?'
+ru-ru = '0 аргументов? Что за хрень?'
+it-it = '0 argomenti? Che diavolo?'
+tr-tr = '0 argüman mı? Bu ne?'
+vi-vn = 'Nhận 0 tham số? Cái quái gì vậy?'
 
 ["ffmpeg decode error: {}"]
 zh-cn = "ffmpeg 解码错误: {}"
@@ -125,6 +215,12 @@ ja-jp = "ffmpeg デコードエラー: {}"
 fr-fr = "erreur de décodage ffmpeg: {}"
 de-de = "ffmpeg Decode-Fehler: {}"
 es-es = "error de decodificación de ffmpeg: {}"
+ko-kr = 'ffmpeg 디코드 오류: {}'
+pt-br = 'Erro de decodificação do ffmpeg: {}'
+ru-ru = 'Ошибка декодирования ffmpeg: {}'
+it-it = 'Errore di decodifica ffmpeg: {}'
+tr-tr = 'ffmpeg çözme hatası: {}'
+vi-vn = 'Lỗi giải mã ffmpeg: {}'
 
 ["Too many continuous failures, exiting."]
 zh-cn = "连续失败次数过多，程序退出。"
@@ -133,6 +229,12 @@ ja-jp = "連続した失敗が多すぎます。終了します。"
 fr-fr = "Trop d'échecs consécutifs, sortie."
 de-de = "Zu viele aufeinanderfolgende Fehler, Programm wird beendet."
 es-es = "Demasiados fallos continuos, saliendo."
+ko-kr = '연속 실패가 너무 많습니다. 종료합니다.'
+pt-br = 'Muitas falhas consecutivas, encerrando.'
+ru-ru = 'Слишком много последовательных ошибок, выходим.'
+it-it = 'Troppi errori consecutivi, uscita.'
+tr-tr = 'Çok fazla ardışık hata, çıkılıyor.'
+vi-vn = 'Quá nhiều lỗi liên tục, đang thoát.'
 
 ["render thread join error: {:?}"]
 zh-cn = "渲染线程 join 错误: {:?}"
@@ -141,6 +243,12 @@ ja-jp = "レンダリングスレッドの join エラー: {:?}"
 fr-fr = "Erreur de jointure du thread de rendu : {:?}"
 de-de = "Render-Thread Join-Fehler: {:?}"
 es-es = "Error al unir el hilo de render: {:?}"
+ko-kr = '렌더 스레드 join 오류: {:?}'
+pt-br = 'Erro ao juntar thread de render: {:?}'
+ru-ru = 'Ошибка join потока рендера: {:?}'
+it-it = 'Errore join del thread di rendering: {:?}'
+tr-tr = 'Render iş parçacığı join hatası: {:?}'
+vi-vn = 'Lỗi join luồng render: {:?}'
 
 ["output task join error: {:?}"]
 zh-cn = "输出任务 join 错误: {:?}"
@@ -149,6 +257,12 @@ ja-jp = "出力タスクの join エラー: {:?}"
 fr-fr = "Erreur de jointure de la tâche de sortie : {:?}"
 de-de = "Output-Task Join-Fehler: {:?}"
 es-es = "Error de unión de la tarea de salida: {:?}"
+ko-kr = '출력 작업 join 오류: {:?}'
+pt-br = 'Erro ao juntar tarefa de saída: {:?}'
+ru-ru = 'Ошибка join задачи вывода: {:?}'
+it-it = 'Errore join del task di output: {:?}'
+tr-tr = 'Çıkış görevi join hatası: {:?}'
+vi-vn = 'Lỗi join tác vụ đầu ra: {:?}'
 
 ["input task join error: {:?}"]
 zh-cn = "输入任务 join 错误: {:?}"
@@ -157,6 +271,12 @@ ja-jp = "入力タスクの join エラー: {:?}"
 fr-fr = "Erreur de jointure de la tâche d'entrée : {:?}"
 de-de = "Input-Task Join-Fehler: {:?}"
 es-es = "Error de unión de la tarea de entrada: {:?}"
+ko-kr = '입력 작업 join 오류: {:?}'
+pt-br = 'Erro ao juntar tarefa de entrada: {:?}'
+ru-ru = 'Ошибка join задачи ввода: {:?}'
+it-it = 'Errore join del task di input: {:?}'
+tr-tr = 'Girdi görevi join hatası: {:?}'
+vi-vn = 'Lỗi join tác vụ đầu vào: {:?}'
 
 ["config save error: {}"]
 zh-cn = "配置保存错误: {}"
@@ -165,6 +285,12 @@ ja-jp = "設定の保存エラー: {}"
 fr-fr = "Erreur d'enregistrement de la configuration : {}"
 de-de = "Fehler beim Speichern der Konfiguration: {}"
 es-es = "Error al guardar la configuración: {}"
+ko-kr = '설정 저장 오류: {}'
+pt-br = 'Erro ao salvar configuração: {}'
+ru-ru = 'Ошибка сохранения конфигурации: {}'
+it-it = 'Errore di salvataggio configurazione: {}'
+tr-tr = 'Yapılandırma kaydetme hatası: {}'
+vi-vn = 'Lỗi lưu cấu hình: {}'
 
 ['Failed to create Tokio runtime']
 zh-cn = '无法创建 Tokio 运行时'
@@ -173,6 +299,12 @@ ja-jp = 'Tokio ランタイムの作成に失敗しました'
 fr-fr = 'Impossible de créer le runtime Tokio'
 de-de = 'Tokio-Runtime konnte nicht erstellt werden'
 es-es = 'No se pudo crear el runtime de Tokio'
+ko-kr = 'Tokio 런타임 생성 실패'
+pt-br = 'Falha ao criar runtime Tokio'
+ru-ru = 'Не удалось создать рантайм Tokio'
+it-it = 'Impossibile creare il runtime Tokio'
+tr-tr = 'Tokio çalışma zamanı oluşturulamadı'
+vi-vn = 'Không thể tạo runtime Tokio'
 
 ['av init failed']
 zh-cn = 'av 初始化失败'
@@ -181,3 +313,9 @@ ja-jp = 'av の初期化に失敗しました'
 fr-fr = "Échec de l'initialisation av"
 de-de = 'av-Initialisierung fehlgeschlagen'
 es-es = 'Falló la inicialización de av'
+ko-kr = 'av 초기화 실패'
+pt-br = 'Falha na inicialização do av'
+ru-ru = 'Сбой инициализации av'
+it-it = 'Inizializzazione av fallita'
+tr-tr = 'av başlatma başarısız'
+vi-vn = 'Khởi tạo av thất bại'

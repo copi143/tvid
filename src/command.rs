@@ -172,6 +172,30 @@ fn cmd_lang(args: &[&str]) {
                 static_l10n::lang!("zh-tw");
                 "zh-tw"
             }
+            "ko-kr" | "ko" => {
+                static_l10n::lang!("ko-kr");
+                "ko-kr"
+            }
+            "pt-br" | "pt" => {
+                static_l10n::lang!("pt-br");
+                "pt-br"
+            }
+            "ru-ru" | "ru" => {
+                static_l10n::lang!("ru-ru");
+                "ru-ru"
+            }
+            "it-it" | "it" => {
+                static_l10n::lang!("it-it");
+                "it-it"
+            }
+            "tr-tr" | "tr" => {
+                static_l10n::lang!("tr-tr");
+                "tr-tr"
+            }
+            "vi-vn" | "vi" => {
+                static_l10n::lang!("vi-vn");
+                "vi-vn"
+            }
             "ja-jp" | "ja" => {
                 static_l10n::lang!("ja-jp");
                 "ja-jp"
@@ -272,7 +296,8 @@ fn complete_volume(_args: &[&str], prefix: &str) -> Vec<String> {
 
 fn complete_lang(_args: &[&str], prefix: &str) -> Vec<String> {
     let suggestions = [
-        "en-us", "zh-cn", "zh-tw", "ja-jp", "fr-fr", "de-de", "es-es",
+        "en-us", "zh-cn", "zh-tw", "ja-jp", "fr-fr", "de-de", "es-es", "ko-kr", "pt-br", "ru-ru",
+        "it-it", "tr-tr", "vi-vn",
     ];
     filter_suggestions(prefix, &suggestions)
 }

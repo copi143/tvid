@@ -1,6 +1,6 @@
 [package]
 name = "tvid"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["copi143 <copi143@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -55,7 +55,21 @@ ssh = ["dep:russh"] # WIP
 [package.metadata.static-l10n]
 path = "lang"
 base = "en-us"
-langs = ["en-us", "zh-cn", "zh-tw", "ja-jp", "fr-fr", "de-de", "es-es"]
+langs = [
+  "en-us",
+  "zh-cn",
+  "zh-tw",
+  "ja-jp",
+  "fr-fr",
+  "de-de",
+  "es-es",
+  "ko-kr",
+  "pt-br",
+  "ru-ru",
+  "it-it",
+  "tr-tr",
+  "vi-vn",
+]
 
 [dependencies]
 static-l10n = { version = "0.0.2", optional = true }

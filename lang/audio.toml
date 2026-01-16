@@ -5,6 +5,12 @@ ja-jp = "無効なオーディオサンプルレート: 0"
 fr-fr = "taux d'échantillonnage audio invalide : 0"
 de-de = "Ungültige Audio-Samplerate: 0"
 es-es = "frecuencia de muestreo de audio no válida: 0"
+ko-kr = '잘못된 오디오 샘플레이트: 0'
+pt-br = 'Taxa de amostragem de áudio inválida: 0'
+ru-ru = 'Неверная частота дискретизации аудио: 0'
+it-it = 'Frequenza di campionamento audio non valida: 0'
+tr-tr = 'Geçersiz ses örnekleme hızı: 0'
+vi-vn = 'Tần số lấy mẫu âm thanh không hợp lệ: 0'
 
 ["Quiting audio thread"]
 zh-cn = "退出音频线程"
@@ -13,6 +19,12 @@ ja-jp = "オーディオスレッドを終了します"
 fr-fr = "quitter le thread audio"
 de-de = "Beenden des Audiothreads"
 es-es = "saliendo del hilo de audio"
+ko-kr = '오디오 스레드 종료 중'
+pt-br = 'Encerrando thread de áudio'
+ru-ru = 'Завершение аудиопотока'
+it-it = 'Chiusura del thread audio'
+tr-tr = 'Ses iş parçacığı kapatılıyor'
+vi-vn = 'Đang thoát luồng âm thanh'
 
 ["Unsupported channel count: {}"]
 zh-cn = "不支持的声道数: {}"
@@ -21,6 +33,12 @@ ja-jp = "サポートされていないチャンネル数: {}"
 fr-fr = "nombre de canaux non pris en charge : {}"
 de-de = "Nicht unterstützte Kanalanzahl: {}"
 es-es = "número de canales no compatible: {}"
+ko-kr = '지원되지 않는 채널 수: {}'
+pt-br = 'Número de canais não suportado: {}'
+ru-ru = 'Неподдерживаемое число каналов: {}'
+it-it = 'Numero di canali non supportato: {}'
+tr-tr = 'Desteklenmeyen kanal sayısı: {}'
+vi-vn = 'Số kênh không được hỗ trợ: {}'
 
 ['Unsupported sample format: {:?}']
 zh-cn = '不支持的采样格式: {:?}'
@@ -29,6 +47,12 @@ ja-jp = 'サポートされていないサンプル形式: {:?}'
 fr-fr = "Format d'échantillon non pris en charge : {:?}"
 de-de = 'Nicht unterstütztes Sample-Format: {:?}'
 es-es = 'Formato de muestra no compatible: {:?}'
+ko-kr = '지원되지 않는 샘플 형식: {:?}'
+pt-br = 'Formato de amostra não suportado: {:?}'
+ru-ru = 'Неподдерживаемый формат семплов: {:?}'
+it-it = 'Formato di campione non supportato: {:?}'
+tr-tr = 'Desteklenmeyen örnek formatı: {:?}'
+vi-vn = 'Định dạng mẫu không được hỗ trợ: {:?}'
 
 ['No default output audio device']
 zh-cn = '没有默认输出音频设备'
@@ -37,6 +61,12 @@ ja-jp = '既定の音声出力デバイスがありません'
 fr-fr = 'Aucun périphérique audio de sortie par défaut'
 de-de = 'Kein standardmäßiges Audioausgabegerät'
 es-es = 'No hay dispositivo de salida de audio predeterminado'
+ko-kr = '기본 오디오 출력 장치가 없습니다'
+pt-br = 'Nenhum dispositivo de saída de áudio padrão'
+ru-ru = 'Нет устройства вывода аудио по умолчанию'
+it-it = 'Nessun dispositivo audio di uscita predefinito'
+tr-tr = 'Varsayılan ses çıkış aygıtı yok'
+vi-vn = 'Không có thiết bị âm thanh đầu ra mặc định'
 
 ['Could not create resampler']
 zh-cn = '无法创建重采样器'
@@ -45,6 +75,12 @@ ja-jp = 'リサンプラーを作成できませんでした'
 fr-fr = 'Impossible de créer le rééchantillonneur'
 de-de = 'Resampler konnte nicht erstellt werden'
 es-es = 'No se pudo crear el remuestreador'
+ko-kr = '리샘플러를 만들 수 없습니다'
+pt-br = 'Não foi possível criar o remuestreador'
+ru-ru = 'Не удалось создать ресемплер'
+it-it = 'Impossibile creare il ricampionatore'
+tr-tr = 'Yeniden örnekleyici oluşturulamadı'
+vi-vn = 'Không thể tạo bộ tái lấy mẫu'
 
 ['resampler run failed']
 zh-cn = '重采样器运行失败'
@@ -53,3 +89,9 @@ ja-jp = 'リサンプラーの実行に失敗しました'
 fr-fr = "Échec de l'exécution du rééchantillonneur"
 de-de = 'Ausführung des Resamplers fehlgeschlagen'
 es-es = 'Falló la ejecución del remuestreador'
+ko-kr = '리샘플러 실행 실패'
+pt-br = 'Falha ao executar o remuestreador'
+ru-ru = 'Сбой выполнения ресемплера'
+it-it = 'Esecuzione del ricampionatore non riuscita'
+tr-tr = 'Yeniden örnekleyici çalıştırma başarısız'
+vi-vn = 'Chạy bộ tái lấy mẫu thất bại'

@@ -501,9 +501,9 @@ impl Display for ColorMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             #[cfg(feature = "sixel")]
-            ColorMode::Sixel => write!(f, "{}", l10n!("Sixel")),
+            ColorMode::Sixel => write!(f, "Sixel"),
             #[cfg(feature = "osc1337")]
-            ColorMode::OSC1337 => write!(f, "{}", l10n!("OSC1337")),
+            ColorMode::OSC1337 => write!(f, "OSC1337"),
             ColorMode::TrueColorOnly => write!(f, "{}", l10n!("True Color Mode")),
             ColorMode::Palette256Prefer => write!(f, "{}", l10n!("256 Color Palette Prefer")),
             ColorMode::Palette256Only => write!(f, "{}", l10n!("256 Color Palette Only")),

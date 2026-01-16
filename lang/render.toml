@@ -5,6 +5,12 @@ ja-jp = "保留フレームが多すぎます: {}"
 fr-fr = "Trop de trames en attente : {}"
 de-de = "Zu viele ausstehende Frames: {}"
 es-es = "Demasiados fotogramas pendientes: {}"
+ko-kr = '대기 중 프레임이 너무 많습니다: {}'
+pt-br = 'Muitos quadros pendentes: {}'
+ru-ru = 'Слишком много ожидающих кадров: {}'
+it-it = 'Troppi frame in attesa: {}'
+tr-tr = 'Çok fazla bekleyen kare: {}'
+vi-vn = 'Quá nhiều khung hình đang chờ: {}'
 
 ['Invalid video size update']
 zh-cn = '无效的视频尺寸更新'
@@ -13,6 +19,12 @@ ja-jp = '無効な動画サイズ更新'
 fr-fr = 'Mise à jour de la taille vidéo invalide'
 de-de = 'Ungültige Aktualisierung der Videogröße'
 es-es = 'Actualización de tamaño de video no válida'
+ko-kr = '잘못된 비디오 크기 업데이트'
+pt-br = 'Atualização de tamanho de vídeo inválida'
+ru-ru = 'Неверное обновление размера видео'
+it-it = 'Aggiornamento dimensioni video non valido'
+tr-tr = 'Geçersiz video boyutu güncellemesi'
+vi-vn = 'Cập nhật kích thước video không hợp lệ'
 
 ['Invalid video size: {}x{}']
 zh-cn = '无效的视频尺寸: {}x{}'
@@ -21,6 +33,12 @@ ja-jp = '無効な動画サイズ: {}x{}'
 fr-fr = 'Taille vidéo invalide : {}x{}'
 de-de = 'Ungültige Videogröße: {}x{}'
 es-es = 'Tamaño de video no válido: {}x{}'
+ko-kr = '잘못된 비디오 크기: {}x{}'
+pt-br = 'Tamanho de vídeo inválido: {}x{}'
+ru-ru = 'Неверный размер видео: {}x{}'
+it-it = 'Dimensione video non valida: {}x{}'
+tr-tr = 'Geçersiz video boyutu: {}x{}'
+vi-vn = 'Kích thước video không hợp lệ: {}x{}'
 
 ['render_video_1x1 only supports fppc_x = 1 and fppc_y = 1']
 zh-cn = 'render_video_1x1 仅支持 fppc_x = 1 且 fppc_y = 1'
@@ -29,3 +47,9 @@ ja-jp = 'render_video_1x1 は fppc_x = 1 と fppc_y = 1 のみ対応'
 fr-fr = 'render_video_1x1 ne prend en charge que fppc_x = 1 et fppc_y = 1'
 de-de = 'render_video_1x1 unterstützt nur fppc_x = 1 und fppc_y = 1'
 es-es = 'render_video_1x1 solo admite fppc_x = 1 y fppc_y = 1'
+ko-kr = 'render_video_1x1은 fppc_x = 1 및 fppc_y = 1만 지원합니다'
+pt-br = 'render_video_1x1 suporta apenas fppc_x = 1 e fppc_y = 1'
+ru-ru = 'render_video_1x1 поддерживает только fppc_x = 1 и fppc_y = 1'
+it-it = 'render_video_1x1 supporta solo fppc_x = 1 e fppc_y = 1'
+tr-tr = "render_video_1x1 yalnızca fppc_x = 1 ve fppc_y = 1'i destekler"
+vi-vn = 'render_video_1x1 chỉ hỗ trợ fppc_x = 1 và fppc_y = 1'

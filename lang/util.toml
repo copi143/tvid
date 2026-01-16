@@ -1,19 +1,3 @@
-["Sixel"]
-zh-cn = "Sixel"
-zh-tw = "Sixel"
-ja-jp = "Sixel"
-fr-fr = "Sixel"
-de-de = "Sixel"
-es-es = "Sixel"
-
-["OSC1337"]
-zh-cn = "OSC1337"
-zh-tw = "OSC1337"
-ja-jp = "OSC1337"
-fr-fr = "OSC1337"
-de-de = "OSC1337"
-es-es = "OSC1337"
-
 ["True Color Mode"]
 zh-cn = "真彩色模式"
 zh-tw = "真彩色模式"
@@ -21,6 +5,12 @@ ja-jp = "フルカラー"
 fr-fr = "Couleurs vraies"
 de-de = "Truecolor-Modus"
 es-es = "Modo de color verdadero"
+ko-kr = '트루 컬러 모드'
+pt-br = 'Modo True Color'
+ru-ru = 'Режим True Color'
+it-it = 'Modalità True Color'
+tr-tr = 'True Color modu'
+vi-vn = 'Chế độ True Color'
 
 ["256 Color Palette Prefer"]
 zh-cn = "256 色优先"
@@ -29,6 +19,12 @@ ja-jp = "256色優先"
 fr-fr = "Palette 256 couleurs prioritaire"
 de-de = "256-Farben-Priorität"
 es-es = "Prioridad de paleta de 256 colores"
+ko-kr = '256색 팔레트 우선'
+pt-br = 'Preferir paleta de 256 cores'
+ru-ru = 'Предпочитать палитру 256 цветов'
+it-it = 'Preferisci palette 256 colori'
+tr-tr = '256 renk paleti tercih'
+vi-vn = 'Ưu tiên bảng màu 256'
 
 ["256 Color Palette Only"]
 zh-cn = "仅 256 色"
@@ -37,6 +33,12 @@ ja-jp = "256色のみ"
 fr-fr = "Palette 256 couleurs uniquement"
 de-de = "Nur 256 Farben"
 es-es = "Solo paleta de 256 colores"
+ko-kr = '256색 팔레트만'
+pt-br = 'Somente paleta de 256 cores'
+ru-ru = 'Только палитра 256 цветов'
+it-it = 'Solo palette 256 colori'
+tr-tr = 'Yalnızca 256 renk paleti'
+vi-vn = 'Chỉ bảng màu 256'
 
 ["Gray Scale Mode"]
 zh-cn = "灰度模式"
@@ -45,6 +47,12 @@ ja-jp = "グレースケール"
 fr-fr = "Niveaux de gris"
 de-de = "Graustufenmodus"
 es-es = "Modo de escala de grises"
+ko-kr = '그레이스케일 모드'
+pt-br = 'Modo escala de cinza'
+ru-ru = 'Режим градаций серого'
+it-it = 'Modalità scala di grigi'
+tr-tr = 'Gri tonlama modu'
+vi-vn = 'Chế độ thang xám'
 
 ["Black and White Mode"]
 zh-cn = "黑白模式"
@@ -53,6 +61,12 @@ ja-jp = "白黒モード"
 fr-fr = "Noir et blanc"
 de-de = "Schwarz-Weiß-Modus"
 es-es = "Modo blanco y negro"
+ko-kr = '흑백 모드'
+pt-br = 'Modo preto e branco'
+ru-ru = 'Черно-белый режим'
+it-it = 'Modalità bianco e nero'
+tr-tr = 'Siyah-beyaz modu'
+vi-vn = 'Chế độ đen trắng'
 
 ["ASCII Art Mode"]
 zh-cn = "ASCII 艺术模式"
@@ -61,6 +75,12 @@ ja-jp = "ASCII アートモード"
 fr-fr = "Mode art ASCII"
 de-de = "ASCII-Kunstmodus"
 es-es = "Modo arte ASCII"
+ko-kr = 'ASCII 아트 모드'
+pt-br = 'Modo arte ASCII'
+ru-ru = 'Режим ASCII-арта'
+it-it = 'Modalità arte ASCII'
+tr-tr = 'ASCII sanat modu'
+vi-vn = 'Chế độ nghệ thuật ASCII'
 
 ["Unicode Braille Mode"]
 zh-cn = "Unicode 盲文模式"
@@ -69,6 +89,12 @@ ja-jp = "Unicode 点字モード"
 fr-fr = "Mode braille Unicode"
 de-de = "Unicode-Braille-Modus"
 es-es = "Modo braille Unicode"
+ko-kr = '유니코드 브라유 모드'
+pt-br = 'Modo Braille Unicode'
+ru-ru = 'Режим Unicode Braille'
+it-it = 'Modalità Braille Unicode'
+tr-tr = 'Unicode Braille modu'
+vi-vn = 'Chế độ Braille Unicode'
 
 ["None"]
 zh-cn = "无"
@@ -77,6 +103,12 @@ ja-jp = "なし"
 fr-fr = "Aucun"
 de-de = "Keine"
 es-es = "Ninguno"
+ko-kr = '없음'
+pt-br = 'Nenhum'
+ru-ru = 'Нет'
+it-it = 'Nessuno'
+tr-tr = 'Yok'
+vi-vn = 'Không'
 
 ["Red"]
 zh-cn = "红色"
@@ -85,6 +117,12 @@ ja-jp = "赤"
 fr-fr = "Rouge"
 de-de = "Rot"
 es-es = "Rojo"
+ko-kr = '빨강'
+pt-br = 'Vermelho'
+ru-ru = 'Красный'
+it-it = 'Rosso'
+tr-tr = 'Kırmızı'
+vi-vn = 'Đỏ'
 
 ["Green"]
 zh-cn = "绿色"
@@ -93,6 +131,12 @@ ja-jp = "緑"
 fr-fr = "Vert"
 de-de = "Grün"
 es-es = "Verde"
+ko-kr = '초록'
+pt-br = 'Verde'
+ru-ru = 'Зелёный'
+it-it = 'Verde'
+tr-tr = 'Yeşil'
+vi-vn = 'Xanh lá'
 
 ["Blue"]
 zh-cn = "蓝色"
@@ -101,6 +145,12 @@ ja-jp = "青"
 fr-fr = "Bleu"
 de-de = "Blau"
 es-es = "Azul"
+ko-kr = '파랑'
+pt-br = 'Azul'
+ru-ru = 'Синий'
+it-it = 'Blu'
+tr-tr = 'Mavi'
+vi-vn = 'Xanh dương'
 
 ["Yellow"]
 zh-cn = "黄色"
@@ -109,6 +159,12 @@ ja-jp = "黄"
 fr-fr = "Jaune"
 de-de = "Gelb"
 es-es = "Amarillo"
+ko-kr = '노랑'
+pt-br = 'Amarelo'
+ru-ru = 'Жёлтый'
+it-it = 'Giallo'
+tr-tr = 'Sarı'
+vi-vn = 'Vàng'
 
 ["Magenta"]
 zh-cn = "品红色"
@@ -117,6 +173,12 @@ ja-jp = "マゼンタ"
 fr-fr = "Magenta"
 de-de = "Magenta"
 es-es = "Magenta"
+ko-kr = '마젠타'
+pt-br = 'Magenta'
+ru-ru = 'Пурпурный'
+it-it = 'Magenta'
+tr-tr = 'Macenta'
+vi-vn = 'Đỏ tím'
 
 ["Cyan"]
 zh-cn = "青色"
@@ -125,6 +187,12 @@ ja-jp = "シアン"
 fr-fr = "Cyan"
 de-de = "Cyan"
 es-es = "Cian"
+ko-kr = '시안'
+pt-br = 'Ciano'
+ru-ru = 'Голубой'
+it-it = 'Ciano'
+tr-tr = 'Camgöbeği'
+vi-vn = 'Lục lam'
 
 ["White"]
 zh-cn = "白色"
@@ -133,6 +201,12 @@ ja-jp = "白"
 fr-fr = "Blanc"
 de-de = "Weiß"
 es-es = "Blanco"
+ko-kr = '흰색'
+pt-br = 'Branco'
+ru-ru = 'Белый'
+it-it = 'Bianco'
+tr-tr = 'Beyaz'
+vi-vn = 'Trắng'
 
 ["Black"]
 zh-cn = "黑色"
@@ -141,3 +215,9 @@ ja-jp = "黒"
 fr-fr = "Noir"
 de-de = "Schwarz"
 es-es = "Negro"
+ko-kr = '검정'
+pt-br = 'Preto'
+ru-ru = 'Чёрный'
+it-it = 'Nero'
+tr-tr = 'Siyah'
+vi-vn = 'Đen'

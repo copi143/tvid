@@ -1,11 +1,15 @@
 # <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
+<img align="left" width="192" src="tvid.min.svg" alt="tvid logo" />
+
 `tvid` is a terminal video player written in Rust. It uses FFmpeg for decoding and renders video, audio and subtitles directly inside your terminal, providing an overlay UI, playlist view and basic mouse / keyboard interaction.
 
 ---
 
 *Translations (by ChatGPT):*<br />
-**en-us/English** | [zh-cn/简体中文](doc/README.zh-cn.md) | [zh-tw/繁體中文](doc/README.zh-tw.md) | [ja-jp/日本語](doc/README.ja-jp.md) | [fr-fr/Français](doc/README.fr-fr.md) | [de-de/Deutsch](doc/README.de-de.md) | [es-es/Español](doc/README.es-es.md)
+**en-us/English** | [zh-cn/简体中文](doc/README.zh-cn.md) | [zh-tw/繁體中文](doc/README.zh-tw.md) | [ja-jp/日本語](doc/README.ja-jp.md) | [fr-fr/Français](doc/README.fr-fr.md) | [de-de/Deutsch](doc/README.de-de.md) | [es-es/Español](doc/README.es-es.md) | [ko-kr/한국어](doc/README.ko-kr.md) | [pt-br/Português (Brasil)](doc/README.pt-br.md) | [ru-ru/Русский](doc/README.ru-ru.md) | [it-it/Italiano](doc/README.it-it.md) | [tr-tr/Türkçe](doc/README.tr-tr.md) | [vi-vn/Tiếng Việt](doc/README.vi-vn.md)
+
+<br clear="left"/>
 
 ---
 
@@ -154,7 +158,7 @@ Examples:
 - `/volume 80`
 - `/lang zh-cn`
 
-Available language codes: `en-us`, `zh-cn`, `zh-tw`, `ja-jp`, `fr-fr`, `de-de`, `es-es`.
+Available language codes: `en-us`, `zh-cn`, `zh-tw`, `ja-jp`, `fr-fr`, `de-de`, `es-es`, `ko-kr`, `pt-br`, `ru-ru`, `it-it`, `tr-tr`, `vi-vn`
 
 ## Troubleshooting
 

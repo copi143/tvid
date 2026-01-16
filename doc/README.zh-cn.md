@@ -1,11 +1,15 @@
 # <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
+<img align="left" width="192" src="../tvid.min.svg" alt="tvid logo" />
+
 `tvid` 是一个用 Rust 编写的终端视频播放器。它基于 FFmpeg 做解码，在你的终端中直接渲染视频、音频和字幕，并提供覆盖式 UI、播放列表视图以及基础的键盘 / 鼠标交互。
 
 ---
 
 *Translations (by ChatGPT):*<br />
-[en-us/English](../README.md) | **zh-cn/简体中文** | [zh-tw/繁體中文](README.zh-tw.md) | [ja-jp/日本語](README.ja-jp.md) | [fr-fr/Français](README.fr-fr.md) | [de-de/Deutsch](README.de-de.md) | [es-es/Español](README.es-es.md)
+[en-us/English](../README.md) | **zh-cn/简体中文** | [zh-tw/繁體中文](README.zh-tw.md) | [ja-jp/日本語](README.ja-jp.md) | [fr-fr/Français](README.fr-fr.md) | [de-de/Deutsch](README.de-de.md) | [es-es/Español](README.es-es.md) | [ko-kr/한국어](README.ko-kr.md) | [pt-br/Português (Brasil)](README.pt-br.md) | [ru-ru/Русский](README.ru-ru.md) | [it-it/Italiano](README.it-it.md) | [tr-tr/Türkçe](README.tr-tr.md) | [vi-vn/Tiếng Việt](README.vi-vn.md)
+
+<br clear="left"/>
 
 ---
 
@@ -154,7 +158,7 @@ UI 与其他：
 - `/volume 80`
 - `/lang zh-cn`
 
-可用语言代码：`en-us`、`zh-cn`、`zh-tw`、`ja-jp`、`fr-fr`、`de-de`、`es-es`。
+可用语言代码：`en-us`、`zh-cn`、`zh-tw`、`ja-jp`、`fr-fr`、`de-de`、`es-es`。: `en-us`, `zh-cn`, `zh-tw`, `ja-jp`, `fr-fr`, `de-de`, `es-es`, `ko-kr`, `pt-br`, `ru-ru`, `it-it`, `tr-tr`, `vi-vn`
 
 ## 常见问题
 

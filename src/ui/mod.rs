@@ -237,9 +237,9 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
         l10n!("Playing")
     };
     putlns_or_uflns!(wrap;
-        "{}", f16n!("tvid v{}", env!("CARGO_PKG_VERSION"));
+        "tvid v{}", env!("CARGO_PKG_VERSION");
         "{}", l10n!("Press 'q' to quit, 'n' to skip to next, 'l' for playlist");
-        "{}", f16n!("{}: {}", status, wrap.playing);
+        "{}: {}", status, wrap.playing;
         "{}", f16n!("Video Time: {} (a: {}, v: {})", playing_time_str, audio_offset_str, video_offset_str);
         "{}", f16n!("App Time: {}", app_time_str);
         "{}", f16n!("Escape String Encode Time: {:.2?} (avg over last 60)", statistics.escape_string_encode_time.avg());

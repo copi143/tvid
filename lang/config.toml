@@ -5,6 +5,12 @@ ja-jp = "音量は0〜200の間でなければなりません"
 fr-fr = "Le volume doit être entre 0 et 200"
 de-de = "Die Lautstärke muss zwischen 0 und 200 liegen"
 es-es = "El volumen debe estar entre 0 y 200"
+ko-kr = '볼륨은 0과 200 사이여야 합니다'
+pt-br = 'O volume deve estar entre 0 e 200'
+ru-ru = 'Громкость должна быть между 0 и 200'
+it-it = 'Il volume deve essere tra 0 e 200'
+tr-tr = 'Ses seviyesi 0 ile 200 arasında olmalı'
+vi-vn = 'Âm lượng phải nằm trong khoảng 0 đến 200'
 
 ["Unknown config key: {}"]
 zh-cn = "未知的配置项: {}"
@@ -13,3 +19,9 @@ ja-jp = "不明な設定キー: {}"
 fr-fr = "Clé de configuration inconnue : {}"
 de-de = "Unbekannter Konfigurationsschlüssel: {}"
 es-es = "Clave de configuración desconocida: {}"
+ko-kr = '알 수 없는 설정 키: {}'
+pt-br = 'Chave de configuração desconhecida: {}'
+ru-ru = 'Неизвестный ключ конфигурации: {}'
+it-it = 'Chiave di configurazione sconosciuta: {}'
+tr-tr = 'Bilinmeyen yapılandırma anahtarı: {}'
+vi-vn = 'Khóa cấu hình không xác định: {}'

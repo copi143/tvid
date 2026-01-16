@@ -5,6 +5,12 @@ ja-jp = "不明なコマンド: {}"
 fr-fr = "Commande inconnue : {}"
 de-de = "Unbekannter Befehl: {}"
 es-es = "Comando desconocido: {}"
+ko-kr = '알 수 없는 명령어: {}'
+pt-br = 'Comando desconhecido: {}'
+ru-ru = 'Неизвестная команда: {}'
+it-it = 'Comando sconosciuto: {}'
+tr-tr = 'Bilinmeyen komut: {}'
+vi-vn = 'Lệnh không xác định: {}'
 
 ["Commands: {}"]
 zh-cn = "命令: {}"
@@ -13,6 +19,12 @@ ja-jp = "コマンド: {}"
 fr-fr = "Commandes: {}"
 de-de = "Befehle: {}"
 es-es = "Comandos: {}"
+ko-kr = '명령어: {}'
+pt-br = 'Comandos: {}'
+ru-ru = 'Команды: {}'
+it-it = 'Comandi: {}'
+tr-tr = 'Komutlar: {}'
+vi-vn = 'Lệnh: {}'
 
 ["seek: missing argument"]
 zh-cn = "seek 缺少参数"
@@ -21,6 +33,12 @@ ja-jp = "seek の引数が不足しています"
 fr-fr = "seek: argument manquant"
 de-de = "seek: fehlendes Argument"
 es-es = "seek: falta el argumento"
+ko-kr = 'seek: 인수가 없습니다'
+pt-br = 'seek: argumento ausente'
+ru-ru = 'seek: отсутствует аргумент'
+it-it = 'seek: argomento mancante'
+tr-tr = 'seek: eksik argüman'
+vi-vn = 'seek: thiếu đối số'
 
 ["seek: invalid argument: {}"]
 zh-cn = "seek 参数无效: {}"
@@ -29,6 +47,12 @@ ja-jp = "seek の引数が無効です: {}"
 fr-fr = "seek: argument invalide: {}"
 de-de = "seek: ungültiges Argument: {}"
 es-es = "seek: argumento inválido: {}"
+ko-kr = 'seek: 잘못된 인수: {}'
+pt-br = 'seek: argumento inválido: {}'
+ru-ru = 'seek: неверный аргумент: {}'
+it-it = 'seek: argomento non valido: {}'
+tr-tr = 'seek: geçersiz argüman: {}'
+vi-vn = 'seek: đối số không hợp lệ: {}'
 
 ["vol: missing argument"]
 zh-cn = "vol 缺少参数"
@@ -37,6 +61,12 @@ ja-jp = "vol の引数が不足しています"
 fr-fr = "vol: argument manquant"
 de-de = "vol: fehlendes Argument"
 es-es = "vol: falta el argumento"
+ko-kr = 'vol: 인수가 없습니다'
+pt-br = 'vol: argumento ausente'
+ru-ru = 'vol: отсутствует аргумент'
+it-it = 'vol: argomento mancante'
+tr-tr = 'vol: eksik argüman'
+vi-vn = 'vol: thiếu đối số'
 
 ["vol: invalid argument: {}"]
 zh-cn = "vol 参数无效: {}"
@@ -45,6 +75,12 @@ ja-jp = "vol の引数が無効です: {}"
 fr-fr = "vol: argument invalide: {}"
 de-de = "vol: ungültiges Argument: {}"
 es-es = "vol: argumento inválido: {}"
+ko-kr = 'vol: 잘못된 인수: {}'
+pt-br = 'vol: argumento inválido: {}'
+ru-ru = 'vol: неверный аргумент: {}'
+it-it = 'vol: argomento non valido: {}'
+tr-tr = 'vol: geçersiz argüman: {}'
+vi-vn = 'vol: đối số không hợp lệ: {}'
 
 ["Audio is disabled"]
 zh-cn = "未启用音频功能"
@@ -53,6 +89,12 @@ ja-jp = "オーディオ機能が無効です"
 fr-fr = "Audio désactivé"
 de-de = "Audio deaktiviert"
 es-es = "Audio desactivado"
+ko-kr = '오디오가 비활성화되었습니다'
+pt-br = 'O áudio está desativado'
+ru-ru = 'Аудио отключено'
+it-it = 'Audio disabilitato'
+tr-tr = 'Ses devre dışı'
+vi-vn = 'Âm thanh đã bị vô hiệu'
 
 ['lang: missing argument']
 zh-cn = 'lang: 缺少参数'
@@ -61,6 +103,12 @@ ja-jp = 'lang: 引数がありません'
 fr-fr = 'lang: argument manquant'
 de-de = 'lang: fehlendes Argument'
 es-es = 'lang: falta el argumento'
+ko-kr = 'lang: 인수가 없습니다'
+pt-br = 'lang: argumento ausente'
+ru-ru = 'lang: отсутствует аргумент'
+it-it = 'lang: argomento mancante'
+tr-tr = 'lang: eksik argüman'
+vi-vn = 'lang: thiếu đối số'
 
 ['lang: unsupported language: {}']
 zh-cn = 'lang: 不支持的语言: {}'
@@ -69,6 +117,12 @@ ja-jp = 'lang: 未対応の言語: {}'
 fr-fr = 'lang: langue non prise en charge: {}'
 de-de = 'lang: nicht unterstützte Sprache: {}'
 es-es = 'lang: idioma no compatible: {}'
+ko-kr = 'lang: 지원되지 않는 언어: {}'
+pt-br = 'lang: idioma não suportado: {}'
+ru-ru = 'lang: неподдерживаемый язык: {}'
+it-it = 'lang: lingua non supportata: {}'
+tr-tr = 'lang: desteklenmeyen dil: {}'
+vi-vn = 'lang: ngôn ngữ không hỗ trợ: {}'
 
 ['Language set to {}']
 zh-cn = '语言已设置为 {}'
@@ -77,6 +131,12 @@ ja-jp = '言語を {} に設定しました'
 fr-fr = 'Langue définie sur {}'
 de-de = 'Sprache auf {} gesetzt'
 es-es = 'Idioma establecido en {}'
+ko-kr = '언어가 {}로 설정되었습니다'
+pt-br = 'Idioma definido para {}'
+ru-ru = 'Язык установлен на {}'
+it-it = 'Lingua impostata su {}'
+tr-tr = 'Dil {} olarak ayarlandı'
+vi-vn = 'Đã đặt ngôn ngữ thành {}'
 
 ['i18n is disabled']
 zh-cn = 'i18n 已禁用'
@@ -85,3 +145,9 @@ ja-jp = 'i18n は無効です'
 fr-fr = 'i18n est désactivé'
 de-de = 'i18n ist deaktiviert'
 es-es = 'i18n está deshabilitado'
+ko-kr = 'i18n이 비활성화되었습니다'
+pt-br = 'i18n está desativado'
+ru-ru = 'i18n отключен'
+it-it = 'i18n è disabilitato'
+tr-tr = 'i18n devre dışı'
+vi-vn = 'i18n đã bị vô hiệu'

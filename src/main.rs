@@ -129,6 +129,8 @@ fn print_no_playlist(program_name: &str) {
     );
 }
 
+const TVID_LOGO_BASE64: &str = include_str!("tvid.min.svg.base64");
+
 fn print_help(program_name: &str) {
     let version = env!("CARGO_PKG_VERSION");
     let repo = format_link(env!("CARGO_PKG_REPOSITORY"), env!("CARGO_PKG_REPOSITORY"));
@@ -136,6 +138,11 @@ fn print_help(program_name: &str) {
     let license = env!("CARGO_PKG_LICENSE")
         .replace("MIT", &format_link("MIT", "https://choosealicense.com/licenses/mit/"))
         .replace("Apache-2.0", &format_link("Apache-2.0", "https://choosealicense.com/licenses/apache-2.0/"));
+    eprintln!(
+        "\x1b]1337;File=inline=1;size={}:{}\x1b\\",
+        TVID_LOGO_BASE64.len(),
+        TVID_LOGO_BASE64,
+    );
     eprintlns!(
         "{}", l10n!("tvid - Terminal Video Player");
         "{}", f16n!("version: {}", version);
@@ -266,7 +273,7 @@ fn main() -> Result<()> {
 
     #[cfg(feature = "i18n")]
     match sys_locale::get_locale()
-        .map(|l| l.to_lowercase())
+        .map(|l| l.to_lowercase().replace('_', "-"))
         .unwrap_or("en-us".to_string())
         .as_str()
     {
@@ -276,6 +283,12 @@ fn main() -> Result<()> {
         "fr-fr" => static_l10n::lang!("fr-fr"),
         "de-de" => static_l10n::lang!("de-de"),
         "es-es" => static_l10n::lang!("es-es"),
+        "ko-kr" => static_l10n::lang!("ko-kr"),
+        "pt-br" => static_l10n::lang!("pt-br"),
+        "ru-ru" => static_l10n::lang!("ru-ru"),
+        "it-it" => static_l10n::lang!("it-it"),
+        "tr-tr" => static_l10n::lang!("tr-tr"),
+        "vi-vn" => static_l10n::lang!("vi-vn"),
         _ => static_l10n::lang!("en-us"),
     }
 
