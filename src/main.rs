@@ -99,7 +99,7 @@ pub static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .worker_threads(workers)
         .enable_all()
         .build()
-        .expect("Failed to create Tokio runtime")
+        .expect(l10n!("Failed to create Tokio runtime"))
 });
 
 macro_rules! eprintlns {
@@ -190,6 +190,10 @@ static SEEK_SMALL_STEP: Mutex<f64> = Mutex::new(5.0);
 static SEEK_LARGE_STEP: Mutex<f64> = Mutex::new(30.0);
 
 fn register_input_callbacks() {
+    stdin::register_keypress_callback(Key::Escape, |id, _| {
+        info_l10n!("Press 'q' to quit.");
+        true
+    });
     stdin::register_keypress_callback(Key::Normal(' '), |_, _| {
         avsync::switch_pause_state();
         true
@@ -308,7 +312,7 @@ fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    av::init().context("av init failed")?;
+    av::init().context(l10n!("av init failed"))?;
 
     term::init();
 

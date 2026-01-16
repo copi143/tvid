@@ -233,7 +233,7 @@ impl RenderContext {
                         return;
                     }
                 } else {
-                    panic!("Invalid video size update");
+                    panic!("{}", l10n!("Invalid video size update"));
                 }
             }
         }
@@ -251,7 +251,7 @@ impl RenderContext {
         let (xvideo, yvideo) = (self.video_origin_width, self.video_origin_height);
 
         if (xvideo == 0 && yvideo != 0) || (xvideo != 0 && yvideo == 0) {
-            panic!("Invalid video size: {xvideo}x{yvideo}");
+            panic!("{}", f16n!("Invalid video size: {}x{}", xvideo, yvideo));
         }
 
         let fppc_is_zero = if self.fppc_x == 0 || self.fppc_y == 0 {
@@ -762,7 +762,7 @@ pub fn render_main() {
 
 fn render_video_1x1(wrap: &mut ContextWrapper) {
     if wrap.fppc_x != 1 || wrap.fppc_y != 1 {
-        panic!("render_video_1x1 only supports fppc_x = 1 and fppc_y = 1");
+        panic!("{}", l10n!("render_video_1x1 only supports fppc_x = 1 and fppc_y = 1"));
     }
     if let Some(chroma_key) = wrap.chroma_mode.color() {
         for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {

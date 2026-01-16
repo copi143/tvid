@@ -1,0 +1,7 @@
+['Failed to print all log messages']
+zh-cn = '无法打印所有日志消息'
+zh-tw = '無法列印所有日誌訊息'
+ja-jp = 'ログメッセージをすべて出力できませんでした'
+fr-fr = "Impossible d'afficher tous les messages de journal"
+de-de = 'Alle Protokollmeldungen konnten nicht ausgegeben werden'
+es-es = 'No se pudieron imprimir todos los mensajes de registro'

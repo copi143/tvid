@@ -33,7 +33,9 @@ impl Terminal {
             Box::new(move || match rx.try_recv() {
                 Ok(c) => Ok(Some(c)),
                 Err(TryRecvError::Empty) => Ok(None),
-                Err(TryRecvError::Disconnected) => Err(anyhow::anyhow!("Channel disconnected")),
+                Err(TryRecvError::Disconnected) => {
+                    Err(anyhow::anyhow!(l10n!("Channel disconnected")))
+                }
             }),
         ));
         let term = Arc::new(Self {
@@ -71,7 +73,7 @@ impl Terminal {
 
     pub async fn stdin_byte(&self, data: u8) -> Result<()> {
         if let Err(e) = self.tx.send(data).await {
-            bail!("Failed to send byte to input task: {e}");
+            bail!("{}", f16n!("Failed to send byte to input task: {}", e));
         }
         Ok(())
     }
@@ -79,7 +81,7 @@ impl Terminal {
     pub async fn stdin(&self, data: &[u8]) -> Result<()> {
         for &byte in data {
             if let Err(e) = self.tx.send(byte).await {
-                bail!("Failed to send byte to input task: {e}");
+                bail!("{}", f16n!("Failed to send byte to input task: {}", e));
             }
         }
         Ok(())
@@ -90,7 +92,7 @@ impl Terminal {
             .data(self.channel, CryptoVec::from_slice(&[data]))
             .await
             .ok()
-            .context("Failed to send data to SSH client")?;
+            .context(l10n!("Failed to send data to SSH client"))?;
         Ok(())
     }
 
@@ -99,7 +101,7 @@ impl Terminal {
             .data(self.channel, CryptoVec::from_slice(data))
             .await
             .ok()
-            .context("Failed to send data to SSH client")?;
+            .context(l10n!("Failed to send data to SSH client"))?;
         Ok(())
     }
 
@@ -108,7 +110,7 @@ impl Terminal {
             .close(self.channel)
             .await
             .ok()
-            .context("Failed to close SSH channel")?;
+            .context(l10n!("Failed to close SSH channel"))?;
         let id = self.id;
         tokio::spawn(async move { TERMINALS.lock().remove(&id) });
         Ok(())
@@ -169,8 +171,11 @@ impl russh::server::Handler for Handler {
             if byte == 0x03 {
                 info!("Received Ctrl-C on channel {channel} from client {}", self.id);
                 session.data(channel, CryptoVec::from_slice(TERM_EXIT_SEQ))?;
-                session.data(channel, CryptoVec::from_slice(b"Disconnecting from tvid SSH session...\r\n"))?;
-                session.data(channel, CryptoVec::from_slice(b"Bye!\r\n"))?;
+                session.data(
+                    channel,
+                    CryptoVec::from_slice(l10n!("Disconnecting from tvid SSH session...\r\n").as_bytes()),
+                )?;
+                session.data(channel, CryptoVec::from_slice(l10n!("Bye!\r\n").as_bytes()))?;
                 session.close(channel)?;
                 break;
             } else {
@@ -178,7 +183,7 @@ impl russh::server::Handler for Handler {
                     break;
                 };
                 if let Err(e) = term.stdin_byte(byte).await {
-                    error!("Failed to send byte to input task: {e}");
+                    error_f16n!("Failed to send byte to input task: {}", e);
                     break;
                 }
             }
@@ -192,8 +197,14 @@ impl russh::server::Handler for Handler {
         term.resize(col_width as u16, row_height as u16, pix_width as u16, pix_height as u16).await;
         self.channels.insert(channel, term);
         session.channel_success(channel)?;
-        session.data(channel, CryptoVec::from_slice(b"PTY request accepted\r\n"))?;
-        session.data(channel, CryptoVec::from_slice(b"Welcome to tvid SSH session!\r\n"))?;
+        session.data(
+            channel,
+            CryptoVec::from_slice(l10n!("PTY request accepted\r\n").as_bytes()),
+        )?;
+        session.data(
+            channel,
+            CryptoVec::from_slice(l10n!("Welcome to tvid SSH session!\r\n").as_bytes()),
+        )?;
         session.data(channel, CryptoVec::from_slice(TERM_INIT_SEQ))?;
         Ok(())
     }

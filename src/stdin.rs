@@ -76,11 +76,11 @@ fn try_getc() -> Result<Option<u8>> {
         Ok(Some(c))
     } else {
         let Some(n) = scan(&mut lock.buf) else {
-            error!("Failed to read from stdin");
-            bail!("failed to read from stdin");
+            error_l10n!("Failed to read from stdin");
+            bail!("{}", l10n!("Failed to read from stdin"));
         };
         if STDIN_QUIT.load(Ordering::SeqCst) {
-            return Err(anyhow::anyhow!("stdin quit"));
+            return Err(anyhow::anyhow!(l10n!("stdin quit")));
         }
         if n > 0 {
             lock.pos = 1;
@@ -183,7 +183,7 @@ impl Key {
                 b'a'..=b'z' => c as u16,
                 b'A'..=b'Z' => c as u16 - b'A' as u16 + b'a' as u16,
                 1..128 => c as u16,
-                _ => panic!("Invalid normal key: {}", c),
+                _ => panic!("{}", f16n!("Invalid normal key: {}", c)),
             },
             Key::Lower(c) => match c {
                 'a'..='z' => c as u16 - b'a' as u16 + 128,
@@ -522,7 +522,7 @@ async fn input_parsenum(getc: &mut Getc, mut c: u8, end: u8) -> Result<i64> {
     let mut num = 0i64;
     while c != end {
         if c < b'0' || c > b'9' {
-            return Err(anyhow::anyhow!("Invalid number: {}", c as char));
+            return Err(anyhow::anyhow!("{}", f16n!("Invalid number: {}", c as char)));
         }
         num = num * 10 + (c - b'0') as i64;
         c = getc.wait().await?;
@@ -637,9 +637,10 @@ async fn input_escape_square_angle(getc: &mut Getc) -> Result<()> {
         258 => MouseAction::Button10Down,
         259 => MouseAction::Button11Down,
         _ => {
-            error!(
+            error_f16n!(
                 "Unknown mouse action: (0b{:09b}), button up: {}",
-                params[0], mouseup
+                params[0],
+                mouseup
             );
             return Ok(());
         }

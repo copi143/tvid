@@ -147,7 +147,7 @@ fn render_help(wrap: &mut ContextWrapper) {
     helper::textbox_default_color(Some(TERM_DEFAULT_BG), None);
     putlns_or_uflns!(wrap;
         "{}", l10n!("        Help Information (press h to close)       ");
-        "{}", l10n!("--------------------------------------------------");
+        "{}",       "--------------------------------------------------";
         "{}", l10n!("     q:            Quit the program               ");
         "{}", l10n!("     n:            Next item                      ");
         "{}", l10n!("     l:            Open/close playlist            ");
@@ -155,7 +155,7 @@ fn render_help(wrap: &mut ContextWrapper) {
         "{}", l10n!("     w/s/↑/↓:      Move up/down                   ");
         "{}", l10n!("     a/d/←/→:      Enter/return directory         ");
         "{}", l10n!("     h:            Open/close help                ");
-        "{}", l10n!("--------------------------------------------------");
+        "{}",       "--------------------------------------------------";
     );
 }
 

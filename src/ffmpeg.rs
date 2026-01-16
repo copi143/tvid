@@ -141,8 +141,8 @@ pub fn decode_main(path: &str) -> Result<bool> {
             error!("video stream index is valid, so stream must exist");
             fatal_l10n!("What happened with FFmpeg?");
         };
-        let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context("video decoder")?;
-        let codec = codec_ctx.decoder().video().context("video decoder")?;
+        let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context(l10n!("video decoder"))?;
+        let codec = codec_ctx.decoder().video().context(l10n!("video decoder"))?;
         (
             Some(codec),
             Some(stream.time_base()),
@@ -157,8 +157,8 @@ pub fn decode_main(path: &str) -> Result<bool> {
             error!("audio stream index is valid, so stream must exist");
             fatal_l10n!("What happened with FFmpeg?");
         };
-        let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context("audio decoder")?;
-        let codec = codec_ctx.decoder().audio().context("audio decoder")?;
+        let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context(l10n!("audio decoder"))?;
+        let codec = codec_ctx.decoder().audio().context(l10n!("audio decoder"))?;
         (
             Some(codec),
             Some(stream.time_base()),
@@ -171,9 +171,10 @@ pub fn decode_main(path: &str) -> Result<bool> {
     let (mut subtitle_decoder, subtitle_timebase) = if subtitle_stream_index >= 0 {
         let stream = ictx
             .stream(subtitle_stream_index as usize)
-            .context("subtitle stream")?;
-        let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context("subtitle decoder")?;
-        let codec = codec_ctx.decoder().subtitle().context("subtitle decoder")?;
+            .context(l10n!("subtitle stream"))?;
+        let codec_ctx =
+            AVCCtx::from_parameters(stream.parameters()).context(l10n!("subtitle decoder"))?;
+        let codec = codec_ctx.decoder().subtitle().context(l10n!("subtitle decoder"))?;
         (Some(codec), Some(stream.time_base()))
     } else {
         (None, None)
@@ -408,7 +409,7 @@ fn decode_video(
     *video_pts = packet.pts();
 
     if let Err(e) = video_decoder.send_packet(&packet) {
-        eprintln!("video send_packet err: {:?}", e);
+        eprintln!("{}", f16n!("video send_packet err: {:?}", e));
         return;
     }
 
@@ -461,7 +462,7 @@ fn decode_audio(
     *audio_pts = packet.pts();
 
     if let Err(e) = audio_decoder.send_packet(&packet) {
-        eprintln!("audio send_packet err: {:?}", e);
+        eprintln!("{}", f16n!("audio send_packet err: {:?}", e));
         return;
     }
 

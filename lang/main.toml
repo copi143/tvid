@@ -102,6 +102,14 @@ fr-fr = "  c             : Changer le mode couleur"
 de-de = "  c             : Farbmodus wechseln"
 es-es = "  c             : Cambiar modo de color"
 
+["Press 'q' to quit."]
+zh-cn = "按 'q' 键退出。"
+zh-tw = "按 'q' 鍵離開。"
+ja-jp = "'q' キーを押して終了します。"
+fr-fr = "Appuyez sur 'q' pour quitter."
+de-de = "Drücken Sie 'q', um zu beenden."
+es-es = "Presione 'q' para salir."
+
 ["Got 0 args? What the fuck?"]
 zh-cn = "666 这几把的 0 个参数，没救了属于是"
 zh-tw = "媽的 0 個參數，什麼鳥東西"
@@ -157,3 +165,19 @@ ja-jp = "設定の保存エラー: {}"
 fr-fr = "Erreur d'enregistrement de la configuration : {}"
 de-de = "Fehler beim Speichern der Konfiguration: {}"
 es-es = "Error al guardar la configuración: {}"
+
+['Failed to create Tokio runtime']
+zh-cn = '无法创建 Tokio 运行时'
+zh-tw = '無法建立 Tokio 執行期'
+ja-jp = 'Tokio ランタイムの作成に失敗しました'
+fr-fr = 'Impossible de créer le runtime Tokio'
+de-de = 'Tokio-Runtime konnte nicht erstellt werden'
+es-es = 'No se pudo crear el runtime de Tokio'
+
+['av init failed']
+zh-cn = 'av 初始化失败'
+zh-tw = 'av 初始化失敗'
+ja-jp = 'av の初期化に失敗しました'
+fr-fr = "Échec de l'initialisation av"
+de-de = 'av-Initialisierung fehlgeschlagen'
+es-es = 'Falló la inicialización de av'

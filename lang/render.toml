@@ -5,3 +5,27 @@ ja-jp = "保留フレームが多すぎます: {}"
 fr-fr = "Trop de trames en attente : {}"
 de-de = "Zu viele ausstehende Frames: {}"
 es-es = "Demasiados fotogramas pendientes: {}"
+
+['Invalid video size update']
+zh-cn = '无效的视频尺寸更新'
+zh-tw = '無效的視訊尺寸更新'
+ja-jp = '無効な動画サイズ更新'
+fr-fr = 'Mise à jour de la taille vidéo invalide'
+de-de = 'Ungültige Aktualisierung der Videogröße'
+es-es = 'Actualización de tamaño de video no válida'
+
+['Invalid video size: {}x{}']
+zh-cn = '无效的视频尺寸: {}x{}'
+zh-tw = '無效的視訊尺寸: {}x{}'
+ja-jp = '無効な動画サイズ: {}x{}'
+fr-fr = 'Taille vidéo invalide : {}x{}'
+de-de = 'Ungültige Videogröße: {}x{}'
+es-es = 'Tamaño de video no válido: {}x{}'
+
+['render_video_1x1 only supports fppc_x = 1 and fppc_y = 1']
+zh-cn = 'render_video_1x1 仅支持 fppc_x = 1 且 fppc_y = 1'
+zh-tw = 'render_video_1x1 僅支援 fppc_x = 1 且 fppc_y = 1'
+ja-jp = 'render_video_1x1 は fppc_x = 1 と fppc_y = 1 のみ対応'
+fr-fr = 'render_video_1x1 ne prend en charge que fppc_x = 1 et fppc_y = 1'
+de-de = 'render_video_1x1 unterstützt nur fppc_x = 1 und fppc_y = 1'
+es-es = 'render_video_1x1 solo admite fppc_x = 1 y fppc_y = 1'

@@ -1,0 +1,64 @@
+['Channel disconnected']
+zh-cn = '通道已断开'
+zh-tw = '通道已斷開'
+ja-jp = 'チャネルが切断されました'
+fr-fr = 'Canal déconnecté'
+de-de = 'Kanal getrennt'
+es-es = 'Canal desconectado'
+
+['Failed to send byte to input task: {}']
+zh-cn = '无法向输入任务发送字节: {}'
+zh-tw = '無法向輸入任務傳送位元組: {}'
+ja-jp = '入力タスクへのバイト送信に失敗しました: {}'
+fr-fr = "Échec de l'envoi de l'octet à la tâche d'entrée : {}"
+de-de = 'Senden des Bytes an den Eingabetask fehlgeschlagen: {}'
+es-es = 'Error al enviar el byte a la tarea de entrada: {}'
+
+['Failed to send data to SSH client']
+zh-cn = '无法向 SSH 客户端发送数据'
+zh-tw = '無法向 SSH 用戶端傳送資料'
+ja-jp = 'SSH クライアントへのデータ送信に失敗しました'
+fr-fr = "Échec de l'envoi des données au client SSH"
+de-de = 'Senden der Daten an den SSH-Client fehlgeschlagen'
+es-es = 'Error al enviar datos al cliente SSH'
+
+['Failed to close SSH channel']
+zh-cn = '无法关闭 SSH 通道'
+zh-tw = '無法關閉 SSH 通道'
+ja-jp = 'SSH チャンネルのクローズに失敗しました'
+fr-fr = 'Échec de la fermeture du canal SSH'
+de-de = 'Schließen des SSH-Kanals fehlgeschlagen'
+es-es = 'Error al cerrar el canal SSH'
+
+['Disconnecting from tvid SSH session...\r\n']
+zh-cn = '正在断开 tvid SSH 会话...\r\n'
+zh-tw = '正在斷開 tvid SSH 會話...\r\n'
+ja-jp = 'tvid SSH セッションを切断中...\r\n'
+fr-fr = 'Déconnexion de la session SSH tvid...\r\n'
+de-de = 'Trenne die tvid-SSH-Sitzung...\r\n'
+es-es = 'Desconectando la sesión SSH de tvid...\r\n'
+
+['Bye!\r\n']
+zh-cn = '再见！\r\n'
+zh-tw = '再見！\r\n'
+ja-jp = 'さようなら！\r\n'
+fr-fr = 'Au revoir !\r\n'
+de-de = 'Auf Wiedersehen!\r\n'
+es-es = '¡Adiós!\r\n'
+
+['PTY request accepted\r\n']
+zh-cn = 'PTY 请求已接受\r\n'
+zh-tw = 'PTY 請求已接受\r\n'
+ja-jp = 'PTY リクエストが受け付けられました\r\n'
+fr-fr = 'Demande PTY acceptée\r\n'
+de-de = 'PTY-Anfrage angenommen\r\n'
+es-es = 'Solicitud PTY aceptada\r\n'
+
+['Welcome to tvid SSH session!\r\n']
+zh-cn = '欢迎使用 tvid SSH 会话！\r\n'
+zh-tw = '歡迎使用 tvid SSH 會話！\r\n'
+ja-jp = 'tvid SSH セッションへようこそ！\r\n'
+fr-fr = 'Bienvenue dans la session SSH tvid !\r\n'
+de-de = 'Willkommen in der tvid-SSH-Sitzung!\r\n'
+es-es = '¡Bienvenido a la sesión SSH de tvid!\r\n'
+

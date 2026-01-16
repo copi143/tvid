@@ -53,3 +53,35 @@ ja-jp = "オーディオ機能が無効です"
 fr-fr = "Audio désactivé"
 de-de = "Audio deaktiviert"
 es-es = "Audio desactivado"
+
+['lang: missing argument']
+zh-cn = 'lang: 缺少参数'
+zh-tw = 'lang: 缺少參數'
+ja-jp = 'lang: 引数がありません'
+fr-fr = 'lang: argument manquant'
+de-de = 'lang: fehlendes Argument'
+es-es = 'lang: falta el argumento'
+
+['lang: unsupported language: {}']
+zh-cn = 'lang: 不支持的语言: {}'
+zh-tw = 'lang: 不支援的語言: {}'
+ja-jp = 'lang: 未対応の言語: {}'
+fr-fr = 'lang: langue non prise en charge: {}'
+de-de = 'lang: nicht unterstützte Sprache: {}'
+es-es = 'lang: idioma no compatible: {}'
+
+['Language set to {}']
+zh-cn = '语言已设置为 {}'
+zh-tw = '語言已設定為 {}'
+ja-jp = '言語を {} に設定しました'
+fr-fr = 'Langue définie sur {}'
+de-de = 'Sprache auf {} gesetzt'
+es-es = 'Idioma establecido en {}'
+
+['i18n is disabled']
+zh-cn = 'i18n 已禁用'
+zh-tw = 'i18n 已停用'
+ja-jp = 'i18n は無効です'
+fr-fr = 'i18n est désactivé'
+de-de = 'i18n ist deaktiviert'
+es-es = 'i18n está deshabilitado'

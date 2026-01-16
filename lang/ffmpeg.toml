@@ -69,3 +69,51 @@ ja-jp = "ビットマップ字幕はサポートされていません"
 fr-fr = "les sous-titres bitmap ne sont pas pris en charge"
 de-de = "Bitmap-Untertitel werden nicht unterstützt"
 es-es = "los subtítulos de mapa de bits no son compatibles"
+
+['video decoder']
+zh-cn = '视频解码器'
+zh-tw = '視訊解碼器'
+ja-jp = 'ビデオデコーダー'
+fr-fr = 'décodeur vidéo'
+de-de = 'Videodecoder'
+es-es = 'decodificador de video'
+
+['audio decoder']
+zh-cn = '音频解码器'
+zh-tw = '音訊解碼器'
+ja-jp = 'オーディオデコーダー'
+fr-fr = 'décodeur audio'
+de-de = 'Audiodecoder'
+es-es = 'decodificador de audio'
+
+['subtitle stream']
+zh-cn = '字幕流'
+zh-tw = '字幕串流'
+ja-jp = '字幕ストリーム'
+fr-fr = 'flux de sous-titres'
+de-de = 'Untertitel-Stream'
+es-es = 'flujo de subtítulos'
+
+['subtitle decoder']
+zh-cn = '字幕解码器'
+zh-tw = '字幕解碼器'
+ja-jp = '字幕デコーダー'
+fr-fr = 'décodeur de sous-titres'
+de-de = 'Untertitel-Decoder'
+es-es = 'decodificador de subtítulos'
+
+['video send_packet err: {:?}']
+zh-cn = '视频 send_packet 错误: {:?}'
+zh-tw = '視訊 send_packet 錯誤: {:?}'
+ja-jp = 'ビデオ send_packet エラー: {:?}'
+fr-fr = 'erreur send_packet vidéo : {:?}'
+de-de = 'Video-send_packet-Fehler: {:?}'
+es-es = 'error de send_packet de video: {:?}'
+
+['audio send_packet err: {:?}']
+zh-cn = '音频 send_packet 错误: {:?}'
+zh-tw = '音訊 send_packet 錯誤: {:?}'
+ja-jp = 'オーディオ send_packet エラー: {:?}'
+fr-fr = 'erreur send_packet audio : {:?}'
+de-de = 'Audio-send_packet-Fehler: {:?}'
+es-es = 'error de send_packet de audio: {:?}'

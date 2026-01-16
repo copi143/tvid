@@ -9,6 +9,34 @@ use std::time::{Duration, SystemTime};
 use crate::term;
 use crate::{stdout, util::Color};
 
+#[cfg(feature = "i18n")]
+macro_rules! l10n {
+    ($key:literal $(,)?) => {
+        static_l10n::l10n!($key)
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! l10n {
+    ($key:literal $(,)?) => {
+        $key
+    };
+}
+
+#[cfg(feature = "i18n")]
+macro_rules! f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        static_l10n::f16n!($key $(, $arg)*)
+    };
+}
+
+#[cfg(not(feature = "i18n"))]
+macro_rules! f16n {
+    ($key:literal $(, $arg:expr)* $(,)?) => {
+        format!($key $(, $arg)*)
+    };
+}
+
 pub const COLOR_DEBUG: Color = Color::new(128, 192, 255);
 pub const COLOR_INFO: Color = Color::new(64, 192, 128);
 pub const COLOR_WARN: Color = Color::new(255, 192, 0);
@@ -116,7 +144,7 @@ pub fn print_messages() -> Result<()> {
     if stdout::print_all_sync(bytes) {
         Ok(())
     } else {
-        Err(anyhow::anyhow!("Failed to print all log messages"))
+        Err(anyhow::anyhow!(l10n!("Failed to print all log messages")))
     }
 }
 
@@ -181,34 +209,6 @@ macro_rules! error {
 macro_rules! fatal {
     ($($arg:tt)*) => {
         crate::logging::fatal(&format!($($arg)*), None, None)
-    };
-}
-
-#[cfg(feature = "i18n")]
-macro_rules! l10n {
-    ($key:literal $(,)?) => {
-        static_l10n::l10n!($key)
-    };
-}
-
-#[cfg(not(feature = "i18n"))]
-macro_rules! l10n {
-    ($key:literal $(,)?) => {
-        $key
-    };
-}
-
-#[cfg(feature = "i18n")]
-macro_rules! f16n {
-    ($key:literal $(, $arg:expr)* $(,)?) => {
-        static_l10n::f16n!($key $(, $arg)*)
-    };
-}
-
-#[cfg(not(feature = "i18n"))]
-macro_rules! f16n {
-    ($key:literal $(, $arg:expr)* $(,)?) => {
-        format!($key $(, $arg)*)
     };
 }
 

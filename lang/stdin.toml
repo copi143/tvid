@@ -37,3 +37,43 @@ ja-jp = "未処理のキー：{} ({})"
 fr-fr = "Touche non gérée : {} ({})"
 de-de = "Unbehandelter Schlüssel: {} ({})"
 es-es = "Tecla no manejada: {} ({})"
+
+['Failed to read from stdin']
+zh-cn = '无法从 stdin 读取'
+zh-tw = '無法從 stdin 讀取'
+ja-jp = 'stdin から読み取れませんでした'
+fr-fr = 'Impossible de lire depuis stdin'
+de-de = 'Lesen von stdin fehlgeschlagen'
+es-es = 'No se pudo leer desde stdin'
+
+['stdin quit']
+zh-cn = 'stdin 退出'
+zh-tw = 'stdin 結束'
+ja-jp = 'stdin が終了しました'
+fr-fr = 'stdin quitté'
+de-de = 'stdin beendet'
+es-es = 'stdin finalizó'
+
+['Invalid normal key: {}']
+zh-cn = '无效的普通按键: {}'
+zh-tw = '無效的一般按鍵: {}'
+ja-jp = '無効な通常キー: {}'
+fr-fr = 'Touche normale invalide : {}'
+de-de = 'Ungültige normale Taste: {}'
+es-es = 'Tecla normal no válida: {}'
+
+['Invalid number: {}']
+zh-cn = '无效的数字: {}'
+zh-tw = '無效的數字: {}'
+ja-jp = '無効な数値: {}'
+fr-fr = 'Nombre invalide : {}'
+de-de = 'Ungültige Zahl: {}'
+es-es = 'Número no válido: {}'
+
+['Unknown mouse action: (0b{:09b}), button up: {}']
+zh-cn = '未知的鼠标动作: (0b{:09b}), 按键抬起: {}'
+zh-tw = '未知的滑鼠動作: (0b{:09b}), 按鍵放開: {}'
+ja-jp = '不明なマウス動作: (0b{:09b}), ボタン離し: {}'
+fr-fr = 'Action souris inconnue : (0b{:09b}), bouton relâché : {}'
+de-de = 'Unbekannte Mausaktion: (0b{:09b}), Taste losgelassen: {}'
+es-es = 'Acción de ratón desconocida: (0b{:09b}), botón liberado: {}'
