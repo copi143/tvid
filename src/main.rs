@@ -60,9 +60,9 @@ mod ui;
 #[deny(unused_must_use)]
 mod avsync;
 
+mod command;
 mod playlist;
 mod render;
-mod command;
 mod statistics;
 mod stdin;
 mod stdout;
@@ -492,6 +492,8 @@ fn main() -> Result<()> {
     #[cfg(feature = "subtitle")]
     render::add_render_callback(subtitle::render_subtitle);
     render::add_render_callback(ui::render_ui);
+
+    command::register_commands();
 
     let input_main = TOKIO_RUNTIME.spawn(stdin::input_main());
     let output_main = TOKIO_RUNTIME.spawn(stdout::output_main());

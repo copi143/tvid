@@ -1,10 +1,10 @@
 use parking_lot::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::stdin::{self, Key};
-use crate::{avsync, ffmpeg, term, ui};
 use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG};
+use crate::{avsync, ffmpeg, term, ui::helper as uihelper};
 
 static COMMAND_MODE: AtomicBool = AtomicBool::new(false);
 static COMMAND_BUFFER: Mutex<String> = Mutex::new(String::new());
@@ -20,16 +20,19 @@ struct CommandSpec {
 }
 
 static COMMANDS: Mutex<Vec<CommandSpec>> = Mutex::new(Vec::new());
-static COMMANDS_INIT: OnceLock<()> = OnceLock::new();
 
 fn enter_mode() {
-    COMMAND_MODE.store(true, Ordering::SeqCst);
-    refresh_candidates();
+    if !COMMAND_MODE.swap(true, Ordering::SeqCst) {
+        clear_buffer();
+        refresh_candidates();
+    }
 }
 
 fn exit_mode() {
-    COMMAND_MODE.store(false, Ordering::SeqCst);
-    COMMAND_CANDIDATES.lock().clear();
+    if COMMAND_MODE.swap(false, Ordering::SeqCst) {
+        clear_buffer();
+        COMMAND_CANDIDATES.lock().clear();
+    }
 }
 
 fn clear_buffer() {
@@ -49,7 +52,6 @@ fn pop_char() {
 
 fn submit_command() {
     let cmd = COMMAND_BUFFER.lock().trim().to_string();
-    clear_buffer();
     exit_mode();
     if !cmd.is_empty() {
         execute_command(&cmd);
@@ -82,19 +84,17 @@ fn execute_command(line: &str) {
     }
 }
 
-fn init_commands_once() {
-    COMMANDS_INIT.get_or_init(|| {
-        register_command("help", cmd_help, None);
-        register_command("seek", cmd_seek, Some(complete_seek));
-        register_command("vol", cmd_volume, Some(complete_volume));
-        register_command("volume", cmd_volume, Some(complete_volume));
-        register_command("pause", cmd_pause, None);
-        register_command("resume", cmd_resume, None);
-        register_command("toggle", cmd_toggle, None);
-        register_command("next", cmd_next, None);
-        register_command("quit", cmd_quit, None);
-        register_command("exit", cmd_quit, None);
-    });
+pub fn register_commands() {
+    register_command("help", cmd_help, None);
+    register_command("seek", cmd_seek, Some(complete_seek));
+    register_command("vol", cmd_volume, Some(complete_volume));
+    register_command("volume", cmd_volume, Some(complete_volume));
+    register_command("pause", cmd_pause, None);
+    register_command("resume", cmd_resume, None);
+    register_command("toggle", cmd_toggle, None);
+    register_command("next", cmd_next, None);
+    register_command("quit", cmd_quit, None);
+    register_command("exit", cmd_quit, None);
 }
 
 pub fn register_command(name: &'static str, handler: Handler, completer: Option<Completer>) {
@@ -112,11 +112,7 @@ pub fn register_command(name: &'static str, handler: Handler, completer: Option<
 }
 
 fn cmd_help(_args: &[&str]) {
-    let mut names = COMMANDS
-        .lock()
-        .iter()
-        .map(|c| c.name)
-        .collect::<Vec<_>>();
+    let mut names = COMMANDS.lock().iter().map(|c| c.name).collect::<Vec<_>>();
     names.sort_unstable();
     let list = names.join(" ");
     info_l10n!(
@@ -268,7 +264,7 @@ fn apply_completion(prefix: &str, matches: Vec<String>, replace_last: bool) {
         return;
     }
     let lcp = longest_common_prefix(&matches);
-    let mut completion = if lcp.len() > prefix.len() {
+    let completion = if lcp.len() > prefix.len() {
         lcp
     } else if matches.len() == 1 {
         matches[0].clone()
@@ -297,7 +293,6 @@ fn apply_completion(prefix: &str, matches: Vec<String>, replace_last: bool) {
 }
 
 fn complete_current() {
-    init_commands_once();
     let input = COMMAND_BUFFER.lock().clone();
     let ends_with_space = matches!(input.chars().last(), Some(c) if c.is_whitespace());
     let tokens = input.split_whitespace().collect::<Vec<_>>();
@@ -354,7 +349,6 @@ fn refresh_candidates() {
         COMMAND_CANDIDATES.lock().clear();
         return;
     }
-    init_commands_once();
     let input = COMMAND_BUFFER.lock().clone();
     let ends_with_space = matches!(input.chars().last(), Some(c) if c.is_whitespace());
     let tokens = input.split_whitespace().collect::<Vec<_>>();
@@ -403,29 +397,14 @@ fn handle_command_key(k: Key) -> bool {
         return false;
     }
     match k {
-        Key::Tab => {
-            complete_current();
-            true
-        }
-        Key::Backspace => {
-            pop_char();
-            true
-        }
-        Key::Escape => {
-            clear_buffer();
-            exit_mode();
-            true
-        }
-        Key::Normal('\n') => {
-            submit_command();
-            true
-        }
-        Key::Normal(c) => {
-            push_str(&c.to_string());
-            true
-        }
-        _ => true,
+        Key::Tab => complete_current(),
+        Key::Backspace => pop_char(),
+        Key::Escape => exit_mode(),
+        Key::Normal('\n') => submit_command(),
+        Key::Normal(c) => push_str(&c.to_string()),
+        _ => {}
     }
+    true
 }
 
 pub fn render_command(wrap: &mut crate::render::ContextWrapper) {
@@ -450,7 +429,7 @@ pub fn render_command(wrap: &mut crate::render::ContextWrapper) {
         let start_y = y - line_count as isize;
         for (i, line) in lines.into_iter().enumerate() {
             let row = start_y + i as isize;
-            ui::mask(
+            uihelper::mask(
                 wrap,
                 0,
                 row,
@@ -460,34 +439,23 @@ pub fn render_command(wrap: &mut crate::render::ContextWrapper) {
                 TERM_DEFAULT_BG,
                 opacity,
             );
-            ui::textbox(0, row, wrap.cells_width, 1, false);
-            ui::textbox_default_color(Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG));
-            ui::put(wrap, &line, None, None);
+            uihelper::textbox(0, row, wrap.cells_width, 1, false);
+            uihelper::textbox_default_color(Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG));
+            uihelper::put(wrap, &line, None, None);
         }
         y = start_y + line_count as isize;
     }
-    ui::mask(
-        wrap,
-        0,
-        y,
-        wrap.cells_width,
-        1,
-        None,
-        TERM_DEFAULT_BG,
-        1.0,
-    );
-    ui::textbox(0, y, wrap.cells_width, 1, false);
-    ui::textbox_default_color(Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG));
-    ui::put(wrap, &text, None, None);
+    uihelper::mask(wrap, 0, y, wrap.cells_width, 1, None, TERM_DEFAULT_BG, 1.0);
+    uihelper::textbox(0, y, wrap.cells_width, 1, false);
+    uihelper::textbox_default_color(Some(TERM_DEFAULT_FG), Some(TERM_DEFAULT_BG));
+    uihelper::put(wrap, &text, None, None);
 }
 
 pub fn register_input_callbacks() {
-    init_commands_once();
     stdin::register_keypress_callback(Key::Normal('/'), |_, k| {
         if COMMAND_MODE.load(Ordering::SeqCst) {
             return handle_command_key(k);
         }
-        clear_buffer();
         enter_mode();
         refresh_candidates();
         true
@@ -504,9 +472,15 @@ pub fn register_input_callbacks() {
     }
     for c in b'a'..=b'z' {
         let ch = c as char;
-        stdin::register_keypress_callback(Key::Lower(ch), |_, _| COMMAND_MODE.load(Ordering::SeqCst));
-        stdin::register_keypress_callback(Key::Upper(ch), |_, _| COMMAND_MODE.load(Ordering::SeqCst));
-        stdin::register_keypress_callback(Key::Ctrl(ch), |_, _| COMMAND_MODE.load(Ordering::SeqCst));
+        stdin::register_keypress_callback(Key::Lower(ch), |_, _| {
+            COMMAND_MODE.load(Ordering::SeqCst)
+        });
+        stdin::register_keypress_callback(Key::Upper(ch), |_, _| {
+            COMMAND_MODE.load(Ordering::SeqCst)
+        });
+        stdin::register_keypress_callback(Key::Ctrl(ch), |_, _| {
+            COMMAND_MODE.load(Ordering::SeqCst)
+        });
     }
     stdin::register_keypress_callback(Key::Up, |_, _| COMMAND_MODE.load(Ordering::SeqCst));
     stdin::register_keypress_callback(Key::Down, |_, _| COMMAND_MODE.load(Ordering::SeqCst));
@@ -523,11 +497,7 @@ pub fn register_input_callbacks() {
     });
 }
 
-fn format_candidates_lines(
-    width: usize,
-    candidates: &[String],
-    max_lines: usize,
-) -> Vec<String> {
+fn format_candidates_lines(width: usize, candidates: &[String], max_lines: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut current = String::new();
     for cand in candidates {
