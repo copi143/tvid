@@ -62,6 +62,7 @@ mod avsync;
 
 mod playlist;
 mod render;
+mod command;
 mod statistics;
 mod stdin;
 mod stdout;
@@ -427,6 +428,7 @@ fn register_input_callbacks() {
 
     playlist::register_keypress_callbacks();
     ui::register_input_callbacks();
+    command::register_input_callbacks();
 }
 
 static APP_START_TIME: OnceLock<Instant> = OnceLock::new();

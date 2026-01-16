@@ -18,6 +18,7 @@ use crate::stdin::{self, Key, MouseAction};
 use crate::term::{TERM_DEFAULT_BG, TERM_DEFAULT_FG};
 use crate::util::{Cell, Color, TextBoxInfo, best_contrast_color};
 use crate::{avsync, render};
+use crate::command;
 use crate::{ffmpeg, term};
 
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
@@ -435,6 +436,7 @@ pub fn render_ui(wrap: &mut ContextWrapper) {
     render_messages(wrap);
     render_help(wrap);
     render_quit_confirmation(wrap);
+    command::render_command(wrap);
 }
 
 pub static SHOW_PROGRESSBAR: AtomicBool = AtomicBool::new(true);

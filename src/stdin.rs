@@ -801,6 +801,7 @@ async fn input(getc: &mut Getc) -> Result<()> {
             _       => "Unhandled key: NUL";
         ),
         0x1b => input_escape(getc).await?,
+        b'\t' => call_keypress_callbacks(getc.id, Key::Tab),
         b' ' => call_keypress_callbacks(getc.id, Key::Normal(' ')),
         0x7f => call_keypress_callbacks(getc.id, Key::Backspace),
         b'\n' | b'\r' => {
