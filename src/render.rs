@@ -14,8 +14,6 @@ use crate::term::{self, TERM_QUIT, Winsize};
 use crate::{TOKIO_RUNTIME, statistics};
 use crate::{avsync, util::*};
 
-
-
 // @ ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== @
 
 pub struct RenderContext {
@@ -762,7 +760,10 @@ pub fn render_main() {
 
 fn render_video_1x1(wrap: &mut ContextWrapper) {
     if wrap.fppc_x != 1 || wrap.fppc_y != 1 {
-        panic!("{}", l10n!("render_video_1x1 only supports fppc_x = 1 and fppc_y = 1"));
+        panic!(
+            "{}",
+            l10n!("render_video_1x1 only supports fppc_x = 1 and fppc_y = 1")
+        );
     }
     if let Some(chroma_key) = wrap.chroma_mode.color() {
         for cy in wrap.padding_top..(wrap.cells_height - wrap.padding_bottom) {

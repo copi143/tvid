@@ -141,8 +141,12 @@ pub fn decode_main(path: &str) -> Result<bool> {
             error!("video stream index is valid, so stream must exist");
             fatal_l10n!("What happened with FFmpeg?");
         };
-        let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context(l10n!("video decoder"))?;
-        let codec = codec_ctx.decoder().video().context(l10n!("video decoder"))?;
+        let codec_ctx =
+            AVCCtx::from_parameters(stream.parameters()).context(l10n!("video decoder"))?;
+        let codec = codec_ctx
+            .decoder()
+            .video()
+            .context(l10n!("video decoder"))?;
         (
             Some(codec),
             Some(stream.time_base()),
@@ -157,8 +161,12 @@ pub fn decode_main(path: &str) -> Result<bool> {
             error!("audio stream index is valid, so stream must exist");
             fatal_l10n!("What happened with FFmpeg?");
         };
-        let codec_ctx = AVCCtx::from_parameters(stream.parameters()).context(l10n!("audio decoder"))?;
-        let codec = codec_ctx.decoder().audio().context(l10n!("audio decoder"))?;
+        let codec_ctx =
+            AVCCtx::from_parameters(stream.parameters()).context(l10n!("audio decoder"))?;
+        let codec = codec_ctx
+            .decoder()
+            .audio()
+            .context(l10n!("audio decoder"))?;
         (
             Some(codec),
             Some(stream.time_base()),
@@ -174,7 +182,10 @@ pub fn decode_main(path: &str) -> Result<bool> {
             .context(l10n!("subtitle stream"))?;
         let codec_ctx =
             AVCCtx::from_parameters(stream.parameters()).context(l10n!("subtitle decoder"))?;
-        let codec = codec_ctx.decoder().subtitle().context(l10n!("subtitle decoder"))?;
+        let codec = codec_ctx
+            .decoder()
+            .subtitle()
+            .context(l10n!("subtitle decoder"))?;
         (Some(codec), Some(stream.time_base()))
     } else {
         (None, None)

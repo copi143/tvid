@@ -10,8 +10,6 @@ use tokio::task::JoinHandle;
 use crate::APP_START_TIME;
 use crate::avsync::played_time_or_none;
 
-
-
 pub struct TextBoxInfo {
     pub x: AtomicIsize,
     pub y: AtomicIsize,

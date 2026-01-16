@@ -7,8 +7,6 @@ use std::path::Path;
 
 use crate::playlist::PLAYLIST;
 
-
-
 #[cfg(windows)]
 const CONFIG_DIR: &str = "%LocalAppData%\\tvid";
 #[cfg(unix)]

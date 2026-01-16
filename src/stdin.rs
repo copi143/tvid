@@ -522,7 +522,10 @@ async fn input_parsenum(getc: &mut Getc, mut c: u8, end: u8) -> Result<i64> {
     let mut num = 0i64;
     while c != end {
         if c < b'0' || c > b'9' {
-            return Err(anyhow::anyhow!("{}", f16n!("Invalid number: {}", c as char)));
+            return Err(anyhow::anyhow!(
+                "{}",
+                f16n!("Invalid number: {}", c as char)
+            ));
         }
         num = num * 10 + (c - b'0') as i64;
         c = getc.wait().await?;

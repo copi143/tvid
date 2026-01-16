@@ -277,7 +277,10 @@ fn build_cpal_stream(
         SampleFormat::U32 => build_output_stream!(device, config, u32, 2147483648, |v: f32| {
             (unorm!(v) * u32::MAX as f32) as u32
         }),
-        _ => unimplemented!("{}", f16n!("Unsupported sample format: {:?}", config.sample_format())),
+        _ => unimplemented!(
+            "{}",
+            f16n!("Unsupported sample format: {:?}", config.sample_format())
+        ),
     }
     .map_err(|e| e.into())
 }
@@ -381,7 +384,7 @@ pub fn audio_main() {
                     target_channel_layout,
                     target_sample_rate,
                 )
-        .context(l10n!("Could not create resampler"))
+                .context(l10n!("Could not create resampler"))
                 .unwrap(),
             );
             resampler_format = Some(frame.format());
@@ -392,7 +395,7 @@ pub fn audio_main() {
         let mut converted = AudioFrame::empty();
         unsafe { resampler.assume_init_mut() }
             .run(&frame, &mut converted)
-        .context(l10n!("resampler run failed"))
+            .context(l10n!("resampler run failed"))
             .unwrap();
 
         AUDIO_BUFFER_LEN.fetch_add(converted.samples(), Ordering::SeqCst);
