@@ -8,7 +8,8 @@ use std::time::Duration;
 
 #[cfg(feature = "audio")]
 use crate::audio;
-use crate::command;
+#[cfg(feature = "command")]
+use crate::command::render_command;
 use crate::logging::get_messages;
 use crate::playlist::{PLAYLIST, PLAYLIST_SELECTED_INDEX, SHOW_PLAYLIST};
 use crate::render::ContextWrapper;
@@ -39,7 +40,8 @@ pub fn render_ui(wrap: &mut ContextWrapper) {
     render_messages(wrap);
     render_help(wrap);
     render_quit_confirmation(wrap);
-    command::render_command(wrap);
+    #[cfg(feature = "command")]
+    render_command(wrap);
 }
 
 pub static SHOW_PROGRESSBAR: AtomicBool = AtomicBool::new(true);

@@ -49,13 +49,15 @@ mod ui;
 #[deny(unused_must_use)]
 mod avsync;
 
-mod command;
 mod playlist;
 mod render;
 mod statistics;
 mod stdin;
 mod stdout;
 mod term;
+
+#[cfg(feature = "command")]
+mod command;
 
 /// TODO
 #[allow(unused)]
@@ -249,6 +251,7 @@ fn register_input_callbacks() {
 
     playlist::register_keypress_callbacks();
     ui::register_input_callbacks();
+    #[cfg(feature = "command")]
     command::register_input_callbacks();
 }
 
@@ -321,6 +324,7 @@ fn main() -> Result<()> {
     render::add_render_callback(subtitle::render_subtitle);
     render::add_render_callback(ui::render_ui);
 
+    #[cfg(feature = "command")]
     command::register_commands();
 
     let input_main = TOKIO_RUNTIME.spawn(stdin::input_main());
