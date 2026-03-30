@@ -54,19 +54,19 @@ it-it = 'Cosa è successo a FFmpeg?'
 tr-tr = "FFmpeg'e ne oldu?"
 vi-vn = 'FFmpeg đã xảy ra chuyện gì?'
 
-["Video stream frame rate is invalid"]
-zh-cn = "视频流帧率无效"
-zh-tw = "視訊串流幀率無效"
-ja-jp = "ビデオストリームのフレームレートが無効です"
-fr-fr = "Le taux de trame du flux vidéo est invalide"
-de-de = "Ungültige Bildrate im Videostream"
-es-es = "La tasa de fotogramas de la secuencia de vídeo no es válida"
-ko-kr = '비디오 스트림 프레임 레이트가 잘못되었습니다'
-pt-br = 'A taxa de quadros do stream de vídeo é inválida'
-ru-ru = 'Неверная частота кадров видеопотока'
-it-it = 'La frequenza fotogrammi del flusso video non è valida'
-tr-tr = 'Video akışının kare hızı geçersiz'
-vi-vn = 'Tốc độ khung hình của luồng video không hợp lệ'
+["Video stream frame rate is invalid, using default frame timing"]
+zh-cn = "视频流帧率无效，使用默认帧时间"
+zh-tw = "視訊串流幀率無效，使用預設幀時間"
+ja-jp = "ビデオストリームのフレームレートが無効のため、デフォルトのフレーム間隔を使用します"
+fr-fr = "Le taux de trame du flux vidéo est invalide, utilisation de la temporisation par défaut"
+de-de = "Ungültige Bildrate im Videostream, Standard-Frame-Timing wird verwendet"
+es-es = "La tasa de fotogramas del flujo de vídeo no es válida; se usa la temporización predeterminada"
+ko-kr = '비디오 스트림 프레임 레이트가 잘못되어 기본 프레임 타이밍을 사용합니다'
+pt-br = 'A taxa de quadros do stream de vídeo é inválida; usando temporização padrão de quadros'
+ru-ru = 'Неверная частота кадров видеопотока, используется тайминг кадров по умолчанию'
+it-it = 'La frequenza fotogrammi del flusso video non è valida; uso temporizzazione fotogrammi predefinita'
+tr-tr = 'Video akışının kare hızı geçersiz, varsayılan kare zamanlaması kullanılıyor'
+vi-vn = 'Tốc độ khung hình của luồng video không hợp lệ, dùng thời gian khung mặc định'
 
 ["What the fuck is this file?"]
 zh-cn = "啥玩意啊这"

@@ -194,14 +194,13 @@ pub fn decode_main(path: &str) -> Result<bool> {
     if let (Some(video_timebase), Some(video_rate)) = (video_timebase, video_rate) {
         VIDEO_TIME_BASE.lock().replace(video_timebase);
         #[cfg(feature = "video")]
-        if video_rate.0 != 0 {
+        if video_rate.0 > 0 && video_rate.1 > 0 {
             VIDEO_FRAMETIME.store(
                 video_rate.1 as u64 * 1_000_000 / video_rate.0 as u64,
                 Ordering::SeqCst,
             );
         } else {
-            error_l10n!("Video stream frame rate is invalid");
-            return Ok(false);
+            warning_l10n!("Video stream frame rate is invalid, using default frame timing");
         }
     }
 
@@ -266,9 +265,10 @@ pub fn decode_main(path: &str) -> Result<bool> {
         let packet = {
             let mut packet = Packet::empty();
             if unsafe { av_read_frame(ictx.as_mut_ptr(), packet.as_mut_ptr()) } < 0 {
-                break;
+                None
+            } else {
+                Some(packet)
             }
-            packet
         };
 
         if let Some((abs, off)) = SEEK_REQUEST.lock().take() {
@@ -285,21 +285,27 @@ pub fn decode_main(path: &str) -> Result<bool> {
             break;
         }
 
-        if packet.stream() as isize == video_stream_index {
-            video_queue.push_back(packet);
-        } else if packet.stream() as isize == audio_stream_index {
-            audio_queue.push_back(packet);
-        } else if packet.stream() as isize == subtitle_stream_index {
-            #[cfg(feature = "subtitle")]
-            decode_subtitle(&mut subtitle_decoder, packet);
-            #[cfg(not(feature = "subtitle"))]
-            drop(packet);
-        } else {
-            drop(packet);
+        let no_packet = packet.is_none();
+        if let Some(packet) = packet {
+            if packet.stream() as isize == video_stream_index {
+                video_queue.push_back(packet);
+            } else if packet.stream() as isize == audio_stream_index {
+                audio_queue.push_back(packet);
+            } else if packet.stream() as isize == subtitle_stream_index {
+                #[cfg(feature = "subtitle")]
+                decode_subtitle(&mut subtitle_decoder, packet);
+                #[cfg(not(feature = "subtitle"))]
+                drop(packet);
+            } else {
+                drop(packet);
+            }
         }
 
-        while (audio_stream_index < 0 || audio_queue.len() > 0)
-            && (video_stream_index < 0 || video_queue.len() > 0)
+        while no_packet
+            || audio_queue.len() > 4
+            || video_queue.len() > 4
+            || ((audio_stream_index < 0 || audio_queue.len() > 0)
+                && (video_stream_index < 0 || video_queue.len() > 0))
         {
             if TERM_QUIT.load(Ordering::SeqCst) || avsync::decode_ended() {
                 break;

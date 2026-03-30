@@ -3,7 +3,7 @@ use core::panic;
 use parking_lot::{Condvar, Mutex};
 use std::io::Write as _;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 #[cfg(feature = "unicode")]
 use unicode_width::UnicodeWidthChar;
@@ -711,6 +711,20 @@ fn render_audio_visualizer(empty_frame: &mut [Color], w: usize, h: usize) {
     }
 }
 
+#[cfg(feature = "audio")]
+static SHOW_AUDIO_VISUALIZER: AtomicBool = AtomicBool::new(false);
+
+#[cfg(feature = "audio")]
+pub fn toggle_show_audio_visualizer() -> bool {
+    let old = SHOW_AUDIO_VISUALIZER.fetch_xor(true, Ordering::SeqCst);
+    !old
+}
+
+#[cfg(feature = "audio")]
+pub fn show_audio_visualizer() -> bool {
+    SHOW_AUDIO_VISUALIZER.load(Ordering::SeqCst)
+}
+
 pub fn render_main() {
     let mut empty_frame = Vec::new();
     while TERM_QUIT.load(Ordering::SeqCst) == false {
@@ -718,7 +732,12 @@ pub fn render_main() {
 
         let render_start = Instant::now();
 
-        let success = if let Some(ref frame) = frame {
+        let show_visualizer = !avsync::has_video() || SHOW_AUDIO_VISUALIZER.load(Ordering::SeqCst);
+        #[cfg(feature = "audio")]
+        if show_visualizer {
+            render_audio_visualizer(&mut empty_frame, width, height);
+        }
+        let success = if !show_visualizer && let Some(ref frame) = frame {
             let bytes = frame.data(0);
             let colors: &[Color] = unsafe {
                 std::slice::from_raw_parts(
@@ -731,17 +750,12 @@ pub fn render_main() {
             let pitch = frame.stride(0) / std::mem::size_of::<Color>();
             render(colors, width, height, pitch)
         } else {
-            #[cfg(feature = "audio")]
-            if !avsync::has_video() {
-                render_audio_visualizer(&mut empty_frame, width, height);
-            }
-            let success = render(&empty_frame, width, height, width);
-            #[cfg(feature = "audio")]
-            if frame.is_none() && !avsync::has_video() {
-                empty_frame.fill(Color::new(0, 0, 0));
-            }
-            success
+            render(&empty_frame, width, height, width)
         };
+        #[cfg(feature = "audio")]
+        if show_visualizer {
+            empty_frame.fill(Color::new(0, 0, 0));
+        }
 
         if !success {
             continue;

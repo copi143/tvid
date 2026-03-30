@@ -197,7 +197,7 @@ static SEEK_SMALL_STEP: Mutex<f64> = Mutex::new(5.0);
 static SEEK_LARGE_STEP: Mutex<f64> = Mutex::new(30.0);
 
 fn register_input_callbacks() {
-    stdin::register_keypress_callback(Key::Escape, |id, _| {
+    stdin::register_keypress_callback(Key::Escape, |_, _| {
         info_l10n!("Press 'q' to quit.");
         true
     });
@@ -222,6 +222,11 @@ fn register_input_callbacks() {
     stdin::register_keypress_callback(Key::Normal('m'), |_, _| true);
     stdin::register_keypress_callback(Key::Normal('f'), |_, _| {
         ui::FILE_SELECT.fetch_xor(true, Ordering::SeqCst);
+        true
+    });
+    #[cfg(feature = "audio")]
+    stdin::register_keypress_callback(Key::Normal('w'), |_, _| {
+        render::toggle_show_audio_visualizer();
         true
     });
 

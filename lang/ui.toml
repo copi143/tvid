@@ -306,6 +306,20 @@ it-it = 'Volume: {}%'
 tr-tr = 'Ses: {}%'
 vi-vn = 'Âm lượng: {}%'
 
+["Audio Visualizer(w): {}"]
+zh-cn = "音频可视化(w): {}"
+zh-tw = "音訊可視化(w): {}"
+ja-jp = "オーディオビジュアライザー(w): {}"
+fr-fr = "Visualiseur audio (w): {}"
+de-de = "Audio-Visualizer (w): {}"
+es-es = "Visualizador de audio (w): {}"
+ko-kr = '오디오 시각화(w): {}'
+pt-br = 'Visualizador de áudio (w): {}'
+ru-ru = 'Аудио-визуализатор (w): {}'
+it-it = 'Visualizzatore audio (w): {}'
+tr-tr = 'Ses görselleştirici (w): {}'
+vi-vn = 'Trình trực quan âm thanh (w): {}'
+
 ["Playlist ({} items):"]
 zh-cn = "播放列表 ({} 项):"
 zh-tw = "播放清單 ({} 項):"

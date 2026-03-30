@@ -231,11 +231,19 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
     let statistics = statistics::get(0);
     let statistics = statistics.lock();
 
+    #[cfg(feature = "audio")]
+    let visualizer_status = if render::show_audio_visualizer() {
+        "ON"
+    } else {
+        "OFF"
+    };
+
     let status = if avsync::is_paused() {
         l10n!("Paused")
     } else {
         l10n!("Playing")
     };
+
     putlns_or_uflns!(wrap;
         "tvid v{}", env!("CARGO_PKG_VERSION");
         "{}", l10n!("Press 'q' to quit, 'n' to skip to next, 'l' for playlist");
@@ -252,6 +260,8 @@ fn render_overlay_text(wrap: &mut ContextWrapper) {
         "{}", f16n!("Chroma Mode: {}", wrap.chroma_mode);
         #[cfg(feature = "audio")]
         "{}", f16n!("Volume: {}%", (audio::get_volume() * 100.0).round() as usize);
+        #[cfg(feature = "audio")]
+        "{}", f16n!("Audio Visualizer(w): {}", visualizer_status);
     );
 }
 

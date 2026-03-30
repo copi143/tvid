@@ -55,13 +55,14 @@ pub fn video_main() {
             continue;
         }
 
-        let frametime = {
-            let pts = frame.pts().unwrap();
+        let frametime = if let Some(pts) = frame.pts() {
             let base = VIDEO_TIME_BASE.lock().unwrap();
             Duration::new(
                 pts as u64 * base.0 as u64 / base.1 as u64,
                 (pts as u64 * base.0 as u64 % base.1 as u64 * 1_000_000_000 / base.1 as u64) as u32,
             )
+        } else {
+            Duration::from_millis(0)
         };
 
         // 为了防止视频卡死，seek 永远播放一帧旧的画面
