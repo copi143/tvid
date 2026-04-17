@@ -375,10 +375,10 @@ fn render_messages(wrap: &mut ContextWrapper) {
         if y < 0 {
             continue;
         }
-        mask(wrap, 0, y, width, 1, None, message.lv.level_color(), 0.5);
-        textbox(0, y, width, 1, false);
-        textbox_default_color(Some(TERM_DEFAULT_BG), None);
-        putln(wrap, &message.msg, message.fg, message.bg);
+        helper::mask(wrap, 0, y, width, 1, None, message.lv.level_color(), 0.5);
+        helper::textbox(0, y, width, 1, false);
+        helper::textbox_default_color(Some(TERM_DEFAULT_BG), None);
+        helper::putln(wrap, &message.msg, message.fg, message.bg);
     }
 }
 

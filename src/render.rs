@@ -725,6 +725,11 @@ pub fn show_audio_visualizer() -> bool {
     SHOW_AUDIO_VISUALIZER.load(Ordering::SeqCst)
 }
 
+#[cfg(not(feature = "audio"))]
+pub fn show_audio_visualizer() -> bool {
+    false
+}
+
 pub fn render_main() {
     let mut empty_frame = Vec::new();
     while TERM_QUIT.load(Ordering::SeqCst) == false {
@@ -732,7 +737,7 @@ pub fn render_main() {
 
         let render_start = Instant::now();
 
-        let show_visualizer = !avsync::has_video() || SHOW_AUDIO_VISUALIZER.load(Ordering::SeqCst);
+        let show_visualizer = !avsync::has_video() || show_audio_visualizer();
         #[cfg(feature = "audio")]
         if show_visualizer {
             render_audio_visualizer(&mut empty_frame, width, height);

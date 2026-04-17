@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::avsync;
+use crate::avsync::{self, end_decode};
 use crate::term::TERM_QUIT;
 
 #[cfg(feature = "audio")]
@@ -325,6 +325,11 @@ pub fn decode_main(path: &str) -> Result<bool> {
                 DECODER_WAKEUP.wait_for(&mut lock, Duration::from_millis(50));
             }
             *lock = false;
+
+            if no_packet && audio_queue.is_empty() && video_queue.is_empty() {
+                end_decode();
+                break;
+            }
         }
     }
 
