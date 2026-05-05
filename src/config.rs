@@ -4,13 +4,30 @@ use parking_lot::Mutex;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::playlist::PLAYLIST;
 
 #[cfg(windows)]
-const CONFIG_DIR: &str = "%LocalAppData%\\tvid";
+const CONFIG_DIR: LazyLock<String> = LazyLock::new(|| {
+    if let Ok(appdata) = std::env::var("LocalAppData") {
+        format!("{appdata}\\tvid")
+    } else if let Ok(home) = std::env::var("UserProfile") {
+        format!("{home}\\AppData\\Local\\tvid")
+    } else {
+        format!(".\\.tvid")
+    }
+});
 #[cfg(unix)]
-const CONFIG_DIR: &str = "~/.config/tvid";
+const CONFIG_DIR: LazyLock<String> = LazyLock::new(|| {
+    if let Ok(config) = std::env::var("XDG_CONFIG_HOME") {
+        format!("{config}/tvid")
+    } else if let Ok(home) = std::env::var("HOME") {
+        format!("{home}/.config/tvid")
+    } else {
+        format!("./.tvid")
+    }
+});
 
 const CONFIG_FILE: &str = "tvid.toml";
 const PLAYLIST_FILE: &str = "playlist.txt";
@@ -116,12 +133,13 @@ fn load_playlist(mut file: File) -> Result<()> {
 }
 
 pub fn load(dir: Option<&str>) -> Result<()> {
-    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
+    let cfg = CONFIG_DIR;
+    let dir = dir.unwrap_or(cfg.as_str());
 
-    let path = Path::new(&dir).join(CONFIG_FILE);
+    let path = Path::new(dir).join(CONFIG_FILE);
     load_config(File::open(path)?)?;
 
-    let path = Path::new(&dir).join(PLAYLIST_FILE);
+    let path = Path::new(dir).join(PLAYLIST_FILE);
     load_playlist(File::open(path)?)?;
 
     Ok(())
@@ -141,20 +159,23 @@ fn save_playlist(mut file: File) -> Result<()> {
 }
 
 pub fn save(dir: Option<&str>) -> Result<()> {
-    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
+    let cfg = CONFIG_DIR;
+    let dir = dir.unwrap_or(cfg.as_str());
 
-    let path = Path::new(&dir).join(CONFIG_FILE);
+    let path = Path::new(dir).join(CONFIG_FILE);
     save_config(File::create(path)?)?;
 
-    let path = Path::new(&dir).join(PLAYLIST_FILE);
+    let path = Path::new(dir).join(PLAYLIST_FILE);
     save_playlist(File::create(path)?)?;
 
     Ok(())
 }
 
 pub fn create_if_not_exists(dir: Option<&str>) -> Result<()> {
-    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
-    let dir = Path::new(&dir);
+    let cfg = CONFIG_DIR;
+    let dir = dir.unwrap_or(cfg.as_str());
+
+    let dir = Path::new(dir);
     if !dir.exists() {
         std::fs::create_dir_all(dir)?;
     }
@@ -188,8 +209,10 @@ pub fn load_or_create_hostkeys(dir: Option<&str>) -> Result<Vec<russh::keys::Pri
     const SSH_HOSTKEY_RSA_FILE: &str = "hostkey_rsa";
     const SSH_HOSTKEY_ED25519_FILE: &str = "hostkey_ed25519";
 
-    let dir = shellexpand::tilde(dir.unwrap_or(CONFIG_DIR)).to_string();
-    let dir = Path::new(&dir);
+    let cfg = CONFIG_DIR;
+    let dir = dir.unwrap_or(cfg.as_str());
+
+    let dir = Path::new(dir);
 
     let keypath_rsa = dir.join(SSH_HOSTKEY_RSA_FILE);
     let keypath_ed25519 = dir.join(SSH_HOSTKEY_ED25519_FILE);
