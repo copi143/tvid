@@ -231,7 +231,7 @@ macro_rules! data_callback {
 macro_rules! build_output_stream {
     ($device:expr, $config:expr, $ty:ty, $default:expr, $expr:expr) => {{
         let channels = $config.channels();
-        let config = &$config.config();
+        let config = $config.config();
         $device.build_output_stream(
             config,
             data_callback!(channels, $ty, $default, $expr),
