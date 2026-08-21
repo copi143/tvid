@@ -1,3 +1,5 @@
+
+
 # <span style="font-variant:small-caps">Terminal VIDeo player</span>
 
 <img align="left" width="192" src="tvid.min.svg" alt="tvid logo" />
@@ -49,7 +51,7 @@ You can install `tvid` directly using Cargo:
 cargo install tvid
 ```
 
-Optional features are enabled at build time. Defaults are `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`.
+Optional features are enabled at build time. Defaults are `ffmpeg`, `i18n`, `config`, `audio`, `video`, `subtitle`, `unicode`, `unifont`, `command`.
 
 ```sh
 cargo install tvid --features sixel,osc1337
@@ -94,7 +96,7 @@ cargo install tvid --no-default-features --features ffmpeg,video
 tvid <input1> [input2] [...]
 ```
 
-Each input becomes an item in the in‑memory playlist.
+Each input becomes an item becomes an item in the in‑memory playlist.
 
 ### Configuration & Playlist Files
 
