@@ -21,7 +21,22 @@ use crate::subtitle;
 #[cfg(feature = "video")]
 use crate::video::{self, VIDEO_FRAME, VIDEO_FRAME_SIG, VIDEO_FRAMETIME, video_main};
 
-#[allow(static_mut_refs)]
+struct LogBuffer {
+    print_prefix: std::ffi::c_int,
+    buf: [u8; 1024],
+}
+
+impl LogBuffer {
+    const fn new() -> Self {
+        Self {
+            print_prefix: 0,
+            buf: [0; 1024],
+        }
+    }
+}
+
+static LOG_BUFFER: Mutex<LogBuffer> = Mutex::new(LogBuffer::new());
+
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe extern "C" fn ffmpeg_log_callback(
     arg1: *mut std::ffi::c_void,
@@ -34,20 +49,17 @@ unsafe extern "C" fn ffmpeg_log_callback(
     if arg2 > avsys::AV_LOG_WARNING {
         return;
     }
-    static LOCK: Mutex<()> = Mutex::new(());
-    let guard = LOCK.lock();
-    static mut PRINT_PREFIX: core::ffi::c_int = 0;
-    static mut BUF: [u8; 1024] = [0u8; 1024];
+    let mut log = LOG_BUFFER.lock();
     avsys::av_log_format_line(
         arg1,
         arg2,
         arg3,
         arg4,
-        BUF.as_mut_ptr() as *mut core::ffi::c_char,
-        BUF.len() as core::ffi::c_int,
-        &mut PRINT_PREFIX as *mut core::ffi::c_int,
+        log.buf.as_mut_ptr() as *mut core::ffi::c_char,
+        log.buf.len() as core::ffi::c_int,
+        &mut log.print_prefix,
     );
-    let c_str = std::ffi::CStr::from_ptr(BUF.as_ptr() as *const core::ffi::c_char);
+    let c_str = std::ffi::CStr::from_ptr(log.buf.as_ptr() as *const core::ffi::c_char);
     if let Ok(str_slice) = c_str.to_str() {
         let str_slice = str_slice.trim_end();
         match arg2 {
@@ -64,7 +76,6 @@ unsafe extern "C" fn ffmpeg_log_callback(
     } else {
         error_l10n!("FFmpeg log: <invalid UTF-8>");
     }
-    drop(guard);
 }
 
 /// 初始化 FFmpeg 日志回调

@@ -30,7 +30,6 @@ use tokio::runtime::Runtime;
 
 use crate::escape::format_link;
 use crate::ffmpeg::seek_request_relative;
-use crate::ui::QUIT_CONFIRMATION;
 use crate::{playlist::PLAYLIST, stdin::Key, term::TERM_QUIT};
 
 #[macro_use]
@@ -207,7 +206,7 @@ fn register_input_callbacks() {
     });
     stdin::register_keypress_callback(Key::Normal('q'), |id, _| {
         if id == 0 {
-            QUIT_CONFIRMATION.store(true, Ordering::SeqCst);
+            ui::request_quit_confirm();
         }
         true
     });
@@ -221,7 +220,7 @@ fn register_input_callbacks() {
     });
     stdin::register_keypress_callback(Key::Normal('m'), |_, _| true);
     stdin::register_keypress_callback(Key::Normal('f'), |_, _| {
-        ui::FILE_SELECT.fetch_xor(true, Ordering::SeqCst);
+        ui::toggle_file_select();
         true
     });
     #[cfg(feature = "audio")]
